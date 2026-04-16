@@ -4,6 +4,8 @@
 
 **Status:** Draft specification v0.1 · Reference implementation in progress
 
+🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md) 에서 한국어 개요를 읽으실 수 있습니다.
+
 ---
 
 ## Why this exists
