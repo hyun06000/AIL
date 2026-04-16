@@ -526,6 +526,18 @@ class Executor:
                 return ConfidentValue(raw[0][int(raw[1]):int(raw[2])], conf)
 
         # --- List operations ---
+        if name == "get":
+            # get(list_or_record, index_or_key) -> single element
+            if len(raw) >= 2:
+                coll = raw[0]
+                key = raw[1]
+                if isinstance(coll, list):
+                    idx = int(key)
+                    if 0 <= idx < len(coll):
+                        return ConfidentValue(coll[idx], conf)
+                    return ConfidentValue(None, conf)
+                if isinstance(coll, dict):
+                    return ConfidentValue(coll.get(str(key)), conf)
         if name == "append":
             if len(raw) >= 2 and isinstance(raw[0], list):
                 return ConfidentValue(raw[0] + [raw[1]], conf)
