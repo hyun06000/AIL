@@ -125,6 +125,7 @@ python examples/evolve_retune_demo.py
 현재 참조 구현이 지원하는 것:
 
 - ✅ `retune` 액션 (수치 파라미터를 선언된 범위의 중점으로 조정)
+- ✅ `rewrite constraints` 액션 — 제약식의 수치 임계값을 일정량만큼 타이트하게 재작성
 - ✅ 버전 체인 (단조 증가하는 version_id)
 - ✅ `bounded_by`로 범위 위반 제안 거부
 - ✅ `rollback_on` 트리거 시 원자적 되돌림
@@ -132,9 +133,30 @@ python examples/evolve_retune_demo.py
 - ✅ `require review_by: human` — `approve_review` 콜백으로 동기 검토
 - ✅ 진화 이벤트를 전부 trace에 기록
 
+### `rewrite constraints` 문법과 안전 속성
+
+```ail
+evolve classify {
+    metric: score
+    when score < 0.7 {
+        rewrite constraints tighten_numeric_thresholds_by 0.05
+    }
+    rollback_on: score < 0.2
+    history: keep_last 5
+}
+```
+
+이 액션은 intent의 `constraints` 블록에 있는 모든 **수치 비교**를 delta 만큼 타이트하게 만듭니다:
+
+- `fidelity > 0.7` → `fidelity > 0.75` (더 엄격한 하한)
+- `latency < 2000` → `latency < 1999.95` (더 엄격한 상한)
+
+**중요한 안전 속성:** `rewrite constraints`는 **항상 사람 검토를 거칩니다.** `require review_by: human`을 프로그램이 선언하지 않아도, 런타임이 강제합니다. 제약식을 바꾸는 건 수치가 작더라도 "프로그램의 규칙 자체"를 바꾸는 것이라, 재조정보다 훨씬 무거운 변경이기 때문입니다.
+
+이건 `retune`과의 결정적 차이예요. `retune`은 조용히 적용될 수 있어요 (파라미터는 구현 디테일이니까). 하지만 `rewrite constraints`는 프로그램이 "뭘 지킬 것인가"를 바꾸는 것이라, 사람이 반드시 봐야 합니다.
+
 아직 지원하지 않는 것 (spec/04 §4):
 
-- ❌ `rewrite constraints` — 제약 블록을 재작성
 - ❌ `rewrite examples` — 예제 블록을 재작성
 - ❌ `rewrite goal` — 목표 자체를 재작성 (사람 검토 필수)
 - ❌ `promote strategy` — 실증적으로 우수한 전략을 선호로 고정

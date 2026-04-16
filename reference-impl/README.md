@@ -11,18 +11,19 @@ This directory contains a working subset of AIL. It is not the full specificatio
 - Confidence-gated branching
 - Basic constraint checking
 - A simple trace log per invocation
-- Evolution: `retune` actions, version chain, `bounded_by` enforcement,
-  `rollback_on` reversion, `history: keep_last` pruning, and
-  `require review_by: human` gating
+- Evolution: `retune` and `rewrite constraints` actions, version chain,
+  `bounded_by` enforcement, `rollback_on` reversion, `history: keep_last`
+  pruning, and `require review_by: human` gating (forced for
+  `rewrite constraints` even when not declared by the program)
 - Imports: `import X from "stdlib/<module>"` resolves against the
   bundled standard library (`stdlib/core`, `stdlib/language`).
   stdlib itself is written in AIL, not Python.
 
 What the MVP does **not** yet include (explicit scope limits):
 
-- Evolution actions other than `retune` (`rewrite examples`,
-  `rewrite goal`, `promote strategy`, `escalate` are reserved — see
-  spec/04 §4)
+- Evolution actions other than `retune` and `rewrite constraints`
+  (`rewrite examples`, `rewrite goal`, `promote strategy`, `escalate`
+  are reserved — see spec/04 §4)
 - Relative imports (`./helpers.ail`) and URL-style imports
   (`org://...`) are rejected with a helpful message
 - Full effect system (a single `human_ask` effect is supported via stdin)
