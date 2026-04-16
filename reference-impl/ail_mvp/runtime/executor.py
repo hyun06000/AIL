@@ -495,7 +495,11 @@ class Executor:
                 return ConfidentValue(len(raw[0]), conf)
         if name == "split":
             if len(raw) >= 2 and isinstance(raw[0], str):
-                return ConfidentValue(raw[0].split(str(raw[1])), conf)
+                delim = str(raw[1])
+                if delim == "":
+                    # Character-level split
+                    return ConfidentValue(list(raw[0]), conf)
+                return ConfidentValue(raw[0].split(delim), conf)
         if name == "join":
             if len(raw) >= 2 and isinstance(raw[0], list):
                 return ConfidentValue(str(raw[1]).join(str(x) for x in raw[0]), conf)
@@ -586,7 +590,43 @@ class Executor:
             if raw and isinstance(raw[0], list):
                 return ConfidentValue(min(raw[0]), conf)
 
+        # --- Meta ---
+        if name == "eval_ail":
+            # eval_ail(source: Text, input: Text) -> Any
+            # Parses an AIL source string and executes its entry with the given input.
+            # This is the primitive that makes AIL self-generating.
+            if len(raw) >= 1 and isinstance(raw[0], str):
+                source_text = raw[0]
+                eval_input = raw[1] if len(raw) >= 2 else ""
+                return self._eval_ail_source(source_text, eval_input, conf)
+
         return None  # not a builtin
+
+    def _eval_ail_source(self, source: str, input_val: Any,
+                         parent_confidence: float) -> ConfidentValue:
+        """Parse and execute an AIL source string. Used by eval_ail builtin."""
+        from ..parser import parse, ParseError
+        try:
+            program = parse(source)
+        except ParseError as e:
+            self.trace.record("eval_ail_parse_error", error=str(e))
+            return ConfidentValue(f"PARSE_ERROR: {e}", 0.0)
+        entry = program.entry()
+        if entry is None:
+            return ConfidentValue("PARSE_ERROR: no entry declaration", 0.0)
+        # Create a child executor sharing our adapter but with fresh state
+        child = Executor(program, self.adapter, ask_human=self.ask_human,
+                         metric_fn=self.metric_fn, approve_review=self.approve_review)
+        try:
+            first_param = entry.params[0][0] if entry.params else "input"
+            result = child.run_entry({first_param: input_val})
+            self.trace.record("eval_ail_success",
+                              value=_truncate(result.value),
+                              confidence=result.confidence)
+            return result
+        except Exception as e:
+            self.trace.record("eval_ail_runtime_error", error=str(e))
+            return ConfidentValue(f"RUNTIME_ERROR: {e}", 0.0)
 
     def _builtin_call(self, name: str, args: list[ConfidentValue],
                       kwargs: dict[str, ConfidentValue]) -> ConfidentValue:

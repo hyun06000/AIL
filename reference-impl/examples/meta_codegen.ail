@@ -1,0 +1,68 @@
+// meta_codegen.ail — AIL generates AIL.
+//
+// This is the program that proves the project's thesis.
+//
+// Flow:
+//   1. Human describes a task in natural language
+//   2. An intent (LLM) reads the AIL reference card and generates
+//      a valid AIL program that solves the task
+//   3. The generated program is parsed and executed by eval_ail
+//   4. The result is returned
+//
+// The AI is both the author and the runtime. The human only
+// describes what they want.
+//
+// Run with mock (generates a placeholder):
+//   ail run examples/meta_codegen.ail --input "count the vowels in hello world" --mock
+//
+// Run with real Claude (actually generates AIL!):
+//   export ANTHROPIC_API_KEY=sk-ant-...
+//   ail run examples/meta_codegen.ail --input "count the vowels in hello world"
+
+intent generate_ail(task: Text) -> Text {
+    goal: valid AIL source code that solves the given task
+    constraints {
+        output_is_parseable_ail_source
+        program_has_entry_main
+        uses_fn_for_deterministic_work
+        uses_intent_only_when_llm_judgment_needed
+        no_import_statements_in_generated_code
+    }
+    examples {
+        ("add two numbers 3 and 4") => ("fn add(a: Number, b: Number) -> Number { return a + b } entry main(x: Text) { return add(3, 4) }")
+        ("reverse the string hello") => ("fn rev(s: Text) -> Text { chars = split(s, \"\") return join(reverse(chars), \"\") } entry main(x: Text) { return rev(\"hello\") }")
+    }
+}
+
+fn validate_and_run(source: Text, input: Text) -> Text {
+    result = eval_ail(source, input)
+    if starts_with(to_text(result), "PARSE_ERROR") {
+        return join(["Generation failed: ", to_text(result)], "")
+    }
+    if starts_with(to_text(result), "RUNTIME_ERROR") {
+        return join(["Execution failed: ", to_text(result)], "")
+    }
+    return to_text(result)
+}
+
+fn build_output(task: Text, source: Text, result: Text) -> Text {
+    lines = [
+        "=== AIL Meta-Codegen ===",
+        "",
+        join(["Task: ", task], ""),
+        "",
+        "Generated program:",
+        "---",
+        source,
+        "---",
+        "",
+        join(["Result: ", result], "")
+    ]
+    return join(lines, "\n")
+}
+
+entry main(task: Text) {
+    source = generate_ail(task)
+    result = validate_and_run(source, task)
+    return build_output(task, source, result)
+}

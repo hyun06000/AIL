@@ -254,3 +254,55 @@ def test_fn_and_intent_in_same_program():
     """
     result, _ = run(src, input="I love this so much", adapter=Scripted())
     assert result.value == "positive (5 words)"
+
+
+# ---------- eval_ail — meta-execution ----------
+
+
+def test_eval_ail_runs_generated_program():
+    src = """
+    fn make_program() -> Text {
+        return "fn double(n: Number) -> Number { return n * 2 } entry main(x: Text) { return double(to_number(x)) }"
+    }
+    entry main(input: Text) {
+        code = make_program()
+        return eval_ail(code, "21")
+    }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value == 42.0
+    assert result.confidence == 1.0
+
+
+def test_eval_ail_returns_parse_error_on_bad_source():
+    src = """
+    entry main(input: Text) {
+        return eval_ail("this is not valid ail {{{", "x")
+    }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert "PARSE_ERROR" in str(result.value)
+    assert result.confidence == 0.0
+
+
+def test_eval_ail_handles_invalid_program_gracefully():
+    """eval_ail with a program that has no entry returns PARSE_ERROR."""
+    src = """
+    entry main(input: Text) {
+        return eval_ail("fn noop() -> Number { return 1 }", "x")
+    }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert "PARSE_ERROR" in str(result.value)
+    assert result.confidence == 0.0
+
+
+def test_split_empty_delimiter_gives_characters():
+    """split('hello', '') should give ['h','e','l','l','o']."""
+    src = """
+    entry main(x: Text) {
+        return split("hello", "")
+    }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value == ['h', 'e', 'l', 'l', 'o']
