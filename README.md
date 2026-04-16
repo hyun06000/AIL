@@ -5,6 +5,7 @@
 **Status:** Specification v0.2 · Python interpreter with 84 tests · FizzBuzz runs without an LLM
 
 🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md)
+🤖 **AI/LLM:** [`README.ai.md`](README.ai.md) — structured reference, no prose. Start with [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md).
 
 ---
 
@@ -157,6 +158,18 @@ See [spec/07-computation.md](spec/07-computation.md) for the full comparison.
 See [CONTRIBUTING.md](CONTRIBUTING.md). Design critique is as valuable as code. [docs/open-questions.md](docs/open-questions.md) lists 15 unresolved problems — picking one and proposing an answer is a great first contribution.
 
 한국어로 이슈나 PR을 여셔도 괜찮습니다.
+
+## Document naming convention
+
+This project maintains parallel documentation for different readers:
+
+| Suffix | Audience | Example |
+|---|---|---|
+| `.md` | Humans | `README.md`, `CONTRIBUTING.md` |
+| `.ai.md` | AI/LLM systems | `README.ai.md`, `spec/08-reference-card.ai.md` |
+| `.ko.md` | Korean-speaking humans | `docs/ko/README.ko.md` |
+
+AI-targeted files (`.ai.md`) contain structured data, complete keyword/function listings, and input/output pairs. They minimize prose and maximize parseability. Human-targeted files explain motivation and design rationale.
 
 ## License
 
