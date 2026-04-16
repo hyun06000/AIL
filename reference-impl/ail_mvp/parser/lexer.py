@@ -39,6 +39,7 @@ class Tok(Enum):
     MINUS = auto()
     STAR = auto()
     SLASH = auto()
+    PERCENT = auto()    # %
 
     # Structural
     NEWLINE = auto()
@@ -53,6 +54,7 @@ KEYWORDS = {
     "metric", "history", "keep_last", "under", "matching",
     "and", "or", "not", "in", "such", "that",
     "return", "true", "false", "threshold",
+    "fn", "if", "else", "for",
 }
 
 
@@ -200,6 +202,7 @@ class Lexer:
             ",": Tok.COMMA, ":": Tok.COLON, ".": Tok.DOT,
             "=": Tok.EQ, "<": Tok.LT, ">": Tok.GT,
             "+": Tok.PLUS, "-": Tok.MINUS, "*": Tok.STAR, "/": Tok.SLASH,
+            "%": Tok.PERCENT,
         }
         if ch in single:
             self.add(single[ch], ch, line, col); return

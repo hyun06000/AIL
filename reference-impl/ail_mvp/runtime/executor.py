@@ -16,8 +16,10 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from ..parser.ast import (
-    Program, IntentDecl, ContextDecl, EntryDecl, EffectDecl, EvolveDecl, ImportDecl,
-    Assignment, ReturnStmt, PerformStmt, BranchStmt, WithContextStmt, ExprStmt,
+    Program, IntentDecl, ContextDecl, EntryDecl, EffectDecl, EvolveDecl,
+    ImportDecl, FnDecl,
+    Assignment, ReturnStmt, PerformStmt, BranchStmt, WithContextStmt,
+    ExprStmt, IfStmt, ForStmt,
     Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
     PerformExpr, MembershipOp,
     Expr, Statement,
@@ -80,6 +82,7 @@ class Executor:
         self.contexts: dict[str, ContextDecl] = {}
         self.effects: dict[str, EffectDecl] = {}
         self.evolves: dict[str, EvolveDecl] = {}
+        self.fns: dict[str, FnDecl] = {}
         self.imported_sources: list[str] = []  # for trace & debugging
         self._index_declarations(program.declarations)
 
@@ -141,6 +144,8 @@ class Executor:
                 self.effects[d.name] = d
             elif isinstance(d, EvolveDecl):
                 self.evolves[d.intent_name] = d
+            elif isinstance(d, FnDecl):
+                self.fns[d.name] = d
 
     # --- evolution helpers ---
 
@@ -254,6 +259,10 @@ class Executor:
             self._exec_branch(stmt, scope)
         elif isinstance(stmt, WithContextStmt):
             self._exec_with(stmt, scope)
+        elif isinstance(stmt, IfStmt):
+            self._exec_if(stmt, scope)
+        elif isinstance(stmt, ForStmt):
+            self._exec_for(stmt, scope)
         elif isinstance(stmt, ExprStmt):
             self._eval_expr(stmt.expr, scope)
         else:
@@ -269,6 +278,25 @@ class Executor:
         finally:
             self.ctx_stack.pop()
             self.trace.record("context_pop", name=ctx.name)
+
+    def _exec_if(self, stmt: IfStmt, scope: dict[str, ConfidentValue]) -> None:
+        cond = self._eval_expr(stmt.condition, scope)
+        if _truthy(cond):
+            for s in stmt.then_body:
+                self._exec_stmt(s, scope)
+        else:
+            for s in stmt.else_body:
+                self._exec_stmt(s, scope)
+
+    def _exec_for(self, stmt: ForStmt, scope: dict[str, ConfidentValue]) -> None:
+        collection = self._eval_expr(stmt.collection, scope)
+        items = collection.value
+        if not hasattr(items, '__iter__') or isinstance(items, str):
+            items = [items]
+        for item in items:
+            scope[stmt.var_name] = ConfidentValue(item, collection.confidence)
+            for s in stmt.body:
+                self._exec_stmt(s, scope)
 
     def _exec_branch(self, stmt: BranchStmt, scope: dict[str, ConfidentValue]) -> None:
         subject_val = self._eval_expr(stmt.subject, scope)
@@ -410,7 +438,6 @@ class Executor:
         if isinstance(call.callee, Identifier):
             name = call.callee.name
         elif isinstance(call.callee, FieldAccess):
-            # e.g., confidence.and(...) — for MVP, flatten to name
             name = self._expr_as_str(call.callee)
         else:
             raise RuntimeError(f"cannot call non-identifier: {call.callee}")
@@ -419,12 +446,147 @@ class Executor:
         args = [self._eval_expr(a, scope) for a in call.args]
         kwargs = {k: self._eval_expr(v, scope) for k, v in call.kwargs.items()}
 
-        # Is it a declared intent?
+        # Is it a declared fn (pure deterministic)?
+        if name in self.fns:
+            return self._invoke_fn(self.fns[name], args, kwargs)
+
+        # Is it a declared intent (LLM-backed)?
         if name in self.intents:
             return self._invoke_intent(self.intents[name], args, kwargs)
 
-        # Built-in pseudo-calls used inside constraints/branches
+        # Built-in functions (spec/07 §5)
+        builtin_result = self._try_builtin_fn(name, args)
+        if builtin_result is not None:
+            return builtin_result
+
+        # Symbolic fallback (constraint checks etc.)
         return self._builtin_call(name, args, kwargs)
+
+    def _invoke_fn(self, fn_decl: FnDecl,
+                   args: list[ConfidentValue],
+                   kwargs: dict[str, ConfidentValue]) -> ConfidentValue:
+        """Execute a pure fn. No LLM, confidence always 1.0."""
+        self.trace.record("fn_call", name=fn_decl.name,
+                          args=[a.value for a in args])
+        # Bind params
+        local: dict[str, ConfidentValue] = {}
+        for (pname, _), argval in zip(fn_decl.params, args):
+            local[pname] = argval
+        for k, v in kwargs.items():
+            local[k] = v
+        # Make other fns and intents callable from within this fn
+        # by sharing the executor scope lookup
+        try:
+            for stmt in fn_decl.body:
+                self._exec_stmt(stmt, local)
+        except ReturnSignal as r:
+            return r.value
+        return ConfidentValue(None, 1.0)
+
+    def _try_builtin_fn(self, name: str,
+                        args: list[ConfidentValue]) -> ConfidentValue | None:
+        """Built-in functions from spec/07 §5. Returns None if not a builtin."""
+        raw = [a.value for a in args]
+        conf = min((a.confidence for a in args), default=1.0)
+
+        # --- Text operations ---
+        if name == "length":
+            if raw and hasattr(raw[0], '__len__'):
+                return ConfidentValue(len(raw[0]), conf)
+        if name == "split":
+            if len(raw) >= 2 and isinstance(raw[0], str):
+                return ConfidentValue(raw[0].split(str(raw[1])), conf)
+        if name == "join":
+            if len(raw) >= 2 and isinstance(raw[0], list):
+                return ConfidentValue(str(raw[1]).join(str(x) for x in raw[0]), conf)
+        if name == "trim":
+            if raw and isinstance(raw[0], str):
+                return ConfidentValue(raw[0].strip(), conf)
+        if name == "upper":
+            if raw and isinstance(raw[0], str):
+                return ConfidentValue(raw[0].upper(), conf)
+        if name == "lower":
+            if raw and isinstance(raw[0], str):
+                return ConfidentValue(raw[0].lower(), conf)
+        if name == "starts_with":
+            if len(raw) >= 2:
+                return ConfidentValue(str(raw[0]).startswith(str(raw[1])), conf)
+        if name == "ends_with":
+            if len(raw) >= 2:
+                return ConfidentValue(str(raw[0]).endswith(str(raw[1])), conf)
+        if name == "replace":
+            if len(raw) >= 3 and isinstance(raw[0], str):
+                return ConfidentValue(raw[0].replace(str(raw[1]), str(raw[2])), conf)
+        if name == "slice":
+            if len(raw) >= 3:
+                return ConfidentValue(raw[0][int(raw[1]):int(raw[2])], conf)
+
+        # --- List operations ---
+        if name == "append":
+            if len(raw) >= 2 and isinstance(raw[0], list):
+                return ConfidentValue(raw[0] + [raw[1]], conf)
+        if name == "sort":
+            if raw and isinstance(raw[0], list):
+                return ConfidentValue(sorted(raw[0]), conf)
+        if name == "reverse":
+            if raw and isinstance(raw[0], list):
+                return ConfidentValue(list(reversed(raw[0])), conf)
+        if name == "range":
+            if len(raw) >= 2:
+                return ConfidentValue(list(range(int(raw[0]), int(raw[1]))), conf)
+        if name == "map" and len(raw) >= 2 and isinstance(raw[0], list):
+            # map(list, fn_name) — fn_name must be a ConfidentValue wrapping a string
+            fn_name = args[1].value
+            if isinstance(fn_name, str) and fn_name in self.fns:
+                results = []
+                for item in raw[0]:
+                    r = self._invoke_fn(self.fns[fn_name], [ConfidentValue(item, conf)], {})
+                    results.append(r.value)
+                return ConfidentValue(results, conf)
+        if name == "filter" and len(raw) >= 2 and isinstance(raw[0], list):
+            fn_name = args[1].value
+            if isinstance(fn_name, str) and fn_name in self.fns:
+                results = []
+                for item in raw[0]:
+                    r = self._invoke_fn(self.fns[fn_name], [ConfidentValue(item, conf)], {})
+                    if _truthy(r):
+                        results.append(item)
+                return ConfidentValue(results, conf)
+        if name == "reduce" and len(raw) >= 3 and isinstance(raw[0], list):
+            fn_name = args[1].value
+            if isinstance(fn_name, str) and fn_name in self.fns:
+                acc = raw[2]
+                for item in raw[0]:
+                    r = self._invoke_fn(
+                        self.fns[fn_name],
+                        [ConfidentValue(acc, conf), ConfidentValue(item, conf)], {},
+                    )
+                    acc = r.value
+                return ConfidentValue(acc, conf)
+
+        # --- Conversion ---
+        if name == "to_number":
+            try:
+                return ConfidentValue(float(raw[0]), conf)
+            except (ValueError, TypeError):
+                return ConfidentValue(None, conf)
+        if name == "to_text":
+            return ConfidentValue(str(raw[0]) if raw else "", conf)
+        if name == "to_boolean":
+            return ConfidentValue(bool(raw[0]) if raw else False, conf)
+
+        # --- Math ---
+        if name == "abs":
+            if raw:
+                return ConfidentValue(abs(raw[0]), conf)
+        if name == "max":
+            if raw and isinstance(raw[0], list):
+                return ConfidentValue(max(raw[0]), conf)
+        if name == "min":
+            if raw and isinstance(raw[0], list):
+                return ConfidentValue(min(raw[0]), conf)
+
+        return None  # not a builtin
 
     def _builtin_call(self, name: str, args: list[ConfidentValue],
                       kwargs: dict[str, ConfidentValue]) -> ConfidentValue:
@@ -583,6 +745,8 @@ def _apply_binop(op: str, left: Any, right: Any) -> Any:
         return left * right
     if op == "/":
         return left / right
+    if op == "%":
+        return left % right
     if op == "==":
         return left == right
     if op == "!=":

@@ -1,0 +1,34 @@
+// fizzbuzz.ail — A pure AIL program. No LLM calls.
+//
+// Demonstrates: fn, if/else, for, built-in functions (range, join,
+// to_text), the % (modulo) operator, and list building.
+//
+// This is the program that proves AIL is a real programming language,
+// not just an LLM orchestrator. Everything here executes deterministically
+// in microseconds with confidence 1.0.
+//
+// Run:
+//   ail run examples/fizzbuzz.ail --input "20" --mock
+
+fn fizzbuzz(n: Number) -> Text {
+    if n % 15 == 0 { return "FizzBuzz" }
+    if n % 3 == 0 { return "Fizz" }
+    if n % 5 == 0 { return "Buzz" }
+    return to_text(n)
+}
+
+fn fizzbuzz_range(limit: Number) -> Text {
+    results = []
+    for i in range(1, limit + 1) {
+        results = append(results, fizzbuzz(i))
+    }
+    return join(results, ", ")
+}
+
+entry main(limit: Text) {
+    n = to_number(limit)
+    if n == false {
+        n = 15
+    }
+    return fizzbuzz_range(n)
+}

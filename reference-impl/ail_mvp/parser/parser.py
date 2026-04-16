@@ -88,6 +88,8 @@ class Parser:
                 return self.parse_import()
             if t.value == "evolve":
                 return self.parse_evolve()
+            if t.value == "fn":
+                return self.parse_fn()
         raise ParseError(f"unexpected top-level token {t!r}")
 
     # --- context ---
@@ -501,6 +503,10 @@ class Parser:
             return self.parse_branch()
         if self.is_keyword("with"):
             return self.parse_with()
+        if self.is_keyword("if"):
+            return self.parse_if()
+        if self.is_keyword("for"):
+            return self.parse_for()
 
         # Assignment: IDENT = expr, if next is EQ
         if self.peek().kind == Tok.IDENT and self.tokens[self.i + 1].kind == Tok.EQ:
@@ -557,6 +563,59 @@ class Parser:
         else:
             body.append(self.parse_statement())
         return WithContextStmt(context_name=name, body=body)
+
+    def parse_fn(self):
+        """Parse a `fn` declaration — a pure deterministic function."""
+        from .ast import FnDecl
+        self.expect_keyword("fn")
+        name = self.expect(Tok.IDENT).value
+        params = self.parse_params()
+        return_type = None
+        if self.match(Tok.ARROW):
+            return_type = self.parse_type_name()
+        self.expect(Tok.LBRACE)
+        body: list[Statement] = []
+        while not self.check(Tok.RBRACE):
+            body.append(self.parse_statement())
+        self.expect(Tok.RBRACE)
+        return FnDecl(name=name, params=params, return_type=return_type, body=body)
+
+    def parse_if(self):
+        """Parse `if COND { ... } else if ... { ... } else { ... }`."""
+        from .ast import IfStmt
+        self.expect_keyword("if")
+        cond = self.parse_expr()
+        self.expect(Tok.LBRACE)
+        then_body: list[Statement] = []
+        while not self.check(Tok.RBRACE):
+            then_body.append(self.parse_statement())
+        self.expect(Tok.RBRACE)
+        else_body: list[Statement] = []
+        if self.is_keyword("else"):
+            self.advance()
+            if self.is_keyword("if"):
+                # else if -> recursive
+                else_body.append(self.parse_if())
+            else:
+                self.expect(Tok.LBRACE)
+                while not self.check(Tok.RBRACE):
+                    else_body.append(self.parse_statement())
+                self.expect(Tok.RBRACE)
+        return IfStmt(condition=cond, then_body=then_body, else_body=else_body)
+
+    def parse_for(self):
+        """Parse `for VAR in COLLECTION { ... }`."""
+        from .ast import ForStmt
+        self.expect_keyword("for")
+        var_name = self.expect(Tok.IDENT).value
+        self.expect_keyword("in")
+        collection = self.parse_expr()
+        self.expect(Tok.LBRACE)
+        body: list[Statement] = []
+        while not self.check(Tok.RBRACE):
+            body.append(self.parse_statement())
+        self.expect(Tok.RBRACE)
+        return ForStmt(var_name=var_name, collection=collection, body=body)
 
     # --- expressions (precedence climbing) ---
 
@@ -625,7 +684,7 @@ class Parser:
 
     def parse_multiplicative(self) -> Expr:
         left = self.parse_postfix()
-        while self.peek().kind in (Tok.STAR, Tok.SLASH):
+        while self.peek().kind in (Tok.STAR, Tok.SLASH, Tok.PERCENT):
             op = self.advance().value
             right = self.parse_postfix()
             left = BinaryOp(op=op, left=left, right=right)

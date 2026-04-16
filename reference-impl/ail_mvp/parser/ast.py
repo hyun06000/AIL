@@ -124,8 +124,25 @@ class ExprStmt:
     expr: Expr
 
 
+@dataclass
+class IfStmt:
+    """Deterministic if/else — boolean condition, not probabilistic."""
+    condition: Expr
+    then_body: list["Statement"]
+    else_body: list["Statement"]    # may be empty, or contain a single IfStmt (else if)
+
+
+@dataclass
+class ForStmt:
+    """Bounded iteration: `for VAR in COLLECTION { ... }`."""
+    var_name: str
+    collection: Expr
+    body: list["Statement"]
+
+
 Statement = (
-    Assignment | ReturnStmt | PerformStmt | BranchStmt | WithContextStmt | ExprStmt
+    Assignment | ReturnStmt | PerformStmt | BranchStmt | WithContextStmt
+    | ExprStmt | IfStmt | ForStmt
 )
 
 
@@ -222,7 +239,21 @@ class EvolveDecl:
     raw: dict[str, Any]
 
 
-TopLevel = ContextDecl | IntentDecl | EffectDecl | EntryDecl | ImportDecl | EvolveDecl
+@dataclass
+class FnDecl:
+    """A pure, deterministic function — no LLM, confidence always 1.0.
+
+    This is where AI writes actual algorithms: sorting, parsing,
+    transforming data. The body contains real control flow (if, for,
+    assignments, returns) rather than goals and constraints.
+    """
+    name: str
+    params: list[tuple[str, str | None]]   # (name, optional type)
+    return_type: str | None
+    body: list[Statement]
+
+
+TopLevel = ContextDecl | IntentDecl | EffectDecl | EntryDecl | ImportDecl | EvolveDecl | FnDecl
 
 
 @dataclass
