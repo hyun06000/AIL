@@ -14,12 +14,17 @@ This directory contains a working subset of AIL. It is not the full specificatio
 - Evolution: `retune` actions, version chain, `bounded_by` enforcement,
   `rollback_on` reversion, `history: keep_last` pruning, and
   `require review_by: human` gating
+- Imports: `import X from "stdlib/<module>"` resolves against the
+  bundled standard library (`stdlib/core`, `stdlib/language`).
+  stdlib itself is written in AIL, not Python.
 
 What the MVP does **not** yet include (explicit scope limits):
 
-- Evolution actions other than `retune` (`rewrite constraints`,
-  `rewrite examples`, `rewrite goal`, `promote strategy`, `escalate`
-  are reserved — see spec/04 §4)
+- Evolution actions other than `retune` (`rewrite examples`,
+  `rewrite goal`, `promote strategy`, `escalate` are reserved — see
+  spec/04 §4)
+- Relative imports (`./helpers.ail`) and URL-style imports
+  (`org://...`) are rejected with a helpful message
 - Full effect system (a single `human_ask` effect is supported via stdin)
 - Calibration (confidence is pass-through from the model)
 - Type checking beyond structural matching
@@ -108,6 +113,9 @@ ail run examples/ask_human.ail --input "What should I have for dinner?"
 ail run examples/evolve_retune.ail --input "I loved it" --mock
 # To *see* evolution in action (v0 -> v1 -> rollback), run the demo:
 python examples/evolve_retune_demo.py
+
+# Uses the bundled standard library (no custom intent definitions)
+ail run examples/summarize_and_classify.ail --input "some article text" --mock
 ```
 
 ---

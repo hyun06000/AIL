@@ -73,6 +73,7 @@ ail-project/
 ### 한국어 문서
 
 - [**evolve-guide.ko.md**](evolve-guide.ko.md) — 자기 수정 (`evolve`) 메커니즘 이해하기
+- [**stdlib-guide.ko.md**](stdlib-guide.ko.md) — 표준 라이브러리 이해하기
 
 ---
 
