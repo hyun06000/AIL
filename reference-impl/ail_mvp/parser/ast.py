@@ -177,10 +177,39 @@ class ImportDecl:
 
 
 @dataclass
-class EvolveDecl:
-    """Parsed but not executed in MVP."""
+class EvolveAction:
+    """A single permitted action inside an evolve block's `when` clause.
 
+    Per spec/04 §4, only a small fixed set of actions is permitted. The
+    MVP supports `retune` (numeric-parameter adjustment); other actions
+    (`rewrite constraints`, `rewrite examples`, `rewrite goal`,
+    `promote strategy`, `escalate`) are reserved for future work.
+    """
+    kind: str                        # 'retune' | 'rewrite_constraints' | ... (MVP: 'retune')
+    target: str                      # e.g. 'confidence_threshold'
+    range_lo: float | None = None    # for retune: the allowed range
+    range_hi: float | None = None
+
+
+@dataclass
+class EvolveDecl:
+    """A declaration attaching evolution rules to an intent.
+
+    Spec/04 §2 requires `metric`, `when`, an action, `rollback_on`, and
+    `history`. An EvolveDecl missing any of these is a compile error,
+    enforced by the parser/validator (see parser.py).
+    """
     intent_name: str
+    metric: Expr                                    # scalar expression
+    metric_sample_rate: float                       # 0.0–1.0
+    when_condition: Expr                            # triggers action
+    action: EvolveAction                            # the change to apply
+    rollback_on: Expr                               # reverts most recent change
+    history_keep: int                               # versions retained
+    bounded_by: dict[str, tuple[float, float]]      # field name -> (min, max)
+    review_by: str | None                           # None | 'human' | role name
+    # Raw form preserved for round-tripping; parser stores a best-effort
+    # normalization and keeps the rest of the block here for forward compat.
     raw: dict[str, Any]
 
 

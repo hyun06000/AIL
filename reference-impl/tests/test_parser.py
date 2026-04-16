@@ -117,28 +117,80 @@ def test_parse_perform_in_assignment():
     assert intent.low_confidence_handler is not None
 
 
-def test_parse_evolve_block_tolerated():
-    """evolve blocks are parsed and retained even though MVP does not execute them."""
+def test_parse_evolve_block_full():
+    """A valid evolve block is parsed into a fully structured declaration."""
     src = """
     intent i(x: Text) -> Text { goal: Text }
 
     evolve i {
-        metric: something
+        metric: user_score(sampled: 0.1)
         when metric < 0.7 {
-            retune
+            retune confidence_threshold: within [0.5, 0.9]
         }
-        rollback_on: drop > 0.1
+        rollback_on: metric_drop > 0.15
         history: keep_last 10
     }
 
     entry main(x: Text) { return i(x) }
     """
+    from ail_mvp.parser.ast import EvolveDecl
     prog = compile_source(src)
-    # Should have at least IntentDecl, EvolveDecl, EntryDecl
-    kinds = {type(d).__name__ for d in prog.declarations}
-    assert "EvolveDecl" in kinds
-    assert "IntentDecl" in kinds
-    assert "EntryDecl" in kinds
+    evolves = [d for d in prog.declarations if isinstance(d, EvolveDecl)]
+    assert len(evolves) == 1
+    ev = evolves[0]
+    assert ev.intent_name == "i"
+    assert ev.history_keep == 10
+    assert ev.metric_sample_rate == 0.1
+    assert ev.action.kind == "retune"
+    assert ev.action.target == "confidence_threshold"
+    assert ev.action.range_lo == 0.5
+    assert ev.action.range_hi == 0.9
+
+
+def test_parse_evolve_missing_required_fields_rejected():
+    """An evolve block without rollback_on MUST be rejected (spec/04 §2)."""
+    from ail_mvp.parser.parser import ParseError
+    src = """
+    intent i(x: Text) -> Text { goal: Text }
+    evolve i {
+        metric: m
+        when metric < 0.7 {
+            retune t: within [0.1, 0.9]
+        }
+        history: keep_last 5
+    }
+    entry main(x: Text) { return i(x) }
+    """
+    with pytest.raises(ParseError, match="rollback_on"):
+        compile_source(src)
+
+
+def test_parse_evolve_with_bounded_by_and_review():
+    """bounded_by and require review_by are parsed when present."""
+    src = """
+    intent i(x: Text) -> Text { goal: Text }
+    evolve i {
+        metric: m
+        when m < 0.7 {
+            retune threshold: within [0.1, 0.9]
+            bounded_by {
+                threshold: [0.2, 0.95]
+                latency: <= 2000
+            }
+        }
+        rollback_on: m < 0.5
+        history: keep_last 3
+        require review_by: human
+    }
+    entry main(x: Text) { return i(x) }
+    """
+    from ail_mvp.parser.ast import EvolveDecl
+    prog = compile_source(src)
+    ev = [d for d in prog.declarations if isinstance(d, EvolveDecl)][0]
+    assert ev.review_by == "human"
+    assert "threshold" in ev.bounded_by
+    assert ev.bounded_by["threshold"] == (0.2, 0.95)
+    assert ev.bounded_by["latency"][1] == 2000.0
 
 
 def test_comments_are_ignored():

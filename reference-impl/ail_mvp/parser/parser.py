@@ -262,26 +262,174 @@ class Parser:
         source = self.expect(Tok.STRING).value
         return ImportDecl(symbol=sym, source=source, kind=kind)
 
-    # --- evolve (parsed but not executed) ---
+    # --- evolve ---
 
     def parse_evolve(self) -> EvolveDecl:
+        """Parse an evolve block.
+
+        Per spec/04 §2, an evolve block MUST contain metric, when, an
+        action, rollback_on, and history. Missing any of these is a
+        compile error (enforced here).
+
+        MVP-supported action: `retune <target>: within [lo, hi]`.
+        Other actions are reserved and raise ParseError if encountered.
+        """
+        from .ast import EvolveAction
+
         self.expect_keyword("evolve")
         intent_name = self.expect(Tok.IDENT).value
         self.expect(Tok.LBRACE)
-        depth = 1
+
+        metric: Expr | None = None
+        metric_sample_rate = 1.0
+        when_condition: Expr | None = None
+        action: EvolveAction | None = None
+        rollback_on: Expr | None = None
+        history_keep: int | None = None
+        bounded_by: dict[str, tuple[float, float]] = {}
+        review_by: str | None = None
         raw: dict[str, Any] = {}
-        # Consume balanced braces; MVP does not interpret evolve
-        while depth > 0:
-            t = self.peek()
-            if t.kind == Tok.LBRACE:
-                depth += 1; self.advance()
-            elif t.kind == Tok.RBRACE:
-                depth -= 1; self.advance()
-            elif t.kind == Tok.EOF:
+
+        while not self.check(Tok.RBRACE):
+            if self.check(Tok.EOF):
                 raise ParseError("unterminated evolve block")
+
+            field_name = self.expect(Tok.IDENT).value
+
+            if field_name == "metric":
+                self.expect(Tok.COLON)
+                # metric may be `name` or `name(sampled: 0.05)`
+                metric_name = self.expect(Tok.IDENT).value
+                metric = Identifier(name=metric_name)
+                if self.match(Tok.LPAREN):
+                    # parse sampled: <number> (only recognized kwarg)
+                    while not self.check(Tok.RPAREN):
+                        kw = self.expect(Tok.IDENT).value
+                        self.expect(Tok.COLON)
+                        if kw == "sampled":
+                            metric_sample_rate = float(self.expect(Tok.NUMBER).value)
+                        else:
+                            # tolerate unknown kwargs for forward compat
+                            self.parse_expr()
+                        if not self.match(Tok.COMMA):
+                            break
+                    self.expect(Tok.RPAREN)
+
+            elif field_name == "when":
+                when_condition = self.parse_expr()
+                # Optional `{ action }` block follows the when clause
+                if self.match(Tok.LBRACE):
+                    action = self._parse_evolve_action()
+                    # Optional bounded_by inside the action block
+                    if self.is_keyword("bounded_by"):
+                        self.advance()
+                        self.expect(Tok.LBRACE)
+                        while not self.check(Tok.RBRACE):
+                            bname = self.expect(Tok.IDENT).value
+                            # allow field.path via dot
+                            while self.match(Tok.DOT):
+                                bname += "." + self.expect(Tok.IDENT).value
+                            self.expect(Tok.COLON)
+                            lo, hi = self._parse_bounded_range()
+                            bounded_by[bname] = (lo, hi)
+                        self.expect(Tok.RBRACE)
+                    self.expect(Tok.RBRACE)
+
+            elif field_name == "rollback_on":
+                self.expect(Tok.COLON)
+                rollback_on = self.parse_expr()
+
+            elif field_name == "history":
+                self.expect(Tok.COLON)
+                # expect: keep_last N
+                self.expect_keyword("keep_last")
+                history_keep = int(self.expect(Tok.NUMBER).value)
+
+            elif field_name == "require":
+                # `require review_by: <role>`
+                self.expect_keyword("review_by")
+                self.expect(Tok.COLON)
+                review_by = self.expect(Tok.IDENT).value
+
             else:
-                self.advance()
-        return EvolveDecl(intent_name=intent_name, raw=raw)
+                # Tolerate unknown fields for forward compatibility, skip the value
+                if self.match(Tok.COLON):
+                    self.parse_expr()
+                raw[field_name] = "<unparsed>"
+
+        self.expect(Tok.RBRACE)
+
+        # Required fields check (per spec/04 §2)
+        missing = []
+        if metric is None: missing.append("metric")
+        if when_condition is None: missing.append("when")
+        if action is None: missing.append("action (inside when block)")
+        if rollback_on is None: missing.append("rollback_on")
+        if history_keep is None: missing.append("history")
+        if missing:
+            raise ParseError(
+                f"evolve {intent_name}: missing required field(s): "
+                + ", ".join(missing)
+                + " (per spec/04 §2)"
+            )
+
+        return EvolveDecl(
+            intent_name=intent_name,
+            metric=metric,
+            metric_sample_rate=metric_sample_rate,
+            when_condition=when_condition,
+            action=action,
+            rollback_on=rollback_on,
+            history_keep=history_keep,
+            bounded_by=bounded_by,
+            review_by=review_by,
+            raw=raw,
+        )
+
+    def _parse_evolve_action(self):
+        """Parse a single action inside a when { ... } block.
+
+        MVP grammar:
+            retune <target>: within [<lo>, <hi>]
+        """
+        from .ast import EvolveAction
+
+        # Read action keyword (first identifier)
+        kw = self.expect(Tok.IDENT).value
+        if kw != "retune":
+            raise ParseError(
+                f"evolve action '{kw}' not supported in MVP; only 'retune' is implemented. "
+                f"See spec/04 §4 for the full action set."
+            )
+        target = self.expect(Tok.IDENT).value
+        self.expect(Tok.COLON)
+        self.expect_keyword("within")
+        self.expect(Tok.LBRACK)
+        lo = float(self.expect(Tok.NUMBER).value)
+        self.expect(Tok.COMMA)
+        hi = float(self.expect(Tok.NUMBER).value)
+        self.expect(Tok.RBRACK)
+        return EvolveAction(kind="retune", target=target, range_lo=lo, range_hi=hi)
+
+    def _parse_bounded_range(self) -> tuple[float, float]:
+        """Parse a bounded_by range value. Supports:
+            [lo, hi]
+            >= lo
+            <= hi
+        """
+        if self.match(Tok.LBRACK):
+            lo = float(self.expect(Tok.NUMBER).value)
+            self.expect(Tok.COMMA)
+            hi = float(self.expect(Tok.NUMBER).value)
+            self.expect(Tok.RBRACK)
+            return (lo, hi)
+        if self.match(Tok.GEQ):
+            lo = float(self.expect(Tok.NUMBER).value)
+            return (lo, float("inf"))
+        if self.match(Tok.LEQ):
+            hi = float(self.expect(Tok.NUMBER).value)
+            return (float("-inf"), hi)
+        raise ParseError(f"expected [lo, hi] or >= N or <= N at {self.peek()}")
 
     # --- common pieces ---
 
