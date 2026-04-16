@@ -1,0 +1,21 @@
+// stdlib/core — foundational intents available in every program.
+//
+// These are the universal primitives: identity for pass-through,
+// refuse for declared refusals. More are added here only when they
+// are genuinely universal; specialized intents live in other stdlib
+// modules (stdlib/language, stdlib/reason, etc.).
+
+intent identity(x: Text) -> Text {
+    goal: return the input value unchanged
+    constraints {
+        output == input
+    }
+}
+
+intent refuse(reason: Text) -> Text {
+    goal: a structured refusal carrying the declared reason
+    constraints {
+        output_begins_with_cannot_or_wont
+        output_includes_the_reason
+    }
+}

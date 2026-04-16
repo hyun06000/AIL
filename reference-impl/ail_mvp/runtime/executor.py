@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from ..parser.ast import (
-    Program, IntentDecl, ContextDecl, EntryDecl, EffectDecl, EvolveDecl,
+    Program, IntentDecl, ContextDecl, EntryDecl, EffectDecl, EvolveDecl, ImportDecl,
     Assignment, ReturnStmt, PerformStmt, BranchStmt, WithContextStmt, ExprStmt,
     Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
     PerformExpr, MembershipOp,
@@ -26,6 +26,7 @@ from .context import ContextStack, ContextResolver, ResolvedContext
 from .trace import Trace
 from .model import ModelAdapter, ModelResponse
 from .evolution import EvolutionSupervisor
+from ..stdlib import resolve as resolve_import, ImportResolutionError
 
 
 @dataclass
@@ -79,15 +80,8 @@ class Executor:
         self.contexts: dict[str, ContextDecl] = {}
         self.effects: dict[str, EffectDecl] = {}
         self.evolves: dict[str, EvolveDecl] = {}
-        for d in program.declarations:
-            if isinstance(d, IntentDecl):
-                self.intents[d.name] = d
-            elif isinstance(d, ContextDecl):
-                self.contexts[d.name] = d
-            elif isinstance(d, EffectDecl):
-                self.effects[d.name] = d
-            elif isinstance(d, EvolveDecl):
-                self.evolves[d.intent_name] = d
+        self.imported_sources: list[str] = []  # for trace & debugging
+        self._index_declarations(program.declarations)
 
         # Construct an EvolutionSupervisor per evolving intent, lazily on
         # first use. Per spec/04 they are stateful across calls within
@@ -100,6 +94,53 @@ class Executor:
         # Ensure 'default' exists
         if "default" not in self.contexts:
             self.contexts["default"] = _default_context()
+
+    def _index_declarations(self, decls, _visiting: set[str] | None = None) -> None:
+        """Index declarations, resolving imports recursively.
+
+        A local declaration shadows any imported one of the same name —
+        the program's own code is authoritative. Imports are processed
+        in order; an import cycle raises ImportResolutionError rather
+        than silently dropping later imports.
+        """
+        _visiting = _visiting or set()
+
+        for d in decls:
+            if isinstance(d, ImportDecl):
+                if d.source in _visiting:
+                    raise ImportResolutionError(
+                        f"import cycle detected at '{d.source}'"
+                    )
+                _visiting.add(d.source)
+                try:
+                    imported_program = resolve_import(d.source)
+                except ImportResolutionError:
+                    raise
+                self.imported_sources.append(d.source)
+                # Recursively index the imported program's declarations
+                # so its own imports also resolve. Imports merge under
+                # the imported program's own names; only symbols whose
+                # name matches `d.symbol` are kept from that import.
+                self._index_declarations(
+                    imported_program.declarations, _visiting,
+                )
+                # After recursion, narrow to the requested symbol if
+                # the import named a single one. For the MVP we import
+                # the whole module — `d.symbol` is recorded but not
+                # used to filter, because fine-grained filtering is a
+                # separate feature and the bundled stdlib is curated.
+                _visiting.discard(d.source)
+                continue
+
+            if isinstance(d, IntentDecl):
+                # Local declarations win over imported ones
+                self.intents[d.name] = d
+            elif isinstance(d, ContextDecl):
+                self.contexts[d.name] = d
+            elif isinstance(d, EffectDecl):
+                self.effects[d.name] = d
+            elif isinstance(d, EvolveDecl):
+                self.evolves[d.intent_name] = d
 
     # --- evolution helpers ---
 

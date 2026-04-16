@@ -1,0 +1,64 @@
+// stdlib/language — operations on natural-language text.
+//
+// These are the workhorse intents for AI-authored programs.
+// Each one has a clear goal, conservative constraints, and is safe to
+// evolve independently (no evolve block here — callers attach their
+// own if they want).
+
+intent summarize(source: Text, max_tokens: Number) -> Text {
+    goal: Text summary of source that preserves the main argument and key facts
+    constraints {
+        length_under_max_tokens
+        no_hallucinated_facts
+        preserves_attribution_when_present
+    }
+}
+
+intent translate(source: Text, target_language: Text) -> Text {
+    goal: Text faithfully translating source into target_language
+    constraints {
+        fidelity_above_point_eight_five
+        preserves_formatting
+        preserves_proper_nouns_when_no_good_translation_exists
+    }
+}
+
+intent classify(text: Text, labels: Text) -> Text {
+    goal: one of the given labels that best describes text
+    constraints {
+        output in labels
+        classification_reflects_content_not_style
+    }
+    on_low_confidence(threshold: 0.6) {
+        return "unclear"
+    }
+}
+
+intent extract(source: Text, schema_description: Text) -> Text {
+    goal: structured data matching schema_description extracted from source
+    constraints {
+        output_is_valid_json
+        schema_fields_populated_when_present_in_source
+        null_for_fields_not_present
+    }
+    on_low_confidence(threshold: 0.5) {
+        return "{}"
+    }
+}
+
+intent rewrite(source: Text, instruction: Text) -> Text {
+    goal: source_rewritten_to_follow_instruction_while_preserving_unchanged_meaning
+    constraints {
+        instruction_is_followed
+        no_content_added_unrelated_to_instruction
+    }
+}
+
+intent critique(artifact: Text, rubric: Text) -> Text {
+    goal: Text critique of artifact against rubric that includes concrete suggestions
+    constraints {
+        critique_cites_specific_parts_of_artifact
+        suggestions_are_actionable
+        tone_is_constructive
+    }
+}
