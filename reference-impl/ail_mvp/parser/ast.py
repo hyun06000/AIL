@@ -180,15 +180,24 @@ class ImportDecl:
 class EvolveAction:
     """A single permitted action inside an evolve block's `when` clause.
 
-    Per spec/04 §4, only a small fixed set of actions is permitted. The
-    MVP supports `retune` (numeric-parameter adjustment); other actions
-    (`rewrite constraints`, `rewrite examples`, `rewrite goal`,
-    `promote strategy`, `escalate`) are reserved for future work.
+    Per spec/04 §4, only a small fixed set of actions is permitted.
+    The MVP supports:
+      - 'retune'             : adjust a numeric parameter to the
+                               midpoint of a declared range
+      - 'rewrite_constraints': tighten numeric thresholds in the
+                               intent's constraints block by a fixed
+                               delta; requires human review
+
+    Other actions (`rewrite examples`, `rewrite goal`, `promote
+    strategy`, `escalate`) are reserved for future work.
     """
-    kind: str                        # 'retune' | 'rewrite_constraints' | ... (MVP: 'retune')
-    target: str                      # e.g. 'confidence_threshold'
-    range_lo: float | None = None    # for retune: the allowed range
+    kind: str                        # 'retune' | 'rewrite_constraints'
+    # For 'retune':
+    target: str = ""                 # e.g. 'confidence_threshold'
+    range_lo: float | None = None    # the allowed range
     range_hi: float | None = None
+    # For 'rewrite_constraints':
+    tighten_delta: float | None = None  # e.g. 0.05 -> tighter by 5%
 
 
 @dataclass

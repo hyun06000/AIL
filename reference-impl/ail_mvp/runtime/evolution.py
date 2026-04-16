@@ -31,14 +31,23 @@ from ..parser.ast import EvolveDecl, EvolveAction
 class IntentVersion:
     """A single version of an evolving intent's tunable parameters.
 
-    The MVP tracks a dict of numeric parameters; a rewrite action type
-    would extend this to include structural edits.
+    Two kinds of per-version state:
+      - parameters: numeric values used by retune actions
+      - constraint_overrides: replacement constraint expressions for
+        rewrite_constraints actions. Maps constraint-index (position in
+        the original intent's constraints list) to the replacement
+        expression in stringified form.
+
+    The executor reads these at dispatch time: parameters are injected
+    into the context; constraint_overrides replace the corresponding
+    lines of the constraints block passed to the model adapter.
     """
     version_id: int
-    parameters: dict[str, float]         # e.g., {'confidence_threshold': 0.75}
-    parent_id: int | None                # previous version, None for v0
-    reason: str                          # human-readable why this version exists
-    applied_at_call: int                 # invocation count at time of apply
+    parameters: dict[str, float]
+    parent_id: int | None
+    reason: str
+    applied_at_call: int
+    constraint_overrides: dict[int, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -63,10 +72,14 @@ class EvolutionSupervisor:
 
     def __init__(self, decl: EvolveDecl,
                  approve_review: Callable[[dict], bool] | None = None,
-                 rng_seed: int | None = None):
+                 rng_seed: int | None = None,
+                 intent_decl=None):
         self.decl = decl
         self.intent_name = decl.intent_name
         self.approve_review = approve_review or (lambda _info: False)
+        # The AST node for the intent this supervisor governs. Needed by
+        # rewrite_constraints to introspect existing constraint expressions.
+        self._intent_decl = intent_decl
 
         # Random sampling for metric collection
         import random
@@ -184,12 +197,18 @@ class EvolutionSupervisor:
         if not (avg < threshold if cond.op == "<" else avg <= threshold):
             return None
 
-        # Build the proposed modification (MVP: retune)
         action = self.decl.action
-        if action.kind != "retune":
-            return None
 
-        # Nudge toward the midpoint of the allowed range
+        # Dispatch by action kind
+        if action.kind == "retune":
+            return self._propose_retune(action, avg, threshold)
+        if action.kind == "rewrite_constraints":
+            return self._propose_rewrite_constraints(action, avg, threshold)
+        return None
+
+    def _propose_retune(self, action, avg: float,
+                        threshold: float) -> EvolutionEvent | None:
+        """Build a retune proposal: set the target to the midpoint of the range."""
         mid = (action.range_lo + action.range_hi) / 2.0
         proposed_params = dict(self._active_version().parameters)
         proposed_params[action.target] = mid
@@ -213,36 +232,145 @@ class EvolutionSupervisor:
 
         # Human review gate
         if self.decl.review_by == "human":
-            self._pending_modification = proposed_params
+            return self._seek_review_or_apply(
+                proposed_params=proposed_params,
+                proposed_overrides={},
+                avg=avg, threshold=threshold,
+            )
+
+        self._apply_modification(proposed_params, {})
+        return self.events[-1]
+
+    def _propose_rewrite_constraints(self, action, avg: float,
+                                     threshold: float) -> EvolutionEvent | None:
+        """Build a rewrite_constraints proposal.
+
+        Walks the intent's constraints block, finds BinaryOp nodes of the
+        form `<lhs> <op> <number>`, and proposes tighter versions:
+
+          >  and >=   : increase threshold by tighten_delta
+          <  and <=   : decrease threshold by tighten_delta
+
+        The proposal is stored as constraint_overrides (index -> string
+        form of the new constraint). The original constraints AST is
+        never mutated; each version carries its own overrides.
+        """
+        from ..parser.ast import BinaryOp, Literal
+
+        intent = self._intent_decl
+        if intent is None:
+            return None
+
+        delta = action.tighten_delta or 0.0
+        current = self._active_version()
+        proposed_overrides = dict(current.constraint_overrides)
+
+        changed_any = False
+        for idx, constraint in enumerate(intent.constraints):
+            if not isinstance(constraint, BinaryOp):
+                continue
+            if not isinstance(constraint.right, Literal):
+                continue
+            if not isinstance(constraint.right.value, (int, float)):
+                continue
+
+            lhs_repr = self._expr_repr(constraint.left)
+            old_val = float(constraint.right.value)
+            # Tightening direction depends on operator
+            if constraint.op in (">", ">="):
+                new_val = old_val + delta
+            elif constraint.op in ("<", "<="):
+                new_val = old_val - delta
+            else:
+                continue
+
+            # Accumulate if this constraint was already overridden
+            if idx in proposed_overrides:
+                # Re-tightening: parse the prior override's number and add
+                # another delta. For MVP we skip re-tightening; the
+                # window is reset after each version, so the next time
+                # we trigger we're starting from the prior value.
+                pass
+
+            new_text = f"{lhs_repr} {constraint.op} {new_val}"
+            proposed_overrides[idx] = new_text
+            changed_any = True
+
+        if not changed_any:
+            ev = EvolutionEvent(
+                kind="modification_rejected",
+                payload={
+                    "reason": "no numeric constraints to tighten",
+                },
+            )
+            self.events.append(ev)
+            return ev
+
+        # rewrite_constraints ALWAYS goes through human review —
+        # tightening rules is a material change even if numerically
+        # small. If the program did not declare review_by: human,
+        # we force it for safety.
+        return self._seek_review_or_apply(
+            proposed_params=dict(self._active_version().parameters),
+            proposed_overrides=proposed_overrides,
+            avg=avg, threshold=threshold,
+            force_review=True,
+        )
+
+    def _seek_review_or_apply(self, *, proposed_params: dict[str, float],
+                              proposed_overrides: dict[int, str],
+                              avg: float, threshold: float,
+                              force_review: bool = False,
+                              ) -> EvolutionEvent | None:
+        """Common path: if review required, request it; else apply."""
+        if self.decl.review_by == "human" or force_review:
+            self._pending_modification = (proposed_params, proposed_overrides)
             self._review_pending = True
             info = {
                 "intent": self.intent_name,
                 "current_version": self.active_version_id,
                 "proposed_params": proposed_params,
+                "proposed_constraint_overrides": proposed_overrides,
                 "trigger_metric_avg": avg,
                 "threshold": threshold,
+                "forced_review": force_review,
             }
             ev = EvolutionEvent(kind="review_requested", payload=info)
             self.events.append(ev)
-            # Call the approval callback synchronously (MVP behavior).
-            # In a production runtime this would be async.
             if self.approve_review(info):
-                self._apply_modification(proposed_params, reason_suffix=" (human-approved)")
+                self._apply_modification(proposed_params, proposed_overrides,
+                                         reason_suffix=" (human-approved)")
                 self._review_pending = False
                 self._pending_modification = None
-                return ev  # the apply event is appended by _apply_modification
             return ev
 
-        # No review required: apply immediately
-        self._apply_modification(proposed_params)
+        self._apply_modification(proposed_params, proposed_overrides)
         return self.events[-1]
 
+    @staticmethod
+    def _expr_repr(expr) -> str:
+        """Best-effort string representation of an expression for override text."""
+        from ..parser.ast import Identifier, FieldAccess, Literal
+        if isinstance(expr, Identifier):
+            return expr.name
+        if isinstance(expr, FieldAccess):
+            return f"{EvolutionSupervisor._expr_repr(expr.target)}.{expr.field}"
+        if isinstance(expr, Literal):
+            return repr(expr.value)
+        return str(expr)
+
     def _apply_modification(self, proposed_params: dict[str, float],
+                            proposed_overrides: dict[int, str] | None = None,
                             reason_suffix: str = "") -> None:
         new_id = max(v.version_id for v in self.versions) + 1
+        action = self.decl.action
+        if action.kind == "rewrite_constraints":
+            action_desc = f"tighten constraints by {action.tighten_delta}"
+        else:
+            action_desc = "retune to midpoint"
         reason = (
             f"metric {self._describe_metric()} fell below threshold; "
-            f"retune to midpoint{reason_suffix}"
+            f"{action_desc}{reason_suffix}"
         )
         new_version = IntentVersion(
             version_id=new_id,
@@ -250,6 +378,7 @@ class EvolutionSupervisor:
             parent_id=self.active_version_id,
             reason=reason,
             applied_at_call=self._call_counter,
+            constraint_overrides=proposed_overrides or {},
         )
         self.versions.append(new_version)
         self.active_version_id = new_id

@@ -156,6 +156,7 @@ class Executor:
             sup = EvolutionSupervisor(
                 self.evolves[intent_name],
                 approve_review=self.approve_review,
+                intent_decl=self.intents.get(intent_name),
             )
             self.supervisors[intent_name] = sup
         return sup
@@ -545,11 +546,10 @@ class Executor:
             rollback = confidence
         events = sup.observe(metric_value=metric, rollback_value=rollback)
         for ev in events:
-            self.trace.record(
-                f"evolution_{ev.kind}",
-                intent=intent_name,
-                **{k: v for k, v in ev.payload.items()},
-            )
+            # Avoid collision if the payload already carries 'intent'
+            payload = dict(ev.payload)
+            payload.setdefault("intent", intent_name)
+            self.trace.record(f"evolution_{ev.kind}", **payload)
 
 
 # --- utilities ---

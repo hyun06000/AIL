@@ -391,25 +391,53 @@ class Parser:
 
         MVP grammar:
             retune <target>: within [<lo>, <hi>]
+            rewrite constraints tighten_numeric_thresholds_by <delta>
         """
         from .ast import EvolveAction
 
         # Read action keyword (first identifier)
         kw = self.expect(Tok.IDENT).value
-        if kw != "retune":
-            raise ParseError(
-                f"evolve action '{kw}' not supported in MVP; only 'retune' is implemented. "
-                f"See spec/04 §4 for the full action set."
+
+        if kw == "retune":
+            target = self.expect(Tok.IDENT).value
+            self.expect(Tok.COLON)
+            self.expect_keyword("within")
+            self.expect(Tok.LBRACK)
+            lo = float(self.expect(Tok.NUMBER).value)
+            self.expect(Tok.COMMA)
+            hi = float(self.expect(Tok.NUMBER).value)
+            self.expect(Tok.RBRACK)
+            return EvolveAction(
+                kind="retune", target=target,
+                range_lo=lo, range_hi=hi,
             )
-        target = self.expect(Tok.IDENT).value
-        self.expect(Tok.COLON)
-        self.expect_keyword("within")
-        self.expect(Tok.LBRACK)
-        lo = float(self.expect(Tok.NUMBER).value)
-        self.expect(Tok.COMMA)
-        hi = float(self.expect(Tok.NUMBER).value)
-        self.expect(Tok.RBRACK)
-        return EvolveAction(kind="retune", target=target, range_lo=lo, range_hi=hi)
+
+        if kw == "rewrite":
+            what = self.expect(Tok.IDENT).value
+            if what != "constraints":
+                raise ParseError(
+                    f"'rewrite {what}' not supported in MVP; "
+                    f"only 'rewrite constraints' is implemented. "
+                    f"See spec/04 §4 for the full action set."
+                )
+            # Expect the specific tightening directive (only supported variant)
+            mode = self.expect(Tok.IDENT).value
+            if mode != "tighten_numeric_thresholds_by":
+                raise ParseError(
+                    f"'rewrite constraints {mode}' not recognized; "
+                    f"expected 'tighten_numeric_thresholds_by <delta>'."
+                )
+            delta = float(self.expect(Tok.NUMBER).value)
+            return EvolveAction(
+                kind="rewrite_constraints",
+                tighten_delta=delta,
+            )
+
+        raise ParseError(
+            f"evolve action '{kw}' not supported in MVP. "
+            f"Supported: 'retune', 'rewrite constraints'. "
+            f"See spec/04 §4 for the full action set."
+        )
 
     def _parse_bounded_range(self) -> tuple[float, float]:
         """Parse a bounded_by range value. Supports:
