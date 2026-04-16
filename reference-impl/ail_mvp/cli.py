@@ -46,7 +46,9 @@ def main(argv: list[str] | None = None) -> int:
         program = compile_source(source)
         print(f"Program with {len(program.declarations)} declarations:")
         for d in program.declarations:
-            print(f"  {type(d).__name__}: {getattr(d, 'name', '?')}")
+            # Different declaration types have different name fields
+            label = _declaration_label(d)
+            print(f"  {type(d).__name__}: {label}")
         return 0
 
     if args.cmd == "run":
@@ -79,6 +81,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     return 0
+
+
+def _declaration_label(d) -> str:
+    """Return a human-friendly label for each declaration type."""
+    # Each declaration kind has its own primary-name field
+    if hasattr(d, "name"):
+        return d.name
+    if hasattr(d, "intent_name"):   # EvolveDecl
+        return f"for {d.intent_name}"
+    if hasattr(d, "source"):        # ImportDecl
+        sym = getattr(d, "symbol", "")
+        return f"{sym} from {d.source!r}" if sym else d.source
+    return "?"
 
 
 if __name__ == "__main__":

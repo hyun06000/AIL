@@ -1,0 +1,26 @@
+// summarize_and_classify.ail
+//
+// Uses the bundled standard library instead of redefining primitives.
+// Shows how a short AIL program composes two stdlib intents with
+// context-driven behavior.
+//
+// Flow: take a long piece of text, summarize it, then classify the
+// summary's sentiment. Both summarize and classify come from
+// stdlib/language — the user's program only adds the composition
+// and the context that shapes how they run.
+
+import summarize from "stdlib/language"
+import classify from "stdlib/language"
+
+context editorial_review extends default {
+    register: "neutral"
+    audience: "general_reader"
+    preserve: [names, dates, numbers]
+}
+
+entry main(article: Text) {
+    with context editorial_review:
+        brief = summarize(article, 80)
+        mood = classify(brief, "positive_negative_mixed_unclear")
+    return mood
+}
