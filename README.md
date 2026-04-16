@@ -1,50 +1,89 @@
 # AIL — AI-Intent Language
 
-> A language, runtime, and operating system designed from first principles for AI as the primary author of computation.
+> A programming language designed for AI as the primary author of code.
 
-**Status:** Draft specification v0.1 · Reference implementation runs live against Claude · stdlib written in AIL · 65 tests passing
+**Status:** Specification v0.2 · Python interpreter with 84 tests · FizzBuzz runs without an LLM
 
-🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md) 에서 한국어 개요를 읽으실 수 있습니다.
+🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md)
 
 ---
 
-## Why this exists
+## What is AIL?
 
-Every programming language in widespread use today was designed for humans writing code. Syntax exists to reduce human cognitive load. Type systems exist to prevent human errors. IDEs exist to scaffold human memory.
+AIL is a programming language where **AI is the programmer and humans are the stakeholders**. It has two kinds of building blocks:
 
-But the authorship of code is shifting. In 2026, a significant portion of production code is written by AI systems and reviewed (or not reviewed) by humans. The language those AI systems use is still Python, still JavaScript, still C++ — languages whose every design decision assumes a human at the keyboard.
+- **`fn`** — pure deterministic functions for algorithms, data transforms, and logic. No LLM needed. Fast, free, confidence 1.0.
+- **`intent`** — goal-driven declarations that delegate to a language model when judgment is required. Slow, costs tokens, carries a confidence score.
 
-This project asks a different question:
+The AI chooses the right tool for each subtask. This distinction — "what I can compute" vs "what I need to reason about" — is built into the language, not a framework convention.
 
-> If AI is the author, what should the language look like?
+```ail
+import classify from "stdlib/language"
+import word_count from "stdlib/utils"
 
-AIL (AI-Intent Language) is the answer, built across three layers:
+fn build_report(label: Text, count: Number) -> Text {
+    return join([label, " (", to_text(count), " words)"], "")
+}
 
-| Layer | Name | What it is |
+entry main(text: Text) {
+    sentiment = classify(text, "positive_negative_neutral")  // intent: LLM
+    count = word_count(text)                                  // fn: no LLM
+    return build_report(sentiment, count)                     // fn: no LLM
+}
+```
+
+---
+
+## Quick start
+
+```bash
+cd reference-impl
+pip install -e ".[anthropic]"
+
+# No API key needed — pure fn programs run without an LLM:
+ail run examples/fizzbuzz.ail --input "20" --mock
+
+# With an API key (env var or .env file):
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > ../.env
+python examples/run_live.py
+
+# See evolution (retune + rollback) in action:
+python examples/evolve_retune_demo.py
+```
+
+---
+
+## What the language can do today
+
+| Feature | Example |
+|---|---|
+| Pure functions | `fn factorial(n) -> Number { if n <= 1 { return 1 } return n * factorial(n-1) }` |
+| Loops | `for item in list { ... }` |
+| Conditionals | `if / else if / else` |
+| 20 built-in functions | `split`, `join`, `sort`, `map`, `filter`, `reduce`, `range`... |
+| LLM-backed intents | `intent classify(text) -> Text { goal: sentiment_label }` |
+| Context system | `with context formal_korean: translate(doc)` |
+| Self-modification | `evolve { retune ... }`, `rewrite constraints` (human review enforced) |
+| Module system | `import summarize from "stdlib/language"` |
+| Confidence tracking | Every value carries a confidence in [0, 1] |
+| Standard library | `stdlib/core`, `stdlib/language` (intents), `stdlib/utils` (fns) — all written in AIL |
+
+---
+
+## Examples (8 programs)
+
+| Program | What it shows | LLM needed? |
 |---|---|---|
-| Language | **AIL** | A declarative, probabilistic, context-first language whose programs describe *intent* rather than procedure |
-| Runtime | **AIRT** | A runtime that treats AI model calls as first-class primitives and executes programs as adaptive probabilistic graphs |
-| OS | **NOOS** | An operating system whose kernel exposes intent, context, and model capacity as syscalls instead of files, processes, and memory |
+| `hello.ail` | Simplest possible program | Yes |
+| `translate.ail` | Context inheritance + override | Yes |
+| `classify.ail` | Branch dispatch on classifier output | Yes |
+| `ask_human.ail` | Low-confidence fallback to human | Yes |
+| `evolve_retune.ail` | Evolution with version chain | Yes |
+| `summarize_and_classify.ail` | stdlib imports | Yes |
+| **`fizzbuzz.ail`** | **Pure fn — no LLM at all** | **No** |
+| **`review_analyzer.ail`** | **Hybrid: fn parses data, intent judges sentiment** | **Partially** |
 
-Humans interact with this stack the same way they always do: in natural language. The AI writes AIL, AIRT runs it, NOOS hosts it. The human describes what they want.
-
----
-
-## The core inversion
-
-Traditional computing assumes:
-
-- **Determinism is normal, uncertainty is the exception.**
-- **Code describes steps.**
-- **Context is implicit and lost at function boundaries.**
-- **Programs are static artifacts that humans write and then freeze.**
-
-AIL inverts all four:
-
-- **Uncertainty is normal, certainty is the exception.** Every value carries a confidence.
-- **Code describes intent.** The runtime decides steps.
-- **Context is first-class.** It is passed, inherited, and narrowed like a type.
-- **Programs are live.** They observe their own behavior and rewrite themselves under declared constraints.
+The last two are the most important. FizzBuzz proves AIL is a real language. The review analyzer shows the hybrid model working in practice: 23 fn calls (free, fast) + 6 intent calls (LLM, for judgment only).
 
 ---
 
@@ -52,57 +91,73 @@ AIL inverts all four:
 
 ```
 ail-project/
-├── spec/              # Language specification (normative)
-├── runtime/           # AIRT runtime design documents
-├── os/                # NOOS operating system design documents
-├── reference-impl/    # Python reference interpreter for AIL
-├── examples/          # Example AIL programs
-├── docs/              # Tutorials, design rationale, FAQ
-└── .github/           # CI, issue templates
+├── spec/              # Language specification (7 documents)
+│   ├── 01-language    # Core syntax: intent, context, branch, entry
+│   ├── 02-context     # Context system
+│   ├── 03-confidence  # Confidence model
+│   ├── 04-evolution   # Self-modification
+│   ├── 05-effects     # Effects and authorization
+│   ├── 06-stdlib      # Standard library spec
+│   └── 07-computation # fn, if, for, types (v0.2)
+├── runtime/           # AIRT runtime design (document, not full impl)
+├── os/                # NOOS OS design (document only)
+├── reference-impl/    # Python interpreter (working)
+│   ├── ail_mvp/       # Parser, executor, adapters, stdlib
+│   ├── examples/      # 8 example programs
+│   └── tests/         # 84 tests
+├── docs/
+│   ├── ko/            # Korean documentation
+│   └── open-questions.md
+└── .github/           # CI with optional live-test against Claude
 ```
 
-Start here:
+### What is implemented vs what is design-only
 
-- [**spec/00-overview.md**](spec/00-overview.md) — Read this first
-- [**spec/01-language.md**](spec/01-language.md) — The language
-- [**runtime/00-airt.md**](runtime/00-airt.md) — The runtime
-- [**os/00-noos.md**](os/00-noos.md) — The OS
-- [**reference-impl/README.md**](reference-impl/README.md) — Run an AIL program today
+| Component | Status |
+|---|---|
+| AIL language (spec + interpreter) | ✅ Working |
+| Standard library | ✅ Working (written in AIL) |
+| Evolution (retune + rewrite constraints) | ✅ Working |
+| Anthropic adapter | ✅ Working |
+| AIRT full dispatcher | 📄 Design document |
+| NOOS operating system | 📄 Design document |
+
+AIRT and NOOS are vision documents describing what a purpose-built runtime and OS would look like. They are not implemented. The Python interpreter is the working runtime today.
+
+---
+
+## Why a new language? (not a Python library)
+
+Three things AIL enforces that a Python library cannot:
+
+1. **`evolve` blocks require `rollback_on` and `history`** — compile error if missing. A library can only recommend; a language can refuse to run.
+
+2. **`rewrite constraints` always forces human review** — even if the program forgot to declare it. A library cannot override the programmer's omission.
+
+3. **`fn` cannot perform effects** — no network calls, no file writes, no side effects. Guaranteed by grammar, not by convention. An AI writing `fn` knows its code is pure.
+
+See [spec/07-computation.md](spec/07-computation.md) for the full comparison.
 
 ---
 
 ## Design tenets
 
-These govern every decision in this project. When a choice is unclear, return to these.
-
-1. **AI is the author, human is the stakeholder.** Syntax optimizes for AI generation and AI reading, not human typing.
-2. **Intent over procedure.** If the runtime can figure it out, the program should not specify it.
-3. **Probabilistic by default.** Booleans and exact equality are escape hatches, not primitives.
-4. **Context is a type.** What a program *means* depends on the situation it runs in, and that situation is declared.
-5. **Live programs.** Source code is the seed; the executing program is the organism.
-6. **Observability is not optional.** Every intent has a decision trace. The runtime cannot hide why it did what it did.
-7. **Humans remain in the loop for consequences.** Actions with real-world effects require declared authorization, not just absence of prohibition.
-
-Tenet 7 matters. This project is designed assuming AI will execute it, but is not designed to remove humans. The OS layer explicitly makes authorization a first-class syscall.
+1. **AI is the author, human is the stakeholder.**
+2. **`fn` for computation, `intent` for judgment.** The AI picks; the language supports both.
+3. **Probabilistic where needed, deterministic where possible.** `fn` is always confidence 1.0; `intent` carries a distribution.
+4. **Context is a type.** Situational assumptions are declared, inherited, and traced.
+5. **Live programs.** `evolve` lets programs improve under declared constraints.
+6. **Observability is not optional.** Every decision has a trace.
+7. **Humans remain in the loop for consequences.** Effects require authorization; constraint rewrites require review.
 
 ---
 
-## Project status
+## Contributing
 
-This repository currently contains **design documents and a reference interpreter** for a subset of AIL. AIRT and NOOS are described as specifications; they are not yet implemented. The goal of v0.1 is to make the ideas concrete enough that:
+See [CONTRIBUTING.md](CONTRIBUTING.md). Design critique is as valuable as code. [docs/open-questions.md](docs/open-questions.md) lists 15 unresolved problems — picking one and proposing an answer is a great first contribution.
 
-- You can read an AIL program and understand it.
-- You can run a simple AIL program against a language model today.
-- You can argue with the design and open an issue.
-
-See [ROADMAP.md](ROADMAP.md) for what comes next.
-
----
+한국어로 이슈나 PR을 여셔도 괜찮습니다.
 
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Early-stage projects benefit most from design critique — issues challenging the core assumptions are as valuable as code.
