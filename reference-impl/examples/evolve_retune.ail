@@ -1,0 +1,42 @@
+// Evolution example — a confidence threshold that retunes itself.
+//
+// Demonstrates:
+//   - A complete evolve block with all required fields (per spec/04 §2)
+//   - The `retune` action narrowing a numeric parameter toward a midpoint
+//   - `bounded_by` enforcing hard limits the evolver cannot cross
+//   - `rollback_on` reverting to the previous version if things get worse
+//   - `history: keep_last` bounding how many old versions to retain
+//
+// How to run:
+//   # With mock (no API key needed):
+//   ail run examples/evolve_retune.ail --input "hello" --mock
+//
+//   # To see evolution in action, you'd drive the executor many times
+//   # with a Python harness; see tests/test_executor.py for an example.
+
+intent classify_sentiment(text: Text) -> Text {
+    goal: sentiment_label
+    constraints {
+        output in ["positive", "negative", "mixed", "unclear"]
+    }
+}
+
+evolve classify_sentiment {
+    metric: user_feedback_score(sampled: 1.0)
+
+    when user_feedback_score < 0.7 {
+        retune confidence_threshold: within [0.5, 0.95]
+        bounded_by {
+            confidence_threshold: [0.4, 1.0]
+        }
+    }
+
+    rollback_on: user_feedback_score < 0.3
+
+    history: keep_last 10
+}
+
+entry main(message: Text) {
+    label = classify_sentiment(message)
+    return label
+}

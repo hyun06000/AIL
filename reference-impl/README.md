@@ -11,14 +11,20 @@ This directory contains a working subset of AIL. It is not the full specificatio
 - Confidence-gated branching
 - Basic constraint checking
 - A simple trace log per invocation
+- Evolution: `retune` actions, version chain, `bounded_by` enforcement,
+  `rollback_on` reversion, `history: keep_last` pruning, and
+  `require review_by: human` gating
 
-What the MVP does **not** include (explicit scope limits):
+What the MVP does **not** yet include (explicit scope limits):
 
-- Evolution (`evolve` blocks are parsed but not executed)
+- Evolution actions other than `retune` (`rewrite constraints`,
+  `rewrite examples`, `rewrite goal`, `promote strategy`, `escalate`
+  are reserved — see spec/04 §4)
 - Full effect system (a single `human_ask` effect is supported via stdin)
-- Calibration (confidence is pass-through from model)
+- Calibration (confidence is pass-through from the model)
 - Type checking beyond structural matching
 - The Authority / ledger / User Surface (these are NOOS-level)
+- Persistence across runs (evolution state lives in a single Executor)
 
 The MVP's purpose is to let someone clone this repo, set one environment variable, and run an AIL program against a language model today. Everything else in this project is spec; this directory is proof-of-concept.
 
@@ -78,6 +84,11 @@ ail run examples/classify.ail --input "I really enjoyed the film, but the ending
 
 # A program that asks a human for help when uncertain
 ail run examples/ask_human.ail --input "What should I have for dinner?"
+
+# An evolving intent that retunes a confidence threshold
+ail run examples/evolve_retune.ail --input "I loved it" --mock
+# To *see* evolution in action (v0 -> v1 -> rollback), run the demo:
+python examples/evolve_retune_demo.py
 ```
 
 ---
