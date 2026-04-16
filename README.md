@@ -2,7 +2,7 @@
 
 > A programming language designed for AI as the primary author of code.
 
-**Status:** Specification v0.2 · Python interpreter with 84 tests · FizzBuzz runs without an LLM
+**Status:** v1.0.0 · Python interpreter with 88 tests · FizzBuzz runs without an LLM
 
 🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md)
 🤖 **AI/LLM:** [`README.ai.md`](README.ai.md) — structured reference, no prose. Start with [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md).
