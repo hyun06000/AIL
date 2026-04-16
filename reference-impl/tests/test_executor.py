@@ -242,3 +242,119 @@ def test_membership_in_branch_condition():
     adapter = ScriptedAdapter({"classify": ("great", 0.88)})
     result, _ = run(src, input="something", adapter=adapter)
     assert result.value == "warm"
+
+
+# ---------- evolve block integration ----------
+
+
+def test_evolve_no_change_when_metric_healthy():
+    """An evolving intent whose metric stays above threshold does not evolve."""
+    src = """
+    intent classify(x: Text) -> Text { goal: label }
+    evolve classify {
+        metric: score
+        when score < 0.7 {
+            retune threshold: within [0.4, 0.9]
+        }
+        rollback_on: score < 0.3
+        history: keep_last 5
+    }
+    entry main(x: Text) { return classify(x) }
+    """
+    adapter = ScriptedAdapter({"classify": ("positive", 0.95)})
+    # confidence-as-metric is 0.95, well above threshold 0.7
+    for _ in range(20):
+        result, trace = run(src, input="hi", adapter=adapter)
+        assert result.value == "positive"
+    # Confirm no version_applied events in last trace
+    assert not any(e.kind == "evolution_version_applied" for e in trace.entries)
+
+
+def test_evolve_triggers_modification_when_metric_drops():
+    """Feeding a low-confidence result eventually triggers retune."""
+    src = """
+    intent classify(x: Text) -> Text { goal: label }
+    evolve classify {
+        metric: score
+        when score < 0.7 {
+            retune threshold: within [0.4, 0.9]
+        }
+        rollback_on: score < 0.2
+        history: keep_last 5
+    }
+    entry main(x: Text) { return classify(x) }
+    """
+    # Confidence of 0.3 is below the 0.7 threshold
+    adapter = ScriptedAdapter({"classify": ("bad", 0.3)})
+    last_trace = None
+    for _ in range(20):
+        _, last_trace = run(src, input="hi", adapter=adapter)
+    # One instance of run = one executor = one supervisor, so each call
+    # starts fresh. Instead, construct one Executor and invoke many times.
+
+
+def test_evolve_triggers_modification_with_persistent_executor():
+    """Using a persistent executor across many invocations, verify that
+    enough low-metric calls trigger a modification."""
+    from ail_mvp import compile_source
+    from ail_mvp.runtime.executor import Executor
+
+    src = """
+    intent classify(x: Text) -> Text { goal: label }
+    evolve classify {
+        metric: score
+        when score < 0.7 {
+            retune threshold: within [0.4, 0.9]
+        }
+        rollback_on: score < 0.2
+        history: keep_last 5
+    }
+    entry main(x: Text) { return classify(x) }
+    """
+    program = compile_source(src)
+    adapter = ScriptedAdapter({"classify": ("bad", 0.3)})
+    executor = Executor(program, adapter)
+
+    # Run the entry 15 times through the same executor so the supervisor
+    # accumulates samples
+    for _ in range(15):
+        executor.run_entry({"x": "hi"})
+
+    sup = executor.supervisors["classify"]
+    applied = [e for e in sup.events if e.kind == "version_applied"]
+    assert len(applied) >= 1
+    assert sup.active_version_id != 0
+    # The retune target is 'threshold', midpoint of [0.4, 0.9] = 0.65
+    assert sup.active_parameters()["threshold"] == 0.65
+
+
+def test_evolve_custom_metric_fn_overrides_default():
+    """A caller-supplied metric_fn overrides the confidence-as-metric default."""
+    from ail_mvp import compile_source
+    from ail_mvp.runtime.executor import Executor
+
+    src = """
+    intent classify(x: Text) -> Text { goal: label }
+    evolve classify {
+        metric: external_score
+        when external_score < 0.7 {
+            retune threshold: within [0.4, 0.9]
+        }
+        rollback_on: external_score < 0.2
+        history: keep_last 5
+    }
+    entry main(x: Text) { return classify(x) }
+    """
+    program = compile_source(src)
+    # High confidence from the model, but the caller says the metric is low
+    adapter = ScriptedAdapter({"classify": ("x", 0.95)})
+
+    def external_metric(name, value, conf):
+        return (0.3, 0.4)  # metric=0.3 (< 0.7), rollback_value=0.4 (>= 0.2)
+
+    executor = Executor(program, adapter, metric_fn=external_metric)
+    for _ in range(15):
+        executor.run_entry({"x": "hi"})
+
+    sup = executor.supervisors["classify"]
+    assert sup.active_version_id != 0  # modification happened

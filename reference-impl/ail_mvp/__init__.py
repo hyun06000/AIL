@@ -45,12 +45,19 @@ def run(
     inputs: Optional[dict[str, Any]] = None,
     adapter: Optional[ModelAdapter] = None,
     ask_human=None,
+    metric_fn=None,
+    approve_review=None,
 ) -> tuple[ConfidentValue, "Trace"]:
     """Run an AIL program. Returns (result, trace).
 
     `source_or_path` can be a path to a .ail file or a source string.
     `input` is a convenience alias for the first entry parameter.
     `inputs` is a dict of all entry parameters.
+    `metric_fn(intent_name, value, confidence) -> (metric, rollback)`
+       supplies feedback for evolving intents. When omitted, confidence
+       itself is used as both metric and rollback signal.
+    `approve_review(info) -> bool` handles `require review_by: human`
+       gates. Returns True to approve, False to hold.
     """
     text: str
     # Only treat as a path if it looks like one (short, no newlines) to avoid
@@ -83,7 +90,10 @@ def run(
         resolved_inputs.setdefault(first_param_name, input)
 
     adapter = adapter or _default_adapter()
-    executor = Executor(program, adapter, ask_human=ask_human)
+    executor = Executor(
+        program, adapter, ask_human=ask_human,
+        metric_fn=metric_fn, approve_review=approve_review,
+    )
     result = executor.run_entry(resolved_inputs)
     return result, executor.trace
 

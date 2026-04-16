@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from ..parser.ast import (
-    Program, IntentDecl, ContextDecl, EntryDecl, EffectDecl,
+    Program, IntentDecl, ContextDecl, EntryDecl, EffectDecl, EvolveDecl,
     Assignment, ReturnStmt, PerformStmt, BranchStmt, WithContextStmt, ExprStmt,
     Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
     PerformExpr, MembershipOp,
@@ -25,6 +25,7 @@ from ..parser.ast import (
 from .context import ContextStack, ContextResolver, ResolvedContext
 from .trace import Trace
 from .model import ModelAdapter, ModelResponse
+from .evolution import EvolutionSupervisor
 
 
 @dataclass
@@ -50,17 +51,34 @@ class ConstraintViolation(Exception):
 
 class Executor:
     def __init__(self, program: Program, adapter: ModelAdapter,
-                 ask_human=None):
+                 ask_human=None, metric_fn=None, approve_review=None):
+        """
+        Parameters:
+          program       — compiled AIL program
+          adapter       — language model adapter
+          ask_human     — callable(question, expect=...) -> answer, for
+                          perform human_ask and human_confirmation
+          metric_fn     — optional callable(intent_name, result_value,
+                          confidence) -> (metric, rollback_value). Returning
+                          (None, None) suppresses evolution observation for
+                          a given call. Used by evolve blocks to get
+                          real-world feedback signals.
+          approve_review — callable(review_info) -> bool, for
+                          `require review_by: human` gates
+        """
         self.program = program
         self.adapter = adapter
         self.ctx_stack = ContextStack()
         self.trace = Trace()
         self.ask_human = ask_human or _default_ask_human
+        self.metric_fn = metric_fn   # may be None; evolution then idles
+        self.approve_review = approve_review or (lambda _info: False)
 
         # index declarations
         self.intents: dict[str, IntentDecl] = {}
         self.contexts: dict[str, ContextDecl] = {}
         self.effects: dict[str, EffectDecl] = {}
+        self.evolves: dict[str, EvolveDecl] = {}
         for d in program.declarations:
             if isinstance(d, IntentDecl):
                 self.intents[d.name] = d
@@ -68,6 +86,13 @@ class Executor:
                 self.contexts[d.name] = d
             elif isinstance(d, EffectDecl):
                 self.effects[d.name] = d
+            elif isinstance(d, EvolveDecl):
+                self.evolves[d.intent_name] = d
+
+        # Construct an EvolutionSupervisor per evolving intent, lazily on
+        # first use. Per spec/04 they are stateful across calls within
+        # this executor's lifetime.
+        self.supervisors: dict[str, EvolutionSupervisor] = {}
 
         self.resolver = ContextResolver(self)
         self._resolved_cache: dict[str, ResolvedContext] = {}
@@ -75,6 +100,24 @@ class Executor:
         # Ensure 'default' exists
         if "default" not in self.contexts:
             self.contexts["default"] = _default_context()
+
+    # --- evolution helpers ---
+
+    def _get_supervisor(self, intent_name: str) -> EvolutionSupervisor | None:
+        """Return the supervisor for an intent, creating it if needed.
+
+        Returns None if the intent has no evolve declaration.
+        """
+        if intent_name not in self.evolves:
+            return None
+        sup = self.supervisors.get(intent_name)
+        if sup is None:
+            sup = EvolutionSupervisor(
+                self.evolves[intent_name],
+                approve_review=self.approve_review,
+            )
+            self.supervisors[intent_name] = sup
+        return sup
 
     # --- constants for context field exprs ---
 
@@ -371,6 +414,22 @@ class Executor:
                 context_dict = dict(active.fields)
             context_dict["_intent_name"] = intent.name
 
+            # Evolution: if this intent is evolving, inject the current
+            # tuned parameters into the context. This is how the model
+            # (and downstream logic) sees the effect of a retune.
+            supervisor = self._get_supervisor(intent.name)
+            if supervisor is not None:
+                tuned = supervisor.active_parameters()
+                if tuned:
+                    context_dict["_evolved_parameters"] = dict(tuned)
+                    context_dict["_evolve_version"] = supervisor.active_version_id
+                    self.trace.record(
+                        "evolution_version_active",
+                        intent=intent.name,
+                        version=supervisor.active_version_id,
+                        parameters=tuned,
+                    )
+
             goal_str = self._expr_as_str(intent.goal)
             constraints_str = [self._expr_as_str(c) for c in intent.constraints]
             example_pairs = []
@@ -409,11 +468,47 @@ class Executor:
                         for s in handler_body:
                             self._exec_stmt(s, handler_scope)
                     except ReturnSignal as r:
+                        # Supervisor still observes the handler's result
+                        self._observe_evolution(intent.name, r.value.value,
+                                                r.value.confidence)
                         return r.value
 
-            return ConfidentValue(response.value, response.confidence)
+            result = ConfidentValue(response.value, response.confidence)
+
+            # Feed the supervisor (no-op if intent has no evolve block)
+            self._observe_evolution(intent.name, result.value, result.confidence)
+
+            return result
         finally:
             self.trace.exit()
+
+    def _observe_evolution(self, intent_name: str,
+                           value: Any, confidence: float) -> None:
+        """Feed the supervisor a metric sample and rollback signal.
+
+        The metric_fn callback is the primary source of evolution signals;
+        it receives (intent_name, value, confidence) and returns
+        (metric, rollback) where both are Optional[float]. If no
+        metric_fn is registered, a sensible default is used: the
+        intent's own confidence serves as both the metric (higher is
+        better) and the rollback value (lower is worse).
+        """
+        sup = self._get_supervisor(intent_name)
+        if sup is None:
+            return
+        if self.metric_fn is not None:
+            metric, rollback = self.metric_fn(intent_name, value, confidence)
+        else:
+            # Default heuristic: use confidence as the feedback signal.
+            metric = confidence
+            rollback = confidence
+        events = sup.observe(metric_value=metric, rollback_value=rollback)
+        for ev in events:
+            self.trace.record(
+                f"evolution_{ev.kind}",
+                intent=intent_name,
+                **{k: v for k, v in ev.payload.items()},
+            )
 
 
 # --- utilities ---
