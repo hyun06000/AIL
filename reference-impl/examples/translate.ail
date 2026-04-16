@@ -1,0 +1,35 @@
+// Translation example demonstrating context inheritance and override.
+//
+// Shows:
+//   - Context declarations with `extends`
+//   - `override` keyword on a field
+//   - `with context` activating a context for an intent call
+//   - Intent body with `on_low_confidence` handler
+
+context translation_job extends default {
+    preserve: [formatting, proper_nouns, numbers]
+    register: "neutral"
+}
+
+context formal_korean extends translation_job {
+    override register: "formal"
+    target_language: "Korean"
+    honorific_level: "합니다체"
+}
+
+intent translate_document(source: Text) -> Text {
+    goal: Text faithfully translating source into context.target_language
+    constraints {
+        fidelity > 0.85
+        preserve_formatting
+    }
+    on_low_confidence(threshold: 0.7) {
+        return source
+    }
+}
+
+entry main(document: Text) {
+    with context formal_korean:
+        translated = translate_document(document)
+    return translated
+}

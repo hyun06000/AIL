@@ -1,0 +1,37 @@
+// Sentiment classification with branch dispatch.
+//
+// Shows:
+//   - Returning a classification from an intent
+//   - `branch` dispatch over the classified value
+//   - Different response paths per arm
+//   - `otherwise` fallback
+
+intent classify_sentiment(text: Text) -> Text {
+    goal: sentiment_label
+    constraints {
+        output_is_one_of_the_allowed_labels
+    }
+}
+
+intent respond_warmly(text: Text) -> Text {
+    goal: Text warm supportive reply
+}
+
+intent respond_carefully(text: Text) -> Text {
+    goal: Text careful empathetic reply
+}
+
+intent ask_clarifying_question(text: Text) -> Text {
+    goal: Text clarifying question
+}
+
+entry main(message: Text) {
+    sentiment = classify_sentiment(message)
+    branch sentiment {
+        [sentiment == "positive"]    => reply = respond_warmly(message)
+        [sentiment == "negative"]    => reply = respond_carefully(message)
+        [sentiment == "mixed"]       => reply = ask_clarifying_question(message)
+        [otherwise]                  => reply = ask_clarifying_question(message)
+    }
+    return reply
+}

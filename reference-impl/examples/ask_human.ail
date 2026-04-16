@@ -1,0 +1,22 @@
+// Demonstrates the human-in-the-loop escape hatch.
+//
+// Shows:
+//   - `on_low_confidence` handler that falls back to asking a human
+//   - `perform human_ask(...)` — a built-in effect in the MVP
+//   - Confidence-driven control flow
+
+intent suggest_dinner(preferences: Text) -> Text {
+    goal: Text suggesting what to have for dinner
+    constraints {
+        suggestion_is_concrete_and_actionable
+    }
+    on_low_confidence(threshold: 0.75) {
+        answer = perform human_ask("I am not sure what you would like. What are you in the mood for?")
+        return answer
+    }
+}
+
+entry main(preferences: Text) {
+    suggestion = suggest_dinner(preferences)
+    return suggestion
+}

@@ -1,0 +1,15 @@
+// Simplest possible AIL program.
+//
+// Demonstrates: entry, intent, goal, single model-backed invocation.
+
+intent greet(name: Text) -> Text {
+    goal: Text greeting the named person warmly and briefly
+    constraints {
+        length < 100
+    }
+}
+
+entry main(name: Text) {
+    greeting = greet(name)
+    return greeting
+}
