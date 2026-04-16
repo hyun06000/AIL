@@ -1,0 +1,508 @@
+"""Recursive-descent parser for AIL (MVP subset).
+
+Covers: context, intent, effect, entry, import, evolve (parsed only).
+Statement forms: assignment, return, perform, branch, with, expression.
+Expression forms: literals, identifiers, field access, calls, binary/unary ops, lists.
+
+The MVP grammar is deliberately a subset of the full spec. Features parsed
+but not executed (like `evolve`) are preserved for round-trip visibility.
+"""
+from __future__ import annotations
+from typing import Any
+
+from .lexer import Token, Tok, tokenize
+from .ast import (
+    Program, ContextDecl, IntentDecl, EffectDecl, EntryDecl, ImportDecl, EvolveDecl,
+    Assignment, ReturnStmt, PerformStmt, BranchStmt, BranchArm, WithContextStmt, ExprStmt,
+    Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
+    Expr, Statement,
+)
+
+
+class ParseError(Exception):
+    pass
+
+
+class Parser:
+    def __init__(self, tokens: list[Token]):
+        self.tokens = tokens
+        self.i = 0
+
+    # --- helpers ---
+
+    def peek(self, offset: int = 0) -> Token:
+        return self.tokens[self.i + offset]
+
+    def advance(self) -> Token:
+        tok = self.tokens[self.i]
+        self.i += 1
+        return tok
+
+    def check(self, kind: Tok, value: str | None = None) -> bool:
+        t = self.peek()
+        if t.kind != kind:
+            return False
+        if value is not None and t.value != value:
+            return False
+        return True
+
+    def match(self, kind: Tok, value: str | None = None) -> bool:
+        if self.check(kind, value):
+            self.advance()
+            return True
+        return False
+
+    def expect(self, kind: Tok, value: str | None = None) -> Token:
+        if not self.check(kind, value):
+            t = self.peek()
+            want = value if value else kind.name
+            raise ParseError(f"expected {want} at {t.line}:{t.col}, got {t.kind.name}({t.value!r})")
+        return self.advance()
+
+    def expect_keyword(self, kw: str) -> Token:
+        return self.expect(Tok.IDENT, kw)
+
+    def is_keyword(self, kw: str) -> bool:
+        return self.check(Tok.IDENT, kw)
+
+    # --- top level ---
+
+    def parse_program(self) -> Program:
+        decls: list[Any] = []
+        while not self.check(Tok.EOF):
+            decls.append(self.parse_top_level())
+        return Program(declarations=decls)
+
+    def parse_top_level(self) -> Any:
+        t = self.peek()
+        if t.kind == Tok.IDENT:
+            if t.value == "context":
+                return self.parse_context()
+            if t.value == "intent":
+                return self.parse_intent()
+            if t.value == "effect":
+                return self.parse_effect()
+            if t.value == "entry":
+                return self.parse_entry()
+            if t.value == "import":
+                return self.parse_import()
+            if t.value == "evolve":
+                return self.parse_evolve()
+        raise ParseError(f"unexpected top-level token {t!r}")
+
+    # --- context ---
+
+    def parse_context(self) -> ContextDecl:
+        self.expect_keyword("context")
+        name = self.expect(Tok.IDENT).value
+        extends = None
+        if self.match(Tok.IDENT, "extends"):
+            extends = self.expect(Tok.IDENT).value
+        self.expect(Tok.LBRACE)
+        fields: dict[str, Expr] = {}
+        overrides: set[str] = set()
+        while not self.check(Tok.RBRACE):
+            is_override = False
+            if self.match(Tok.IDENT, "override"):
+                is_override = True
+            field_name = self.expect(Tok.IDENT).value
+            self.expect(Tok.COLON)
+            value = self.parse_expr()
+            fields[field_name] = value
+            if is_override:
+                overrides.add(field_name)
+        self.expect(Tok.RBRACE)
+        return ContextDecl(name=name, extends=extends, fields=fields, overrides=overrides)
+
+    # --- intent ---
+
+    def parse_intent(self) -> IntentDecl:
+        self.expect_keyword("intent")
+        name = self.expect(Tok.IDENT).value
+        params = self.parse_params()
+        return_type = None
+        if self.match(Tok.ARROW):
+            return_type = self.parse_type_name()
+        self.expect(Tok.LBRACE)
+
+        goal: Expr = Literal(value=None)
+        constraints: list[Expr] = []
+        examples: list[tuple[list[Expr], Expr]] = []
+        low_conf: tuple[float, list[Statement]] | None = None
+        trace_level = "partial"
+        body_hint: list[Statement] = []
+
+        while not self.check(Tok.RBRACE):
+            if self.is_keyword("goal"):
+                self.advance()
+                self.expect(Tok.COLON)
+                goal = self.parse_expr()
+            elif self.is_keyword("constraints"):
+                self.advance()
+                self.expect(Tok.LBRACE)
+                while not self.check(Tok.RBRACE):
+                    constraints.append(self.parse_expr())
+                self.expect(Tok.RBRACE)
+            elif self.is_keyword("examples"):
+                self.advance()
+                self.expect(Tok.LBRACE)
+                while not self.check(Tok.RBRACE):
+                    inputs, out = self.parse_example()
+                    examples.append((inputs, out))
+                self.expect(Tok.RBRACE)
+            elif self.is_keyword("on_low_confidence"):
+                self.advance()
+                self.expect(Tok.LPAREN)
+                self.expect_keyword("threshold")
+                self.expect(Tok.COLON)
+                thresh_tok = self.expect(Tok.NUMBER)
+                self.expect(Tok.RPAREN)
+                self.expect(Tok.LBRACE)
+                handler_body = []
+                while not self.check(Tok.RBRACE):
+                    handler_body.append(self.parse_statement())
+                self.expect(Tok.RBRACE)
+                low_conf = (float(thresh_tok.value), handler_body)
+            elif self.is_keyword("trace"):
+                self.advance()
+                self.expect(Tok.COLON)
+                trace_level = self.expect(Tok.IDENT).value
+            else:
+                # body statement hint
+                body_hint.append(self.parse_statement())
+
+        self.expect(Tok.RBRACE)
+        return IntentDecl(
+            name=name, params=params, return_type=return_type,
+            goal=goal, constraints=constraints, examples=examples,
+            low_confidence_handler=low_conf, trace_level=trace_level,
+            body_hint=body_hint,
+        )
+
+    def parse_example(self) -> tuple[list[Expr], Expr]:
+        # Simplified: ( expr, expr, ... ) => expr
+        self.expect(Tok.LPAREN)
+        inputs: list[Expr] = []
+        if not self.check(Tok.RPAREN):
+            inputs.append(self.parse_expr())
+            while self.match(Tok.COMMA):
+                # Skip named kwargs like "register: ..." in examples (MVP)
+                if self.peek().kind == Tok.IDENT and self.tokens[self.i + 1].kind == Tok.COLON:
+                    self.advance(); self.advance()  # name and colon
+                    self.parse_expr()  # discard for MVP
+                else:
+                    inputs.append(self.parse_expr())
+        self.expect(Tok.RPAREN)
+        self.expect(Tok.FATARROW)
+        # Output may be wrapped in parens
+        if self.match(Tok.LPAREN):
+            out = self.parse_expr()
+            self.expect(Tok.RPAREN)
+        else:
+            out = self.parse_expr()
+        return inputs, out
+
+    # --- effect ---
+
+    def parse_effect(self) -> EffectDecl:
+        self.expect_keyword("effect")
+        name = self.expect(Tok.IDENT).value
+        self.expect(Tok.LBRACE)
+        sig_params: list[tuple[str, str | None]] = []
+        sig_return: str | None = None
+        authorization = "none"
+        observable_by: list[str] = []
+        while not self.check(Tok.RBRACE):
+            field_name = self.expect(Tok.IDENT).value
+            self.expect(Tok.COLON)
+            if field_name == "signature":
+                sig_params = self.parse_params()
+                if self.match(Tok.ARROW):
+                    sig_return = self.parse_type_name()
+            elif field_name == "authorization":
+                authorization = self.expect(Tok.IDENT).value
+            elif field_name == "observable_by":
+                self.expect(Tok.LBRACK)
+                while not self.check(Tok.RBRACK):
+                    observable_by.append(self.expect(Tok.IDENT).value)
+                    if not self.match(Tok.COMMA):
+                        break
+                self.expect(Tok.RBRACK)
+            else:
+                # Skip unknown fields (MVP tolerance)
+                self.parse_expr()
+        self.expect(Tok.RBRACE)
+        return EffectDecl(
+            name=name, signature_params=sig_params, signature_return=sig_return,
+            authorization=authorization, observable_by=observable_by,
+        )
+
+    # --- entry ---
+
+    def parse_entry(self) -> EntryDecl:
+        self.expect_keyword("entry")
+        name = self.expect(Tok.IDENT).value
+        params = self.parse_params()
+        self.expect(Tok.LBRACE)
+        body: list[Statement] = []
+        while not self.check(Tok.RBRACE):
+            body.append(self.parse_statement())
+        self.expect(Tok.RBRACE)
+        return EntryDecl(name=name, params=params, body=body)
+
+    # --- import ---
+
+    def parse_import(self) -> ImportDecl:
+        self.expect_keyword("import")
+        kind = "intent"
+        if self.is_keyword("context") or self.is_keyword("effect"):
+            kind = self.advance().value
+        sym = self.expect(Tok.IDENT).value
+        self.expect_keyword("from")
+        source = self.expect(Tok.STRING).value
+        return ImportDecl(symbol=sym, source=source, kind=kind)
+
+    # --- evolve (parsed but not executed) ---
+
+    def parse_evolve(self) -> EvolveDecl:
+        self.expect_keyword("evolve")
+        intent_name = self.expect(Tok.IDENT).value
+        self.expect(Tok.LBRACE)
+        depth = 1
+        raw: dict[str, Any] = {}
+        # Consume balanced braces; MVP does not interpret evolve
+        while depth > 0:
+            t = self.peek()
+            if t.kind == Tok.LBRACE:
+                depth += 1; self.advance()
+            elif t.kind == Tok.RBRACE:
+                depth -= 1; self.advance()
+            elif t.kind == Tok.EOF:
+                raise ParseError("unterminated evolve block")
+            else:
+                self.advance()
+        return EvolveDecl(intent_name=intent_name, raw=raw)
+
+    # --- common pieces ---
+
+    def parse_params(self) -> list[tuple[str, str | None]]:
+        self.expect(Tok.LPAREN)
+        params: list[tuple[str, str | None]] = []
+        if not self.check(Tok.RPAREN):
+            params.append(self.parse_param())
+            while self.match(Tok.COMMA):
+                params.append(self.parse_param())
+        self.expect(Tok.RPAREN)
+        return params
+
+    def parse_param(self) -> tuple[str, str | None]:
+        name = self.expect(Tok.IDENT).value
+        ty = None
+        if self.match(Tok.COLON):
+            ty = self.parse_type_name()
+        return (name, ty)
+
+    def parse_type_name(self) -> str:
+        # Simple: just an identifier (possibly with brackets, MVP: ignored)
+        return self.expect(Tok.IDENT).value
+
+    # --- statements ---
+
+    def parse_statement(self) -> Statement:
+        if self.is_keyword("return"):
+            self.advance()
+            if self.check(Tok.RBRACE):
+                return ReturnStmt(value=None)
+            return ReturnStmt(value=self.parse_expr())
+        if self.is_keyword("perform"):
+            self.advance()
+            effect_name = self.expect(Tok.IDENT).value
+            self.expect(Tok.LPAREN)
+            args, kwargs = self.parse_call_args()
+            self.expect(Tok.RPAREN)
+            return PerformStmt(effect=effect_name, args=args, kwargs=kwargs)
+        if self.is_keyword("branch"):
+            return self.parse_branch()
+        if self.is_keyword("with"):
+            return self.parse_with()
+
+        # Assignment: IDENT = expr, if next is EQ
+        if self.peek().kind == Tok.IDENT and self.tokens[self.i + 1].kind == Tok.EQ:
+            name = self.advance().value
+            self.advance()  # =
+            # allow `name = perform effect(...)` as a special rhs
+            if self.is_keyword("perform"):
+                self.advance()
+                effect_name = self.expect(Tok.IDENT).value
+                self.expect(Tok.LPAREN)
+                args, kwargs = self.parse_call_args()
+                self.expect(Tok.RPAREN)
+                from .ast import PerformExpr
+                return Assignment(name=name, value=PerformExpr(effect=effect_name, args=args, kwargs=kwargs))
+            value = self.parse_expr()
+            return Assignment(name=name, value=value)
+
+        return ExprStmt(expr=self.parse_expr())
+
+    def parse_branch(self) -> BranchStmt:
+        self.expect_keyword("branch")
+        subject = self.parse_expr()
+        self.expect(Tok.LBRACE)
+        arms: list[BranchArm] = []
+        while not self.check(Tok.RBRACE):
+            self.expect(Tok.LBRACK)
+            if self.is_keyword("otherwise"):
+                cond: Expr = Identifier(name="otherwise")
+                self.advance()
+            else:
+                cond = self.parse_expr()
+            self.expect(Tok.RBRACK)
+            self.expect(Tok.FATARROW)
+            action = self.parse_statement()
+            arms.append(BranchArm(condition=cond, action=action))
+        self.expect(Tok.RBRACE)
+        calibrate_on = None
+        if self.is_keyword("calibrate_on"):
+            self.advance()
+            calibrate_on = self.expect(Tok.IDENT).value
+        return BranchStmt(subject=subject, arms=arms, calibrate_on=calibrate_on)
+
+    def parse_with(self) -> WithContextStmt:
+        self.expect_keyword("with")
+        self.expect_keyword("context")
+        name = self.expect(Tok.IDENT).value
+        self.expect(Tok.COLON)
+        # MVP: with body is a braced block OR a single statement
+        body: list[Statement] = []
+        if self.match(Tok.LBRACE):
+            while not self.check(Tok.RBRACE):
+                body.append(self.parse_statement())
+            self.expect(Tok.RBRACE)
+        else:
+            body.append(self.parse_statement())
+        return WithContextStmt(context_name=name, body=body)
+
+    # --- expressions (precedence climbing) ---
+
+    def parse_expr(self) -> Expr:
+        return self.parse_or()
+
+    def parse_or(self) -> Expr:
+        left = self.parse_and()
+        while self.is_keyword("or"):
+            self.advance()
+            right = self.parse_and()
+            left = BinaryOp(op="or", left=left, right=right)
+        return left
+
+    def parse_and(self) -> Expr:
+        left = self.parse_not()
+        while self.is_keyword("and"):
+            self.advance()
+            right = self.parse_not()
+            left = BinaryOp(op="and", left=left, right=right)
+        return left
+
+    def parse_not(self) -> Expr:
+        if self.is_keyword("not"):
+            self.advance()
+            return UnaryOp(op="not", operand=self.parse_not())
+        return self.parse_comparison()
+
+    def parse_comparison(self) -> Expr:
+        left = self.parse_additive()
+        cmp_map = {Tok.EQEQ: "==", Tok.NEQ: "!=", Tok.LT: "<", Tok.GT: ">",
+                   Tok.LEQ: "<=", Tok.GEQ: ">=", Tok.GGT: ">>", Tok.GGGT: ">>>"}
+        if self.peek().kind in cmp_map:
+            op = cmp_map[self.advance().kind]
+            right = self.parse_additive()
+            return BinaryOp(op=op, left=left, right=right)
+        return left
+
+    def parse_additive(self) -> Expr:
+        left = self.parse_multiplicative()
+        while self.peek().kind in (Tok.PLUS, Tok.MINUS):
+            op = self.advance().value
+            right = self.parse_multiplicative()
+            left = BinaryOp(op=op, left=left, right=right)
+        return left
+
+    def parse_multiplicative(self) -> Expr:
+        left = self.parse_postfix()
+        while self.peek().kind in (Tok.STAR, Tok.SLASH):
+            op = self.advance().value
+            right = self.parse_postfix()
+            left = BinaryOp(op=op, left=left, right=right)
+        return left
+
+    def parse_postfix(self) -> Expr:
+        expr = self.parse_primary()
+        while True:
+            if self.match(Tok.DOT):
+                field_name = self.expect(Tok.IDENT).value
+                expr = FieldAccess(target=expr, field=field_name)
+            elif self.check(Tok.LPAREN):
+                self.advance()
+                args, kwargs = self.parse_call_args()
+                self.expect(Tok.RPAREN)
+                expr = Call(callee=expr, args=args, kwargs=kwargs)
+            else:
+                break
+        return expr
+
+    def parse_call_args(self) -> tuple[list[Expr], dict[str, Expr]]:
+        args: list[Expr] = []
+        kwargs: dict[str, Expr] = {}
+        if self.check(Tok.RPAREN):
+            return args, kwargs
+        while True:
+            # named arg?
+            if (self.peek().kind == Tok.IDENT
+                    and self.tokens[self.i + 1].kind == Tok.COLON):
+                name = self.advance().value
+                self.advance()  # :
+                kwargs[name] = self.parse_expr()
+            else:
+                args.append(self.parse_expr())
+            if not self.match(Tok.COMMA):
+                break
+        return args, kwargs
+
+    def parse_primary(self) -> Expr:
+        t = self.peek()
+        if t.kind == Tok.STRING:
+            self.advance()
+            return Literal(value=t.value)
+        if t.kind == Tok.NUMBER:
+            self.advance()
+            v = float(t.value) if "." in t.value else int(t.value)
+            return Literal(value=v)
+        if t.kind == Tok.LBRACK:
+            self.advance()
+            items: list[Expr] = []
+            if not self.check(Tok.RBRACK):
+                items.append(self.parse_expr())
+                while self.match(Tok.COMMA):
+                    items.append(self.parse_expr())
+            self.expect(Tok.RBRACK)
+            return ListLiteral(items=items)
+        if t.kind == Tok.LPAREN:
+            self.advance()
+            e = self.parse_expr()
+            self.expect(Tok.RPAREN)
+            return e
+        if self.match(Tok.MINUS):
+            return UnaryOp(op="-", operand=self.parse_primary())
+        if t.kind == Tok.IDENT:
+            self.advance()
+            if t.value == "true":
+                return Literal(value=True)
+            if t.value == "false":
+                return Literal(value=False)
+            return Identifier(name=t.value)
+        raise ParseError(f"unexpected token {t!r}")
+
+
+def parse(source: str) -> Program:
+    tokens = tokenize(source)
+    return Parser(tokens).parse_program()
