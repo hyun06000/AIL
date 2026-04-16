@@ -120,22 +120,105 @@ class AnthropicAdapter:
     # --- response parsing ---
 
     def _parse_response(self, text: str) -> tuple[Any, float]:
-        # Try direct JSON
+        """Parse a model response into (value, confidence).
+
+        Tolerates common response shapes:
+          1. Pure JSON:           {"value": ..., "confidence": ...}
+          2. Code-fenced JSON:    ```json\n{"value": ...}\n```
+          3. JSON embedded in prose — extract the first balanced {...}
+             that contains a "value" key
+          4. Anything else — return raw text with a moderate confidence
+
+        The returned confidence is clamped to [0.0, 1.0].
+        """
+        stripped = text.strip()
+
+        # (2) Strip code fences before trying other parses
+        stripped = self._strip_code_fence(stripped)
+
+        # (1) Direct JSON
         try:
-            obj = json.loads(text)
+            obj = json.loads(stripped)
             if isinstance(obj, dict) and "value" in obj and "confidence" in obj:
-                return obj["value"], float(obj["confidence"])
-        except json.JSONDecodeError:
+                return obj["value"], self._clamp_confidence(obj["confidence"])
+        except (json.JSONDecodeError, ValueError):
             pass
 
-        # Try extracting the last {...} block
-        match = re.search(r"\{[^{}]*\"value\"[^{}]*\}", text, re.DOTALL)
-        if match:
+        # (3) Find the first balanced JSON object that mentions "value"
+        extracted = self._extract_balanced_json(stripped)
+        if extracted is not None:
             try:
-                obj = json.loads(match.group(0))
-                return obj.get("value", text), float(obj.get("confidence", 0.5))
+                obj = json.loads(extracted)
+                if isinstance(obj, dict) and "value" in obj:
+                    return (
+                        obj["value"],
+                        self._clamp_confidence(obj.get("confidence", 0.5)),
+                    )
             except (json.JSONDecodeError, ValueError):
                 pass
 
-        # Fall back: return raw text with a reduced confidence
+        # (4) Fallback
         return text, 0.5
+
+    @staticmethod
+    def _strip_code_fence(text: str) -> str:
+        """Remove an enclosing ``` fence if present. Preserves inner content."""
+        stripped = text.strip()
+        if not stripped.startswith("```"):
+            return stripped
+        # Drop the opening fence line (possibly ```json)
+        newline_idx = stripped.find("\n")
+        if newline_idx == -1:
+            return stripped
+        body = stripped[newline_idx + 1:]
+        if body.endswith("```"):
+            body = body[: -3]
+        return body.strip()
+
+    @staticmethod
+    def _extract_balanced_json(text: str) -> str | None:
+        """Return the first balanced {...} substring that contains '"value"'.
+
+        Respects nested braces and ignores braces inside JSON strings.
+        Returns None if no such substring exists.
+        """
+        start_positions = [i for i, c in enumerate(text) if c == "{"]
+        for start in start_positions:
+            depth = 0
+            in_string = False
+            escape = False
+            for i in range(start, len(text)):
+                ch = text[i]
+                if in_string:
+                    if escape:
+                        escape = False
+                    elif ch == "\\":
+                        escape = True
+                    elif ch == '"':
+                        in_string = False
+                    continue
+                if ch == '"':
+                    in_string = True
+                elif ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = text[start : i + 1]
+                        if '"value"' in candidate:
+                            return candidate
+                        break
+        return None
+
+    @staticmethod
+    def _clamp_confidence(raw: Any) -> float:
+        """Coerce to float in [0.0, 1.0]. Non-numeric -> 0.5."""
+        try:
+            v = float(raw)
+        except (TypeError, ValueError):
+            return 0.5
+        if v < 0.0:
+            return 0.0
+        if v > 1.0:
+            return 1.0
+        return v
