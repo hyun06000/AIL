@@ -1,0 +1,94 @@
+// stdlib/utils — reusable pure functions for common tasks.
+//
+// Every function here is a fn — deterministic, no LLM, confidence 1.0.
+// Import with: import word_count from "stdlib/utils"
+
+fn word_count(text: Text) -> Number {
+    words = split(text, " ")
+    return length(words)
+}
+
+fn char_count(text: Text) -> Number {
+    return length(text)
+}
+
+fn is_empty(text: Text) -> Boolean {
+    return length(trim(text)) == 0
+}
+
+fn repeat(text: Text, times: Number) -> Text {
+    result = ""
+    for i in range(0, times) {
+        result = join([result, text], "")
+    }
+    return result
+}
+
+fn pad_left(text: Text, target_length: Number, pad_char: Text) -> Text {
+    current = length(text)
+    if current >= target_length {
+        return text
+    }
+    padding = repeat(pad_char, target_length - current)
+    return join([padding, text], "")
+}
+
+fn clamp(value: Number, lo: Number, hi: Number) -> Number {
+    if value < lo { return lo }
+    if value > hi { return hi }
+    return value
+}
+
+fn sum_list(numbers: Number) -> Number {
+    total = 0
+    for n in numbers {
+        total = total + n
+    }
+    return total
+}
+
+fn average(numbers: Number) -> Number {
+    if length(numbers) == 0 { return 0 }
+    return sum_list(numbers) / length(numbers)
+}
+
+fn flatten(nested: Text) -> Text {
+    result = []
+    for sublist in nested {
+        for item in sublist {
+            result = append(result, item)
+        }
+    }
+    return result
+}
+
+fn unique(items: Text) -> Text {
+    seen = []
+    result = []
+    for item in items {
+        if item not in seen {
+            seen = append(seen, item)
+            result = append(result, item)
+        }
+    }
+    return result
+}
+
+fn zip_lists(a: Text, b: Text) -> Text {
+    result = []
+    limit = length(a)
+    if length(b) < limit { limit = length(b) }
+    for i in range(0, limit) {
+        result = append(result, [slice(a, i, i + 1), slice(b, i, i + 1)])
+    }
+    return result
+}
+
+fn take(items: Text, n: Number) -> Text {
+    if n >= length(items) { return items }
+    result = []
+    for i in range(0, n) {
+        result = append(result, slice(items, i, i + 1))
+    }
+    return result
+}
