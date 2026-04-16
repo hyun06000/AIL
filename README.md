@@ -2,7 +2,7 @@
 
 > A language, runtime, and operating system designed from first principles for AI as the primary author of computation.
 
-**Status:** Draft specification v0.1 · Reference implementation in progress
+**Status:** Draft specification v0.1 · Reference implementation runs live against Claude · 50 tests passing
 
 🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md) 에서 한국어 개요를 읽으실 수 있습니다.
 

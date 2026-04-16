@@ -35,16 +35,35 @@ The MVP's purpose is to let someone clone this repo, set one environment variabl
 ```bash
 # From the repository root:
 cd reference-impl
-pip install -e .
+pip install -e ".[anthropic]"
 
-# Set your Anthropic API key:
+# Option 1 — environment variable:
 export ANTHROPIC_API_KEY=sk-ant-...
+
+# Option 2 — .env file (at the repo root or any parent of cwd):
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > ../.env
 
 # Run an example:
 ail run examples/hello.ail --input "Hello, world"
 
-# Or, programmatically:
+# Or programmatically:
 python -c "from ail_mvp import run; print(run('examples/hello.ail', input='Hello, world'))"
+
+# Validate everything against real Claude in one command:
+python examples/run_live.py
+
+# Only one example, with a specific input:
+python examples/run_live.py --only translate --input "Good morning!"
+
+# Dump full traces as JSON for later analysis:
+python examples/run_live.py --trace-dir ./live_results
+```
+
+No API key? You can still run everything with the mock adapter:
+
+```bash
+ail run examples/hello.ail --input "world" --mock
+python examples/evolve_retune_demo.py   # fully deterministic; no API needed
 ```
 
 ---

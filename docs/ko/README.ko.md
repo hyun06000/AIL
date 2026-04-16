@@ -76,6 +76,41 @@ ail-project/
 
 ---
 
+## 바로 돌려보기
+
+API 키가 없어도 (mock 어댑터로) 파서·실행기·진화 메커니즘이 작동하는 걸 확인할 수 있습니다:
+
+```bash
+cd reference-impl
+pip install -e ".[anthropic]"
+
+# mock으로 기본 실행
+ail run examples/hello.ail --input "세계" --mock
+
+# 진화가 실제로 버전을 바꾸고 롤백하는 걸 보기 (결정적, API 불필요):
+python examples/evolve_retune_demo.py
+```
+
+실제 Claude 모델에 연결해서 돌려보려면, 프로젝트 루트에 `.env` 파일을 만들거나 환경 변수를 설정하세요:
+
+```bash
+# 방법 1: .env 파일 (편함)
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
+
+# 방법 2: 환경 변수
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# 네 개 예제 전부 실제 모델로 돌리기:
+python examples/run_live.py
+
+# 특정 예제만 돌리기:
+python examples/run_live.py --only classify --input "정말 좋아요!"
+```
+
+모든 호출은 trace에 기록됩니다. `--trace-dir ./out` 을 붙이면 JSON으로 덤프돼요.
+
+---
+
 ## 설계 원칙
 
 모든 결정은 이 원칙들을 따릅니다. 선택이 애매할 때는 이곳으로 돌아옵니다.
