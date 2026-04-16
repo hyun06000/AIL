@@ -159,3 +159,173 @@ def test_history_keep_last_prunes_old_versions():
     # Verify retention: v0 always kept + at most keep_last newest
     assert len(sup.versions) <= 2 + 1
     assert sup.versions[0].version_id == 0  # initial preserved
+
+
+# ---------- rewrite_constraints action ----------
+
+
+def test_rewrite_constraints_tightens_greater_than():
+    """A '>' threshold tightens UP by the declared delta."""
+    from ail_mvp import compile_source
+    from ail_mvp.runtime.executor import Executor
+    from ail_mvp.runtime import MockAdapter
+    from ail_mvp.runtime.model import ModelResponse
+
+    class Low(MockAdapter):
+        def invoke(self, **kw):
+            return ModelResponse(value="x", confidence=0.3, model_id="m", raw={})
+
+    src = """
+    intent i(x: Text) -> Text {
+        goal: label
+        constraints {
+            fidelity > 0.7
+        }
+    }
+    evolve i {
+        metric: score
+        when score < 0.7 {
+            rewrite constraints tighten_numeric_thresholds_by 0.05
+        }
+        rollback_on: score < 0.1
+        history: keep_last 5
+        require review_by: human
+    }
+    entry main(x: Text) { return i(x) }
+    """
+    program = compile_source(src)
+    executor = Executor(program, Low(), approve_review=lambda _: True)
+    for _ in range(15):
+        executor.run_entry({"x": "test"})
+
+    sup = executor.supervisors["i"]
+    assert sup.active_version_id >= 1
+    overrides = sup.versions[-1].constraint_overrides
+    # fidelity > 0.7  ->  fidelity > 0.75
+    assert overrides[0] == "fidelity > 0.75"
+
+
+def test_rewrite_constraints_tightens_less_than():
+    """A '<' threshold tightens DOWN by the declared delta."""
+    from ail_mvp import compile_source
+    from ail_mvp.runtime.executor import Executor
+    from ail_mvp.runtime import MockAdapter
+    from ail_mvp.runtime.model import ModelResponse
+
+    class Low(MockAdapter):
+        def invoke(self, **kw):
+            return ModelResponse(value="x", confidence=0.3, model_id="m", raw={})
+
+    src = """
+    intent i(x: Text) -> Text {
+        goal: label
+        constraints {
+            latency < 2000
+        }
+    }
+    evolve i {
+        metric: score
+        when score < 0.7 {
+            rewrite constraints tighten_numeric_thresholds_by 0.05
+        }
+        rollback_on: score < 0.1
+        history: keep_last 5
+    }
+    entry main(x: Text) { return i(x) }
+    """
+    program = compile_source(src)
+    executor = Executor(program, Low(), approve_review=lambda _: True)
+    for _ in range(15):
+        executor.run_entry({"x": "test"})
+
+    sup = executor.supervisors["i"]
+    overrides = sup.versions[-1].constraint_overrides
+    assert overrides[0] == "latency < 1999.95"
+
+
+def test_rewrite_constraints_always_forces_human_review():
+    """Even without 'require review_by: human', rewrite_constraints
+    must go through a reviewer. Denial blocks the change."""
+    from ail_mvp import compile_source
+    from ail_mvp.runtime.executor import Executor
+    from ail_mvp.runtime import MockAdapter
+    from ail_mvp.runtime.model import ModelResponse
+
+    class Low(MockAdapter):
+        def invoke(self, **kw):
+            return ModelResponse(value="x", confidence=0.3, model_id="m", raw={})
+
+    # NOTE: No `require review_by: human` clause in this program.
+    src = """
+    intent i(x: Text) -> Text {
+        goal: label
+        constraints {
+            fidelity > 0.7
+        }
+    }
+    evolve i {
+        metric: score
+        when score < 0.7 {
+            rewrite constraints tighten_numeric_thresholds_by 0.05
+        }
+        rollback_on: score < 0.1
+        history: keep_last 5
+    }
+    entry main(x: Text) { return i(x) }
+    """
+    program = compile_source(src)
+    # Deny all approvals
+    executor = Executor(program, Low(), approve_review=lambda _: False)
+    for _ in range(15):
+        executor.run_entry({"x": "test"})
+
+    sup = executor.supervisors["i"]
+    # Review was requested (forced)
+    assert any(e.kind == "review_requested" for e in sup.events)
+    # The review event's payload should mark it as forced
+    rr = next(e for e in sup.events if e.kind == "review_requested")
+    assert rr.payload.get("forced_review") is True
+    # Denied -> no version change
+    assert sup.active_version_id == 0
+
+
+def test_rewrite_constraints_rejected_when_no_numeric_constraints():
+    """If the intent has only symbolic constraints, there's nothing to
+    tighten — emit modification_rejected."""
+    from ail_mvp import compile_source
+    from ail_mvp.runtime.executor import Executor
+    from ail_mvp.runtime import MockAdapter
+    from ail_mvp.runtime.model import ModelResponse
+
+    class Low(MockAdapter):
+        def invoke(self, **kw):
+            return ModelResponse(value="x", confidence=0.3, model_id="m", raw={})
+
+    src = """
+    intent i(x: Text) -> Text {
+        goal: label
+        constraints {
+            output_is_valid
+        }
+    }
+    evolve i {
+        metric: score
+        when score < 0.7 {
+            rewrite constraints tighten_numeric_thresholds_by 0.05
+        }
+        rollback_on: score < 0.1
+        history: keep_last 5
+        require review_by: human
+    }
+    entry main(x: Text) { return i(x) }
+    """
+    program = compile_source(src)
+    executor = Executor(program, Low(), approve_review=lambda _: True)
+    for _ in range(15):
+        executor.run_entry({"x": "test"})
+
+    sup = executor.supervisors["i"]
+    assert sup.active_version_id == 0
+    rejections = [e for e in sup.events if e.kind == "modification_rejected"]
+    assert len(rejections) >= 1
+    assert "no numeric constraints" in rejections[0].payload["reason"]
