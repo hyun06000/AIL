@@ -27,7 +27,13 @@ def compile_source(source: str):
 
 
 def _default_adapter() -> ModelAdapter:
-    """Try Anthropic if env var is present, else Mock."""
+    """Try Anthropic if env var is present, else Mock.
+
+    Before checking the environment, load a .env file from the current
+    working directory or from the parent directories up to a reasonable
+    depth. Missing the file is not an error.
+    """
+    _load_dotenv_if_present()
     import os
     if os.environ.get("ANTHROPIC_API_KEY"):
         try:
@@ -36,6 +42,34 @@ def _default_adapter() -> ModelAdapter:
         except ImportError:
             pass
     return MockAdapter()
+
+
+def _load_dotenv_if_present() -> None:
+    """Populate os.environ from a .env file if one exists.
+
+    Searches: the current working directory, then its parents up to 4 levels.
+    Only processes simple KEY=VALUE lines; existing env vars are not
+    overwritten. Missing files are silently ignored.
+    """
+    import os
+    searched = [Path.cwd()] + list(Path.cwd().parents)[:4]
+    for base in searched:
+        candidate = base / ".env"
+        if candidate.is_file():
+            try:
+                text = candidate.read_text(encoding="utf-8")
+            except OSError:
+                return
+            for line in text.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+            return
 
 
 def run(
