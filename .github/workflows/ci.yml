@@ -46,7 +46,7 @@ jobs:
 
       - name: Run evolve demo (deterministic harness)
         working-directory: reference-impl
-        run: python examples/evolve_retune_demo.py
+        run: python tools/evolve_demo.py
 
   live-test:
     name: Live-test against Claude API
@@ -82,7 +82,7 @@ jobs:
             exit 0
           fi
           # Skip ask_human (needs stdin) for the CI run
-          python examples/run_live.py --only hello
-          python examples/run_live.py --only translate
-          python examples/run_live.py --only classify
+          python tools/run_live.py --only hello
+          python tools/run_live.py --only translate
+          python tools/run_live.py --only classify
 

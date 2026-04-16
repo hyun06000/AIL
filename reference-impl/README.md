@@ -56,20 +56,20 @@ ail run examples/hello.ail --input "Hello, world"
 python -c "from ail_mvp import run; print(run('examples/hello.ail', input='Hello, world'))"
 
 # Validate everything against real Claude in one command:
-python examples/run_live.py
+python tools/run_live.py
 
 # Only one example, with a specific input:
-python examples/run_live.py --only translate --input "Good morning!"
+python tools/run_live.py --only translate --input "Good morning!"
 
 # Dump full traces as JSON for later analysis:
-python examples/run_live.py --trace-dir ./live_results
+python tools/run_live.py --trace-dir ./live_results
 ```
 
 No API key? You can still run everything with the mock adapter:
 
 ```bash
 ail run examples/hello.ail --input "world" --mock
-python examples/evolve_retune_demo.py   # fully deterministic; no API needed
+python tools/evolve_demo.py   # fully deterministic; no API needed
 ```
 
 ---
@@ -113,7 +113,7 @@ ail run examples/ask_human.ail --input "What should I have for dinner?"
 # An evolving intent that retunes a confidence threshold
 ail run examples/evolve_retune.ail --input "I loved it" --mock
 # To *see* evolution in action (v0 -> v1 -> rollback), run the demo:
-python examples/evolve_retune_demo.py
+python tools/evolve_demo.py
 
 # Uses the bundled standard library (no custom intent definitions)
 ail run examples/summarize_and_classify.ail --input "some article text" --mock

@@ -37,7 +37,7 @@ class ScriptedAdapter(MockAdapter):
 
 
 def main():
-    source = (Path(__file__).parent / "evolve_retune.ail").read_text()
+    source = (Path(__file__).parent.parent / "examples" / "evolve_retune.ail").read_text()
     program = compile_source(source)
     adapter = ScriptedAdapter(value="positive", confidence=0.92)
 

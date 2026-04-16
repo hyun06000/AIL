@@ -41,6 +41,7 @@ from pathlib import Path
 # Allow running from anywhere inside the repo
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
+EXAMPLES_DIR = HERE.parent / "examples"
 sys.path.insert(0, str(HERE.parent))  # reference-impl/ on sys.path
 
 
@@ -55,37 +56,37 @@ class ExampleCase:
 EXAMPLES: list[ExampleCase] = [
     ExampleCase(
         name="hello",
-        path=HERE / "hello.ail",
+        path=EXAMPLES_DIR / "hello.ail",
         default_input="세계",
         description="Simplest case — one intent, one entry",
     ),
     ExampleCase(
         name="translate",
-        path=HERE / "translate.ail",
+        path=EXAMPLES_DIR / "translate.ail",
         default_input="Hello, how are you doing today?",
         description="Context inheritance with override; Korean formal translation",
     ),
     ExampleCase(
         name="classify",
-        path=HERE / "classify.ail",
+        path=EXAMPLES_DIR / "classify.ail",
         default_input="I really enjoyed the film, but the ending dragged on.",
         description="Branch dispatch on a classifier's output",
     ),
     ExampleCase(
         name="ask_human",
-        path=HERE / "ask_human.ail",
+        path=EXAMPLES_DIR / "ask_human.ail",
         default_input="I'm tired and hungry but unsure what I want",
         description="Low-confidence handler falls back to human (STDIN required)",
     ),
     ExampleCase(
         name="fizzbuzz",
-        path=HERE / "fizzbuzz.ail",
+        path=EXAMPLES_DIR / "fizzbuzz.ail",
         default_input="15",
         description="Pure fn — no LLM calls at all; proves AIL is a real language",
     ),
     ExampleCase(
         name="review_analyzer",
-        path=HERE / "review_analyzer.ail",
+        path=EXAMPLES_DIR / "review_analyzer.ail",
         default_input="Great product!\nTerrible quality\nLoved it so much\nOkay I guess\nAwful",
         description="Hybrid fn+intent pipeline: parse+filter(fn) -> classify(intent) -> report(fn)",
     ),

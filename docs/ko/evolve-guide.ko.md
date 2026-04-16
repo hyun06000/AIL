@@ -88,11 +88,11 @@ evolve classify_sentiment {
 
 ## 실제로 작동하는 것 보기
 
-`reference-impl/examples/evolve_retune_demo.py`를 실행하세요:
+`reference-impl/tools/evolve_demo.py`를 실행하세요:
 
 ```bash
 cd reference-impl
-python examples/evolve_retune_demo.py
+python tools/evolve_demo.py
 ```
 
 출력:

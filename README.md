@@ -46,10 +46,10 @@ ail run examples/fizzbuzz.ail --input "20" --mock
 
 # With an API key (env var or .env file):
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > ../.env
-python examples/run_live.py
+python tools/run_live.py
 
 # See evolution (retune + rollback) in action:
-python examples/evolve_retune_demo.py
+python tools/evolve_demo.py
 ```
 
 ---

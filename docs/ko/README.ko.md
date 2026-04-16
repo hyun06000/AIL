@@ -89,7 +89,7 @@ pip install -e ".[anthropic]"
 ail run examples/hello.ail --input "세계" --mock
 
 # 진화가 실제로 버전을 바꾸고 롤백하는 걸 보기 (결정적, API 불필요):
-python examples/evolve_retune_demo.py
+python tools/evolve_demo.py
 ```
 
 실제 Claude 모델에 연결해서 돌려보려면, 프로젝트 루트에 `.env` 파일을 만들거나 환경 변수를 설정하세요:
@@ -102,10 +102,10 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 export ANTHROPIC_API_KEY=sk-ant-...
 
 # 네 개 예제 전부 실제 모델로 돌리기:
-python examples/run_live.py
+python tools/run_live.py
 
 # 특정 예제만 돌리기:
-python examples/run_live.py --only classify --input "정말 좋아요!"
+python tools/run_live.py --only classify --input "정말 좋아요!"
 ```
 
 모든 호출은 trace에 기록됩니다. `--trace-dir ./out` 을 붙이면 JSON으로 덤프돼요.
