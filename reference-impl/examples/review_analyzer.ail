@@ -1,0 +1,109 @@
+// review_analyzer.ail — A realistic hybrid program.
+//
+// Scenario: you have customer reviews as text (one per line).
+// The program:
+//   1. Parses lines into individual reviews         (fn — deterministic)
+//   2. Filters out empty or too-short reviews       (fn — deterministic)
+//   3. Classifies each review's sentiment           (intent — needs LLM)
+//   4. Computes summary statistics                  (fn — deterministic)
+//   5. Generates a final report                     (fn — deterministic)
+//
+// This is what "AI-friendly language" means in practice: the AI
+// writes fn for what it can compute, intent for what it needs to
+// reason about, and the language treats both as first-class.
+//
+// Run with mock (no API key):
+//   ail run examples/review_analyzer.ail \
+//       --input "Great product!\nTerrible quality\nLoved it\nOkay I guess\nAwful" \
+//       --mock
+//
+// Run with real Claude:
+//   python examples/run_live.py --only review_analyzer
+
+import classify from "stdlib/language"
+import word_count from "stdlib/utils"
+
+// --- Deterministic data processing (fn) ---
+
+fn parse_reviews(raw: Text) -> Text {
+    lines = split(raw, "\n")
+    result = []
+    for line in lines {
+        cleaned = trim(line)
+        if is_empty(cleaned) == false {
+            result = append(result, cleaned)
+        }
+    }
+    return result
+}
+
+fn is_empty(text: Text) -> Boolean {
+    return length(trim(text)) == 0
+}
+
+fn is_long_enough(text: Text) -> Boolean {
+    return word_count(text) >= 2
+}
+
+fn filter_short(reviews: Text) -> Text {
+    result = []
+    for review in reviews {
+        if is_long_enough(review) {
+            result = append(result, review)
+        }
+    }
+    return result
+}
+
+fn count_label(labels: Text, target: Text) -> Number {
+    count = 0
+    for label in labels {
+        if label == target {
+            count = count + 1
+        }
+    }
+    return count
+}
+
+fn build_report(total: Number, pos: Number, neg: Number, neu: Number) -> Text {
+    pos_pct = 0
+    neg_pct = 0
+    neu_pct = 0
+    if total > 0 {
+        pos_pct = pos / total * 100
+        neg_pct = neg / total * 100
+        neu_pct = neu / total * 100
+    }
+    lines = [
+        join(["Review Analysis Report"], ""),
+        join(["======================"], ""),
+        join(["Total reviews: ", to_text(total)], ""),
+        join(["Positive:      ", to_text(pos), " (", to_text(pos_pct), "%)"], ""),
+        join(["Negative:      ", to_text(neg), " (", to_text(neg_pct), "%)"], ""),
+        join(["Neutral:       ", to_text(neu), " (", to_text(neu_pct), "%)"], "")
+    ]
+    return join(lines, "\n")
+}
+
+// --- The pipeline (entry) ---
+
+entry main(raw_input: Text) {
+    // Step 1-2: Parse and filter (pure fn, no LLM)
+    reviews = parse_reviews(raw_input)
+    filtered = filter_short(reviews)
+
+    // Step 3: Classify each review (intent, LLM needed)
+    labels = []
+    for review in filtered {
+        label = classify(review, "positive_negative_neutral")
+        labels = append(labels, label)
+    }
+
+    // Step 4-5: Compute stats and build report (pure fn)
+    total = length(labels)
+    pos = count_label(labels, "positive")
+    neg = count_label(labels, "negative")
+    neu = total - pos - neg
+    report = build_report(total, pos, neg, neu)
+    return report
+}

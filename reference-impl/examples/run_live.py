@@ -77,6 +77,18 @@ EXAMPLES: list[ExampleCase] = [
         default_input="I'm tired and hungry but unsure what I want",
         description="Low-confidence handler falls back to human (STDIN required)",
     ),
+    ExampleCase(
+        name="fizzbuzz",
+        path=HERE / "fizzbuzz.ail",
+        default_input="15",
+        description="Pure fn — no LLM calls at all; proves AIL is a real language",
+    ),
+    ExampleCase(
+        name="review_analyzer",
+        path=HERE / "review_analyzer.ail",
+        default_input="Great product!\nTerrible quality\nLoved it so much\nOkay I guess\nAwful",
+        description="Hybrid fn+intent pipeline: parse+filter(fn) -> classify(intent) -> report(fn)",
+    ),
 ]
 
 
