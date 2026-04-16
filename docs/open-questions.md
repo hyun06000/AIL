@@ -55,17 +55,24 @@ richer-than-scalar confidence types but does not fully define their
 operations. A principled design of these types — especially how they
 interact with `branch` and with constraint satisfaction — is pending.
 
-### Q4. `in` operator and collection membership — *open*
+### Q4. `in` operator and collection membership — *resolved in v0.1.1*
 
-The MVP parser currently does not handle `x in ["a", "b", "c"]` as an
+~~The MVP parser currently does not handle `x in ["a", "b", "c"]` as an
 expression (the word `in` is a reserved keyword but the parser does not
 produce a membership expression). The spec implies this should work; the
 grammar needs a `MembershipOp` production and the executor a matching
-evaluation rule.
+evaluation rule.~~
 
-This was discovered while writing the `classify.ail` example; the example
+~~This was discovered while writing the `classify.ail` example; the example
 works around it with a symbolic constraint. Real programs will want the
-operator.
+operator.~~
+
+**Resolution:** Added `MembershipOp` AST node; parser recognizes `x in C`
+and `x not in C` at comparison precedence. Executor evaluates via Python
+`in`, with confidence propagation as `min(element.confidence,
+collection.confidence)` per spec/03 §3.1. `classify.ail` restored to its
+intended form. Five new executor tests cover the operator directly and
+through a branch arm.
 
 ---
 
@@ -197,6 +204,11 @@ Pick one. Write a proposal. Open an issue with the label `open-question`
 and the question number. A proposal doesn't need to be a full solution —
 even "here's how I'd frame the tradeoffs" is useful.
 
-If you're looking for a place to start, **Q4** (the `in` operator) is the
-smallest one and leads directly to a PR-sized contribution. **Q2** (formal
-semantics) is the largest and probably a multi-month effort.
+If you're looking for a place to start, **Q13** (program portability —
+a manifest describing a program's minimum runtime requirements) or
+**Q14** (debugging tools for traces) are good small-to-medium entry
+points. **Q2** (formal semantics) is the largest and probably a
+multi-month effort.
+
+Recently resolved: **Q4** (membership operator) — see commits
+`1c34eb4`, `6702e90`, `8e46bee`.
