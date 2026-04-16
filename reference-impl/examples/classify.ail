@@ -9,7 +9,7 @@
 intent classify_sentiment(text: Text) -> Text {
     goal: sentiment_label
     constraints {
-        output_is_one_of_the_allowed_labels
+        output in ["positive", "negative", "mixed", "unclear"]
     }
 }
 
