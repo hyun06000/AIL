@@ -167,6 +167,7 @@ slice(text: Text, start: Number, end: Number) -> Text
 ### List
 ```
 length(list: [T]) -> Number
+get(list: [T], index: Number) -> T          // single element access
 append(list: [T], item: T) -> [T]
 sort(list: [T]) -> [T]
 reverse(list: [T]) -> [T]
@@ -177,6 +178,7 @@ reduce(list: [T], fn_name: Text, initial: T) -> T
 ```
 
 Note: map/filter/reduce take fn NAMES as strings, not lambda expressions.
+Note: get() returns a single element; slice() returns a sub-list. Use get() when you want one item.
 
 ### Conversion
 ```
