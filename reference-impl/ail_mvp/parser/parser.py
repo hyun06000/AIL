@@ -417,7 +417,27 @@ class Parser:
             op = cmp_map[self.advance().kind]
             right = self.parse_additive()
             return BinaryOp(op=op, left=left, right=right)
+        # Membership: `x in collection` or `x not in collection`
+        if self.is_keyword("in"):
+            self.advance()
+            collection = self.parse_additive()
+            from .ast import MembershipOp
+            return MembershipOp(element=left, collection=collection, negated=False)
+        if self.is_keyword("not") and self._peek_keyword(1, "in"):
+            self.advance()  # not
+            self.advance()  # in
+            collection = self.parse_additive()
+            from .ast import MembershipOp
+            return MembershipOp(element=left, collection=collection, negated=True)
         return left
+
+    def _peek_keyword(self, offset: int, kw: str) -> bool:
+        """Check whether the token at `offset` ahead of current is the given keyword."""
+        pos = self.i + offset
+        if pos >= len(self.tokens):
+            return False
+        t = self.tokens[pos]
+        return t.kind == Tok.IDENT and t.value == kw
 
     def parse_additive(self) -> Expr:
         left = self.parse_multiplicative()

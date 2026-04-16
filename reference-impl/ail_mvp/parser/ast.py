@@ -61,7 +61,22 @@ class PerformExpr:
     kwargs: dict[str, "Expr"]
 
 
-Expr = Literal | Identifier | FieldAccess | Call | BinaryOp | UnaryOp | ListLiteral | PerformExpr
+@dataclass
+class MembershipOp:
+    """`x in [a, b, c]` — tests whether `element` is contained in `collection`.
+
+    The collection may be a list literal, an identifier bound to a list, or
+    any expression that evaluates to a sequence.
+    """
+    element: "Expr"
+    collection: "Expr"
+    negated: bool = False     # `x not in [...]`
+
+
+Expr = (
+    Literal | Identifier | FieldAccess | Call | BinaryOp | UnaryOp
+    | ListLiteral | PerformExpr | MembershipOp
+)
 
 
 # ---------- Statements / Blocks ----------
