@@ -168,3 +168,77 @@ def test_low_confidence_handler_does_not_fire_when_confident():
     result, trace = run(src, input="hungry", adapter=adapter, ask_human=fake_human)
     assert result.value == "pizza"
     assert asks == []  # handler did not fire
+
+
+# ---------- membership operator (Q4) ----------
+
+
+def test_membership_in_list_true():
+    src = """
+    entry main(x: Text) {
+        result = x in ["a", "b", "c"]
+        return result
+    }
+    """
+    result, _ = run(src, input="b", adapter=MockAdapter())
+    assert result.value is True
+
+
+def test_membership_in_list_false():
+    src = """
+    entry main(x: Text) {
+        result = x in ["a", "b", "c"]
+        return result
+    }
+    """
+    result, _ = run(src, input="z", adapter=MockAdapter())
+    assert result.value is False
+
+
+def test_membership_not_in():
+    src = """
+    entry main(x: Text) {
+        result = x not in ["a", "b"]
+        return result
+    }
+    """
+    r1, _ = run(src, input="c", adapter=MockAdapter())
+    assert r1.value is True
+    r2, _ = run(src, input="a", adapter=MockAdapter())
+    assert r2.value is False
+
+
+def test_membership_against_intent_result():
+    """The classify example pattern: use an intent output as the element."""
+    src = """
+    intent classify(x: Text) -> Text { goal: label }
+    entry main(input: Text) {
+        label = classify(input)
+        is_valid = label in ["positive", "negative", "neutral"]
+        return is_valid
+    }
+    """
+    adapter = ScriptedAdapter({"classify": ("positive", 0.9)})
+    result, _ = run(src, input="some text", adapter=adapter)
+    assert result.value is True
+    # Confidence is min of element (0.9) and collection (literal, 1.0) = 0.9
+    assert abs(result.confidence - 0.9) < 1e-9
+
+
+def test_membership_in_branch_condition():
+    """Using `in` inside a branch arm — the classify.ail use case."""
+    src = """
+    intent classify(x: Text) -> Text { goal: label }
+    entry main(input: Text) {
+        label = classify(input)
+        branch label {
+            [label in ["positive", "great", "love"]] => result = "warm"
+            [label in ["negative", "bad", "hate"]]   => result = "careful"
+            [otherwise]                              => result = "neutral"
+        }
+        return result
+    }
+    """
+    adapter = ScriptedAdapter({"classify": ("great", 0.88)})
+    result, _ = run(src, input="something", adapter=adapter)
+    assert result.value == "warm"

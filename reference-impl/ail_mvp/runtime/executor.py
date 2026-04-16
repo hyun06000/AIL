@@ -18,7 +18,8 @@ from typing import Any, Optional
 from ..parser.ast import (
     Program, IntentDecl, ContextDecl, EntryDecl, EffectDecl,
     Assignment, ReturnStmt, PerformStmt, BranchStmt, WithContextStmt, ExprStmt,
-    Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral, PerformExpr,
+    Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
+    PerformExpr, MembershipOp,
     Expr, Statement,
 )
 from .context import ContextStack, ContextResolver, ResolvedContext
@@ -299,6 +300,18 @@ class Executor:
             return operand
         if isinstance(expr, Call):
             return self._eval_call(expr, scope)
+        if isinstance(expr, MembershipOp):
+            elem = self._eval_expr(expr.element, scope)
+            coll = self._eval_expr(expr.collection, scope)
+            # Collection may be a Python list, tuple, set, string, or dict keys
+            try:
+                contained = elem.value in coll.value
+            except TypeError:
+                # Non-iterable collection: treat as not contained
+                contained = False
+            result = (not contained) if expr.negated else contained
+            # Confidence: min of element and collection (conservative, per spec/03 §3.1)
+            return ConfidentValue(result, min(elem.confidence, coll.confidence))
         if isinstance(expr, PerformExpr):
             # perform-as-expression: build a transient PerformStmt and execute
             return self._exec_perform(
