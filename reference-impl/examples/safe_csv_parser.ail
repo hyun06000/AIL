@@ -1,0 +1,52 @@
+// safe_csv_parser.ail — Error handling with the Result type.
+//
+// Demonstrates: ok(), error(), is_ok(), is_error(), unwrap(),
+// unwrap_or(), unwrap_error() — AIL's way of handling operations
+// that can fail, without exceptions.
+//
+// An AI writing this program declares which operations can fail
+// (to_number on untrusted input) and what to do about it (skip
+// bad rows, count errors, report at the end).
+//
+// Run:
+//   ail run examples/safe_csv_parser.ail --input "Alice:85,Bob:xyz,Charlie:92,Dave:-5" --mock
+
+fn parse_row(raw: Text) -> Text {
+    parts = split(trim(raw), ":")
+    if length(parts) < 2 {
+        return error(join(["malformed row: ", raw], ""))
+    }
+    name = get(parts, 0)
+    score_result = to_number(get(parts, 1))
+    if is_error(score_result) {
+        return error(join(["bad score for ", name, ": ", get(parts, 1)], ""))
+    }
+    if score_result < 0 {
+        return error(join(["negative score for ", name], ""))
+    }
+    return ok(join([name, to_text(score_result)], ":"))
+}
+
+fn parse_all(raw: Text) -> Text {
+    rows = split(raw, ",")
+    good = []
+    errors = []
+    for row in rows {
+        result = parse_row(row)
+        if is_ok(result) {
+            good = append(good, unwrap(result))
+        } else {
+            errors = append(errors, unwrap_error(result))
+        }
+    }
+    return join([
+        join(["Parsed: ", to_text(length(good)), " rows"], ""),
+        join(["Errors: ", to_text(length(errors))], ""),
+        join(["Good: ", join(good, " | ")], ""),
+        join(["Problems: ", join(errors, " | ")], "")
+    ], "\n")
+}
+
+entry main(input: Text) {
+    return parse_all(input)
+}

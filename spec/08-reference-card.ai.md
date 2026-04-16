@@ -194,6 +194,19 @@ max(list: [Number]) -> Number
 min(list: [Number]) -> Number
 ```
 
+### Result (error handling)
+```
+ok(value: Any) -> Result                     // wrap a success value
+error(message: Text) -> Result               // wrap an error
+is_ok(result: Result) -> Boolean             // true if ok
+is_error(result: Result) -> Boolean          // true if error
+unwrap(result: Result) -> Any                // extract value (errors return UNWRAP_ERROR with confidence 0.0)
+unwrap_error(result: Result) -> Text         // extract error message
+unwrap_or(result: Result, default: Any) -> Any  // value if ok, default if error
+```
+
+Note: to_number() returns a Result error on non-numeric input. Use is_error() to check before using the value.
+
 ## STDLIB MODULES
 
 ### stdlib/core

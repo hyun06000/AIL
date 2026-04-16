@@ -306,3 +306,103 @@ def test_split_empty_delimiter_gives_characters():
     """
     result, _ = run(src, input="", adapter=MockAdapter())
     assert result.value == ['h', 'e', 'l', 'l', 'o']
+
+
+# ---------- Result type ----------
+
+
+def test_ok_and_unwrap():
+    src = """
+    entry main(x: Text) { return unwrap(ok(42)) }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value == 42
+
+
+def test_error_and_unwrap_error():
+    src = """
+    entry main(x: Text) { return unwrap_error(error("oops")) }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value == "oops"
+
+
+def test_is_ok_true_for_ok():
+    src = """
+    entry main(x: Text) { return is_ok(ok(1)) }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value is True
+
+
+def test_is_ok_false_for_error():
+    src = """
+    entry main(x: Text) { return is_ok(error("bad")) }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value is False
+
+
+def test_is_error_true_for_error():
+    src = """
+    entry main(x: Text) { return is_error(error("bad")) }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value is True
+
+
+def test_unwrap_or_uses_default_on_error():
+    src = """
+    entry main(x: Text) { return unwrap_or(error("nope"), 99) }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value == 99
+
+
+def test_unwrap_or_uses_value_on_ok():
+    src = """
+    entry main(x: Text) { return unwrap_or(ok(7), 99) }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value == 7
+
+
+def test_to_number_returns_result_error_on_bad_input():
+    src = """
+    entry main(x: Text) {
+        n = to_number("abc")
+        return is_error(n)
+    }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value is True
+
+
+def test_to_number_returns_number_on_good_input():
+    src = """
+    entry main(x: Text) {
+        n = to_number("42")
+        return n + 1
+    }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value == 43.0
+
+
+def test_result_in_fn_pipeline():
+    """A fn returns error, caller handles it with is_ok/unwrap_error."""
+    src = """
+    fn safe_divide(a: Number, b: Number) -> Text {
+        if b == 0 { return error("division by zero") }
+        return ok(a / b)
+    }
+    entry main(x: Text) {
+        r = safe_divide(10, 0)
+        if is_error(r) {
+            return join(["Failed: ", unwrap_error(r)], "")
+        }
+        return unwrap(r)
+    }
+    """
+    result, _ = run(src, input="", adapter=MockAdapter())
+    assert result.value == "Failed: division by zero"

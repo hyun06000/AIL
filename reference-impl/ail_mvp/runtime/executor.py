@@ -585,7 +585,9 @@ class Executor:
             try:
                 return ConfidentValue(float(raw[0]), conf)
             except (ValueError, TypeError):
-                return ConfidentValue(None, conf)
+                return ConfidentValue(
+                    {"_result": True, "ok": False, "error": f"cannot convert to number: {raw[0]}"},
+                    conf)
         if name == "to_text":
             return ConfidentValue(str(raw[0]) if raw else "", conf)
         if name == "to_boolean":
@@ -611,6 +613,48 @@ class Executor:
                 source_text = raw[0]
                 eval_input = raw[1] if len(raw) >= 2 else ""
                 return self._eval_ail_source(source_text, eval_input, conf)
+
+        # --- Result type (v1.1) ---
+        # ok(value) -> {"_result": True, "ok": True, "value": V}
+        # error(msg) -> {"_result": True, "ok": False, "error": E}
+        if name == "ok":
+            if raw:
+                return ConfidentValue(
+                    {"_result": True, "ok": True, "value": raw[0]}, conf)
+        if name == "error":
+            if raw:
+                return ConfidentValue(
+                    {"_result": True, "ok": False, "error": raw[0]}, conf)
+        if name == "is_ok":
+            if raw and isinstance(raw[0], dict) and raw[0].get("_result"):
+                return ConfidentValue(raw[0].get("ok", False), conf)
+            return ConfidentValue(True, conf)
+        if name == "is_error":
+            if raw and isinstance(raw[0], dict) and raw[0].get("_result"):
+                return ConfidentValue(not raw[0].get("ok", True), conf)
+            return ConfidentValue(False, conf)
+        if name == "unwrap":
+            if raw and isinstance(raw[0], dict) and raw[0].get("_result"):
+                if raw[0].get("ok"):
+                    return ConfidentValue(raw[0]["value"], conf)
+                else:
+                    return ConfidentValue(
+                        f"UNWRAP_ERROR: {raw[0].get('error', 'unknown')}", 0.0)
+            return ConfidentValue(raw[0] if raw else None, conf)
+        if name == "unwrap_error":
+            if raw and isinstance(raw[0], dict) and raw[0].get("_result"):
+                if not raw[0].get("ok"):
+                    return ConfidentValue(raw[0].get("error", "unknown"), conf)
+                else:
+                    return ConfidentValue("NOT_AN_ERROR", 0.0)
+            return ConfidentValue("NOT_A_RESULT", 0.0)
+        if name == "unwrap_or":
+            if len(raw) >= 2 and isinstance(raw[0], dict) and raw[0].get("_result"):
+                if raw[0].get("ok"):
+                    return ConfidentValue(raw[0]["value"], conf)
+                else:
+                    return ConfidentValue(raw[1], conf)
+            return ConfidentValue(raw[0] if raw else None, conf)
 
         return None  # not a builtin
 
