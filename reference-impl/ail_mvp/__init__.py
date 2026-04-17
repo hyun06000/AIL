@@ -27,7 +27,12 @@ def compile_source(source: str):
 
 
 def _default_adapter() -> ModelAdapter:
-    """Try Anthropic if env var is present, else Mock.
+    """Pick an adapter based on the environment.
+
+    Preference order:
+      1. `AIL_OLLAMA_MODEL` set → OllamaAdapter (local, no API key)
+      2. `ANTHROPIC_API_KEY` set → AnthropicAdapter
+      3. MockAdapter (offline)
 
     Before checking the environment, load a .env file from the current
     working directory or from the parent directories up to a reasonable
@@ -35,6 +40,9 @@ def _default_adapter() -> ModelAdapter:
     """
     _load_dotenv_if_present()
     import os
+    if os.environ.get("AIL_OLLAMA_MODEL"):
+        from .runtime.ollama_adapter import OllamaAdapter
+        return OllamaAdapter()
     if os.environ.get("ANTHROPIC_API_KEY"):
         try:
             from .runtime.anthropic_adapter import AnthropicAdapter

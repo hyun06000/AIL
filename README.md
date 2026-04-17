@@ -44,9 +44,13 @@ pip install -e ".[anthropic]"
 # No API key needed — pure fn programs run without an LLM:
 ail run examples/fizzbuzz.ail --input "20" --mock
 
-# With an API key (env var or .env file):
+# With Anthropic:
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > ../.env
 python tools/run_live.py
+
+# With local Ollama (free, offline; needs `ollama serve` + pulled model):
+export AIL_OLLAMA_MODEL=llama3.1:latest
+ail run examples/audit_provenance.ail --input "I love this product"
 
 # See evolution (retune + rollback) in action:
 python tools/evolve_demo.py

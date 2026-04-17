@@ -512,14 +512,23 @@ pip install -e ".[anthropic]"
 # Without LLM (fn-only programs, or mock for intent programs):
 ail run PROGRAM.ail --input "INPUT" --mock
 
-# With LLM:
+# With Anthropic:
 export ANTHROPIC_API_KEY=sk-ant-...
+ail run PROGRAM.ail --input "INPUT"
+
+# With local Ollama (no API key; requires `ollama serve` + a pulled model):
+export AIL_OLLAMA_MODEL=llama3.1:latest
 ail run PROGRAM.ail --input "INPUT"
 
 # Programmatically:
 from ail_mvp import run
 result, trace = run("program.ail", input="hello")
 # result.value, result.confidence
+
+# Explicit adapter selection:
+from ail_mvp.runtime.ollama_adapter import OllamaAdapter
+result, trace = run("program.ail", input="hi",
+                    adapter=OllamaAdapter(model="gemma2:latest"))
 ```
 
 ## PYTHON API
