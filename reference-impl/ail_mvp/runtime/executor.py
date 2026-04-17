@@ -31,6 +31,7 @@ from .evolution import EvolutionSupervisor
 from .provenance import (
     Origin, LITERAL_ORIGIN,
     input_origin, fn_origin, intent_origin, builtin_origin, attempt_origin,
+    effect_origin,
     parents_of,
 )
 from .parallel import plan_groups
@@ -410,15 +411,134 @@ class Executor:
 
     def _builtin_effect(self, name: str, args: list[ConfidentValue],
                         kwargs: dict[str, ConfidentValue]) -> ConfidentValue:
+        """Dispatch a perform call to the right effect implementation.
+
+        Every effect wraps its result with `effect_origin(name, parents)`
+        so programs can query via `has_effect_origin(value)` whether a
+        given value's history involved a side-effecting operation.
+        Parents are the arg origins — an effect consuming an LLM result
+        (via intent) correctly shows `intent` upstream of `effect`.
+        """
+        origin = effect_origin(name, parents_of(args))
+
         if name in ("human_ask", "ask_human"):
             question = (args[0].value if args else kwargs.get("question", ConfidentValue("?", 1.0)).value)
             answer = self.ask_human(str(question), expect="text")
-            return ConfidentValue(answer, 1.0)
+            return ConfidentValue(answer, 1.0, origin=origin)
         if name == "log":
             msg = (args[0].value if args else "")
             print(f"[log] {msg}")
-            return ConfidentValue(None, 1.0)
-        raise RuntimeError(f"unknown effect: {name} (MVP supports human_ask, log, or declared effects)")
+            return ConfidentValue(None, 1.0, origin=origin)
+        if name == "http.get":
+            return self._http_effect("GET", args, kwargs, origin)
+        if name == "http.post":
+            return self._http_effect("POST", args, kwargs, origin)
+        if name == "file.read":
+            return self._file_read(args, kwargs, origin)
+        if name == "file.write":
+            return self._file_write(args, kwargs, origin)
+        raise RuntimeError(
+            f"unknown effect: {name} "
+            f"(supported: human_ask, log, http.get, http.post, "
+            f"file.read, file.write, or a declared effect)"
+        )
+
+    # --- effect implementations ---
+
+    def _http_effect(self, method: str, args: list[ConfidentValue],
+                     kwargs: dict[str, ConfidentValue],
+                     origin: Origin) -> ConfidentValue:
+        """HTTP GET/POST using urllib.
+
+        Returns a Record (dict) with `status` (Number), `body` (Text),
+        and `ok` (Boolean for status in 200..299). Confidence is 1.0 on
+        a successful round trip, 0.0 on network error — the caller can
+        thread through an `attempt` block to fall back. Non-2xx is NOT
+        confidence 0 by itself; an API returning 404 is a real response,
+        not a broken pipe.
+        """
+        import urllib.request
+        import urllib.error
+        url = str(args[0].value) if args else str(kwargs.get("url", ConfidentValue("", 1.0)).value)
+        body = None
+        if method == "POST":
+            if len(args) >= 2:
+                body = args[1].value
+            elif "body" in kwargs:
+                body = kwargs["body"].value
+        try:
+            req = urllib.request.Request(
+                url, method=method,
+                data=(str(body).encode("utf-8") if body is not None else None),
+                headers={"User-Agent": "ail-http-effect/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                content = resp.read().decode("utf-8", errors="replace")
+                status = float(resp.status)
+            # Record shape: raw values (not ConfidentValue). FieldAccess
+            # will wrap each in a ConfidentValue carrying the target's
+            # confidence/origin, so the response fields inherit the
+            # effect origin automatically.
+            result = {
+                "status": status,
+                "body": content,
+                "ok": 200 <= status < 300,
+            }
+            return ConfidentValue(result, 1.0, origin=origin)
+        except urllib.error.HTTPError as e:
+            # HTTPError carries a status — still a real response.
+            status = float(e.code)
+            try:
+                content = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                content = ""
+            result = {
+                "status": status,
+                "body": content,
+                "ok": False,
+            }
+            return ConfidentValue(result, 1.0, origin=origin)
+        except urllib.error.URLError as e:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": f"http {method} {url}: {e}"},
+                0.0, origin=origin,
+            )
+
+    def _file_read(self, args: list[ConfidentValue],
+                   kwargs: dict[str, ConfidentValue],
+                   origin: Origin) -> ConfidentValue:
+        """Read a text file. Returns Text on success, Result-error on failure."""
+        path = str(args[0].value) if args else str(kwargs.get("path", ConfidentValue("", 1.0)).value)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return ConfidentValue(f.read(), 1.0, origin=origin)
+        except OSError as e:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": f"file.read {path}: {e}"},
+                0.0, origin=origin,
+            )
+
+    def _file_write(self, args: list[ConfidentValue],
+                    kwargs: dict[str, ConfidentValue],
+                    origin: Origin) -> ConfidentValue:
+        """Write text to a file. Returns Result-ok on success, Result-error on failure."""
+        path = str(args[0].value) if args else str(kwargs.get("path", ConfidentValue("", 1.0)).value)
+        content = args[1].value if len(args) >= 2 else kwargs.get("content", ConfidentValue("", 1.0)).value
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(str(content))
+            return ConfidentValue(
+                {"_result": True, "ok": True, "value": path},
+                1.0, origin=origin,
+            )
+        except OSError as e:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": f"file.write {path}: {e}"},
+                0.0, origin=origin,
+            )
 
     # --- expression evaluation ---
 
@@ -564,6 +684,8 @@ class Executor:
             return self._provenance_lineage_of(args)
         if name == "has_intent_origin":
             return self._provenance_has_intent(args)
+        if name == "has_effect_origin":
+            return self._provenance_has_effect(args)
 
         # Is it a declared fn (pure deterministic)?
         if name in self.fns:
@@ -863,6 +985,21 @@ class Executor:
         return ConfidentValue(
             result, 1.0,
             origin=builtin_origin("has_intent_origin", parents_of(args)),
+        )
+
+    def _provenance_has_effect(self, args: list[ConfidentValue]) -> ConfidentValue:
+        """has_effect_origin(value) -> Boolean
+
+        True iff any node in the value's origin tree has kind="effect" —
+        i.e., a `perform` (http, file, log, etc.) was involved in
+        producing this value.
+        """
+        if not args:
+            return ConfidentValue(False, 1.0)
+        result = args[0].origin.has_kind("effect")
+        return ConfidentValue(
+            result, 1.0,
+            origin=builtin_origin("has_effect_origin", parents_of(args)),
         )
 
     def _invoke_intent(

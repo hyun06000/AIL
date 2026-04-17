@@ -64,7 +64,7 @@ _PURE_BUILTINS: frozenset[str] = frozenset({
     "ok", "error", "is_ok", "is_error",
     "unwrap", "unwrap_or", "unwrap_error",
     # Provenance introspection — pure by construction (reads metadata only)
-    "origin_of", "lineage_of", "has_intent_origin",
+    "origin_of", "lineage_of", "has_intent_origin", "has_effect_origin",
 })
 
 _BANNED_FROM_PURE: frozenset[str] = frozenset({

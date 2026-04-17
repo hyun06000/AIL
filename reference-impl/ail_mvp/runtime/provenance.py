@@ -44,6 +44,7 @@ FN = "fn"
 INTENT = "intent"
 BUILTIN = "builtin"
 ATTEMPT = "attempt"
+EFFECT = "effect"
 
 
 @dataclass(frozen=True)
@@ -127,6 +128,21 @@ def attempt_origin(selected_index: int, selected_parent: "Origin") -> Origin:
     """
     return Origin(kind=ATTEMPT, name=str(selected_index),
                   parents=(selected_parent,))
+
+
+def effect_origin(effect_name: str, parents: tuple) -> Origin:
+    """Origin for a value produced by a `perform` statement.
+
+    `name` is the effect's fully-qualified name (e.g. `http.get`,
+    `file.read`). Parents are the origins of the arguments that were
+    passed into the effect. Carries a timestamp so audit traces can see
+    *when* side-effecting operations happened — useful for debugging
+    programs whose results depend on external state at a moment in time.
+    """
+    return Origin(
+        kind=EFFECT, name=effect_name, parents=parents,
+        at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
 
 
 def parents_of(values) -> tuple:

@@ -1,0 +1,54 @@
+// agent_fetch_summarize.ail — the program as agent.
+//
+// This example shows what AIL looks like once effects are wired: a
+// program that does actual work in the world, not just a calculation.
+// It fetches a URL, summarizes the response via an LLM, writes the
+// summary to a file, and returns a one-line status.
+//
+// The composition is what makes this AIL-native:
+//
+//   perform http.get  — real network effect, carries an `effect` origin
+//            │
+//            ▼
+//   summarize (intent) — LLM judgment, carries an `intent` origin
+//            │
+//            ▼
+//   perform file.write — another effect, writes the result
+//            │
+//            ▼
+//   status line      — carries both `effect` AND `intent` in lineage
+//
+// has_intent_origin(status) -> true
+// has_effect_origin(status) -> true
+//
+// Run:
+//   export AIL_OLLAMA_MODEL=llama3.1:latest
+//   ail run examples/agent_fetch_summarize.ail \
+//       --input "https://www.example.com" --trace
+
+import summarize from "stdlib/language"
+
+fn build_status(url: Text, out_path: Text, size: Number) -> Text {
+    return join([
+        "fetched ", url,
+        " -> summarized ", to_text(size),
+        " chars -> wrote ", out_path
+    ], "")
+}
+
+entry main(url: Text) {
+    // Step 1: fetch the URL (effect — network)
+    resp = perform http.get(url)
+
+    // Step 2: summarize the response body (intent — LLM)
+    summary = summarize(resp.body, 60)
+
+    // Step 3: write the summary to disk (effect — filesystem)
+    out = perform file.write("/tmp/ail_summary.txt", summary)
+
+    // Step 4: build and return a status message.
+    // The status's origin tree contains: effect(http.get) ->
+    // intent(summarize) -> effect(file.write) -> fn(build_status).
+    // has_intent_origin(status) and has_effect_origin(status) both true.
+    return build_status(url, "/tmp/ail_summary.txt", length(summary))
+}

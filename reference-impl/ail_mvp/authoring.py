@@ -41,6 +41,7 @@ from .parser import ParseError, PurityError
 from .parser.lexer import LexError
 from .runtime import ConfidentValue, ModelAdapter, Trace
 from .runtime.json_parsing import parse_value_confidence
+from .stdlib import ImportResolutionError
 
 
 # Path to the language reference card, relative to the installed package.
@@ -109,6 +110,15 @@ def ask(
     ail_source = ""
     author_model = _adapter_name(adapter)
 
+    # Catches every error class that is recoverable by re-prompting the
+    # author. LexError / ParseError / PurityError fire at compile time;
+    # ImportResolutionError fires later when the program tries to resolve
+    # an import that doesn't exist. All are author mistakes and worth a
+    # retry with the error fed back in.
+    _retryable = (LexError, ParseError, PurityError, ImportResolutionError)
+
+    result = None
+    trace = Trace()
     for attempt in range(max_retries + 1):
         ail_source = _author_write_ail(
             prompt=prompt,
@@ -118,7 +128,8 @@ def ask(
         )
         try:
             compile_source(ail_source)   # parse + purity
-        except (LexError, ParseError, PurityError) as e:
+            result, trace = run(ail_source, input=input_text, adapter=adapter)
+        except _retryable as e:
             errors.append(f"{type(e).__name__}: {e}")
             if attempt == max_retries:
                 partial = AskResult(
@@ -135,13 +146,9 @@ def ask(
             continue
         break
     else:
-        # Should be unreachable given the raise above, but keep mypy quiet.
         raise AuthoringError("author loop exited unexpectedly")
 
-    # Execute. Any runtime error (including intent failures) is surfaced
-    # to the caller rather than swallowed — the human asked a question;
-    # they deserve to see an explanation when something went wrong.
-    result, trace = run(ail_source, input=input_text, adapter=adapter)
+    assert result is not None   # loop must have set it on break
 
     return AskResult(
         value=result.value,

@@ -488,6 +488,17 @@ class Parser:
 
     # --- statements ---
 
+    def _parse_effect_name(self) -> str:
+        """Parse `IDENT ('.' IDENT)*` as a namespaced effect name.
+
+        Returns the dotted form as a single string, e.g. `http.get`.
+        Supports the legacy bare form (`human_ask`) without change.
+        """
+        parts = [self.expect(Tok.IDENT).value]
+        while self.match(Tok.DOT):
+            parts.append(self.expect(Tok.IDENT).value)
+        return ".".join(parts)
+
     def parse_statement(self) -> Statement:
         if self.is_keyword("return"):
             self.advance()
@@ -496,7 +507,7 @@ class Parser:
             return ReturnStmt(value=self.parse_expr())
         if self.is_keyword("perform"):
             self.advance()
-            effect_name = self.expect(Tok.IDENT).value
+            effect_name = self._parse_effect_name()
             self.expect(Tok.LPAREN)
             args, kwargs = self.parse_call_args()
             self.expect(Tok.RPAREN)
@@ -517,7 +528,7 @@ class Parser:
             # allow `name = perform effect(...)` as a special rhs
             if self.is_keyword("perform"):
                 self.advance()
-                effect_name = self.expect(Tok.IDENT).value
+                effect_name = self._parse_effect_name()
                 self.expect(Tok.LPAREN)
                 args, kwargs = self.parse_call_args()
                 self.expect(Tok.RPAREN)

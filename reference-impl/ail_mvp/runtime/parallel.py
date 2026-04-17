@@ -57,9 +57,15 @@ def plan_groups(stmts: list[Statement], intents: set[str]) -> list[Group]:
 
     A group is either:
       - `parallel=True`: 2+ Assignment statements, each with an intent
-        call in its RHS, pairwise independent.
+        call in its RHS, no perform (effects), pairwise independent.
       - `parallel=False`: any other statement (or a single assignment
         that couldn't be merged into a parallel batch).
+
+    Effects are deliberately excluded from batching even when otherwise
+    eligible: they have observable side effects (http requests, file
+    writes) whose order matters. Serial by default preserves the
+    execution sequence a program author wrote, which is less surprising
+    than silently reordering HTTP calls for latency.
     """
     groups: list[Group] = []
     i = 0
@@ -67,7 +73,8 @@ def plan_groups(stmts: list[Statement], intents: set[str]) -> list[Group]:
     while i < n:
         s = stmts[i]
         if (isinstance(s, Assignment)
-                and _contains_intent_call(s.value, intents)):
+                and _contains_intent_call(s.value, intents)
+                and not _contains_perform(s.value)):
             batch = [s]
             batch_lhs = {s.name}
             j = i + 1
@@ -93,6 +100,8 @@ def _can_extend_parallel_batch(stmt: Statement, batch_lhs: set[str],
         return False
     if stmt.name in batch_lhs:
         return False   # would shadow an earlier parallel write
+    if _contains_perform(stmt.value):
+        return False   # effects stay serial for predictable ordering
     if not _contains_intent_call(stmt.value, intents):
         return False   # nothing to overlap with, keep it serial
     if _references_any(stmt.value, batch_lhs):

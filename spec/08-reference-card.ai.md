@@ -230,10 +230,12 @@ Note: to_number() returns a Result error on non-numeric input. Use is_error() to
 origin_of(value: Any) -> Record              // {kind, name, model_id?, at?, parents?}
 lineage_of(value: Any) -> [Record]           // flat post-order list of origin nodes
 has_intent_origin(value: Any) -> Boolean     // true iff an intent is anywhere in the origin tree
+has_effect_origin(value: Any) -> Boolean     // true iff a perform is anywhere in the origin tree
 ```
 
-Origin kinds: `"literal"`, `"input"`, `"fn"`, `"intent"`, `"builtin"`.
-Intent origins additionally carry `model_id` and `at` (ISO-8601 timestamp).
+Origin kinds: `"literal"`, `"input"`, `"fn"`, `"intent"`, `"builtin"`, `"attempt"`, `"effect"`.
+Intent and effect origins additionally carry `at` (ISO-8601 timestamp).
+Intent origins also carry `model_id`.
 
 Rules:
 - Literal values have kind `"literal"`.
@@ -334,6 +336,41 @@ serial execution. Dependent sequences fall through to serial.
 Results are committed to scope in source order after all evaluations
 complete, so determinism is preserved. Trace entries from a batch are
 tagged with `parallel=True`.
+
+## EFFECTS — INTERACTION WITH THE WORLD OUTSIDE THE INTERPRETER
+
+```ail
+content = perform file.read("/path/to/file")      // Text | Result-error
+ok = perform file.write("/path/out", "contents")  // Result
+resp = perform http.get("https://api.example.com/data")
+  // resp is a Record: {status: Number, body: Text, ok: Boolean}
+resp = perform http.post("https://api.example.com", "payload")
+perform log("diagnostic message")                 // to stderr
+```
+
+Effects are side-effecting operations invoked via `perform EFFECT(args)`.
+The effect name may be qualified (`http.get`, `file.read`) or bare
+(`human_ask`, `log`). Every value produced by an effect carries an
+`effect` origin node whose `name` is the fully-qualified effect name
+and whose `at` is an ISO-8601 timestamp — you can audit exactly when
+the side effect happened and what fed into it.
+
+Built-in effects:
+  - `http.get(url: Text) -> Record`  — `{status, body, ok}` on response
+  - `http.post(url: Text, body: Text) -> Record`
+  - `file.read(path: Text) -> Text | Result-error`
+  - `file.write(path: Text, content: Text) -> Result`
+  - `log(message: Any)` — stderr, returns nothing
+  - `human_ask(question: Text) -> Text`
+
+Interactions with prior phases:
+  - `pure fn` rejects any body containing `perform`. A pure fn cannot
+    invoke an effect, directly or transitively.
+  - Implicit parallelism does NOT batch effect-containing assignments.
+    `perform` calls run in source order so their observable side effects
+    are deterministic.
+  - `attempt` blocks CAN contain `perform` tries, enabling fallback
+    patterns like "try a cheap local file, else fetch from the network".
 
 ## ATTEMPT — CONFIDENCE-PRIORITY CASCADE
 
