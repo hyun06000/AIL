@@ -74,26 +74,46 @@ error back to the model and retries up to three times.
 
 ## Quick start
 
+### Install
+
 ```bash
-cd reference-impl
-pip install -e ".[anthropic]"
+pip install ailang                # core + Ollama/Mock adapters
+pip install 'ailang[anthropic]'   # also include Anthropic adapter
+```
 
-# AI-as-author (the natural interface):
+The PyPI package is named `ailang` because `ail` was taken by an
+unrelated package abandoned in 2014. The **Python import name is
+still `ail`** (`from ail import run, ask`) and the CLI is still `ail`.
+Only the `pip install` target differs.
+
+### Use
+
+```bash
+# Natural-language interface — AI writes AIL, runtime executes, you
+# see the answer. Set one env var to pick the model:
+export AIL_OLLAMA_MODEL=llama3.1:latest
+ail ask "Count the vowels in 'Hello World'"
+# 3
+
+# Or with an Anthropic key:
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 ail ask "factorial of 7"
+# 5040
 
-# Or run a hand-written .ail file the old-fashioned way:
+# Run a hand-written .ail file directly:
 ail run examples/fizzbuzz.ail --input "20" --mock
 
-# With Anthropic:
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > ../.env
-python tools/run_live.py
+# See the AIL the author produced:
+ail ask "sum the numbers 1 to 50" --show-source
+```
 
-# With local Ollama (free, offline; needs `ollama serve` + pulled model):
-export AIL_OLLAMA_MODEL=llama3.1:latest
-ail run examples/audit_provenance.ail --input "I love this product"
+### Or install from source (for contributing)
 
-# See evolution (retune + rollback) in action:
-python tools/evolve_demo.py
+```bash
+git clone https://github.com/hyun06000/AIL
+cd AIL/reference-impl
+pip install -e ".[anthropic,dev]"
+pytest tests/
 ```
 
 ### Running without Python — the Go runtime

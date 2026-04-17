@@ -20,11 +20,11 @@ from __future__ import annotations
 
 import pytest
 
-from ail_mvp import run, compile_source
-from ail_mvp.parser import PurityError
-from ail_mvp.runtime import MockAdapter
-from ail_mvp.runtime.parallel import plan_groups
-from ail_mvp.parser.ast import (
+from ail import run, compile_source
+from ail.parser import PurityError
+from ail.runtime import MockAdapter
+from ail.runtime.parallel import plan_groups
+from ail.parser.ast import (
     Assignment, Call, Identifier, MatchExpr, MatchArm, Literal,
 )
 
@@ -266,7 +266,7 @@ def test_pure_fn_match_rejects_intent_in_arm_body():
 def test_match_containing_intent_treated_as_intent_for_parallelism():
     # Two assignments whose RHS is a match that calls an intent should
     # be batchable just like a bare intent call would be.
-    from ail_mvp.parser.ast import Assignment, Call, Identifier, MatchExpr, MatchArm, Literal
+    from ail.parser.ast import Assignment, Call, Identifier, MatchExpr, MatchArm, Literal
     stmts = [
         Assignment("a", MatchExpr(
             subject=Call(Identifier("classify_a"), [Identifier("x")], {}),

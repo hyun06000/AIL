@@ -21,9 +21,9 @@ from __future__ import annotations
 
 import sys
 
-from ail_mvp import run
-from ail_mvp.runtime import MockAdapter
-from ail_mvp.runtime.calibration import Calibrator
+from ail import run
+from ail.runtime import MockAdapter
+from ail.runtime.calibration import Calibrator
 
 
 SRC = """

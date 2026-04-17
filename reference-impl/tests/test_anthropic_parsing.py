@@ -6,7 +6,7 @@ required.
 """
 from __future__ import annotations
 
-from ail_mvp.runtime.json_parsing import parse_value_confidence
+from ail.runtime.json_parsing import parse_value_confidence
 
 
 def test_direct_json():

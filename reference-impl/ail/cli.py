@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.cmd == "version":
-        print(f"ail-mvp {__version__}")
+        print(f"ail {__version__}")
         return 0
 
     if args.cmd == "ask":

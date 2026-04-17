@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import pytest
 
-from ail_mvp import compile_source
-from ail_mvp.runtime import MockAdapter
-from ail_mvp.runtime.executor import Executor
-from ail_mvp.runtime.model import ModelResponse
-from ail_mvp.stdlib import (
+from ail import compile_source
+from ail.runtime import MockAdapter
+from ail.runtime.executor import Executor
+from ail.runtime.model import ModelResponse
+from ail.stdlib import (
     resolve, available_stdlib_modules, ImportResolutionError, _clear_cache,
 )
 
@@ -134,7 +134,7 @@ def test_local_intent_shadows_imported():
     executor = Executor(program, MockAdapter())
     local = executor.intents["summarize"]
     # The local version's goal is an Identifier with our unique name
-    from ail_mvp.parser.ast import Identifier
+    from ail.parser.ast import Identifier
     assert isinstance(local.goal, Identifier)
     assert local.goal.name == "local_override_that_ignores_the_stdlib_version"
 

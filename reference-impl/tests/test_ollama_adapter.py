@@ -44,8 +44,8 @@ def test_classify_via_ollama():
     We don't assert the exact label (small-model output varies) — only
     that we get a non-empty result with an ollama-tagged origin.
     """
-    from ail_mvp import run
-    from ail_mvp.runtime.ollama_adapter import OllamaAdapter
+    from ail import run
+    from ail.runtime.ollama_adapter import OllamaAdapter
 
     src = """
     import classify from "stdlib/language"
@@ -63,7 +63,7 @@ def test_classify_via_ollama():
 
 def test_ollama_adapter_defaults_from_env(monkeypatch):
     """AIL_OLLAMA_MODEL / AIL_OLLAMA_HOST fallbacks are read at construction."""
-    from ail_mvp.runtime.ollama_adapter import OllamaAdapter
+    from ail.runtime.ollama_adapter import OllamaAdapter
     monkeypatch.setenv("AIL_OLLAMA_MODEL", "custom-model:tag")
     monkeypatch.setenv("AIL_OLLAMA_HOST", "http://example.invalid:12345")
     adapter = OllamaAdapter()

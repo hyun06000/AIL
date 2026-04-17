@@ -19,10 +19,10 @@ from __future__ import annotations
 import time
 import threading
 
-from ail_mvp import run, compile_source
-from ail_mvp.runtime import MockAdapter
-from ail_mvp.runtime.parallel import plan_groups
-from ail_mvp.parser.ast import (
+from ail import run, compile_source
+from ail.runtime import MockAdapter
+from ail.runtime.parallel import plan_groups
+from ail.parser.ast import (
     Assignment, Call, Identifier, Literal, BinaryOp,
 )
 
@@ -201,7 +201,7 @@ class _SlowAdapter:
         time.sleep(self.delay_s)
         with self._lock:
             self._active -= 1
-        from ail_mvp.runtime.model import ModelResponse
+        from ail.runtime.model import ModelResponse
         intent_name = context.get("_intent_name", "unknown")
         return ModelResponse(
             value=self.responses.get(intent_name, ""),

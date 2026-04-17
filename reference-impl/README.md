@@ -1,139 +1,155 @@
-# AIL Reference Implementation (MVP)
+# AIL — An AI-Authored Programming Language
 
-**Status:** Minimum viable interpreter · Python 3.10+
+> A programming language where AI is the programmer and humans are the stakeholders.
 
-This directory contains a working subset of AIL. It is not the full specification — it covers enough to make the language tangible:
-
-- Parsing `.ail` source to an AST
-- A simplified intent graph representation
-- Context declaration, activation, inheritance, override
-- Intent execution via a pluggable language model backend
-- Confidence-gated branching
-- Basic constraint checking
-- A simple trace log per invocation
-- Evolution: `retune` and `rewrite constraints` actions, version chain,
-  `bounded_by` enforcement, `rollback_on` reversion, `history: keep_last`
-  pruning, and `require review_by: human` gating (forced for
-  `rewrite constraints` even when not declared by the program)
-- Imports: `import X from "stdlib/<module>"` resolves against the
-  bundled standard library (`stdlib/core`, `stdlib/language`).
-  stdlib itself is written in AIL, not Python.
-
-What the MVP does **not** yet include (explicit scope limits):
-
-- Evolution actions other than `retune` and `rewrite constraints`
-  (`rewrite examples`, `rewrite goal`, `promote strategy`, `escalate`
-  are reserved — see spec/04 §4)
-- Relative imports (`./helpers.ail`) and URL-style imports
-  (`org://...`) are rejected with a helpful message
-- Full effect system (a single `human_ask` effect is supported via stdin)
-- Calibration (confidence is pass-through from the model)
-- Type checking beyond structural matching
-- The Authority / ledger / User Surface (these are NOOS-level)
-- Persistence across runs (evolution state lives in a single Executor)
-
-The MVP's purpose is to let someone clone this repo, set one environment variable, and run an AIL program against a language model today. Everything else in this project is spec; this directory is proof-of-concept.
-
----
-
-## Quick start
+**Install**
 
 ```bash
-# From the repository root:
-cd reference-impl
-pip install -e ".[anthropic]"
-
-# Option 1 — environment variable:
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Option 2 — .env file (at the repo root or any parent of cwd):
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > ../.env
-
-# Run an example:
-ail run examples/hello.ail --input "Hello, world"
-
-# Or programmatically:
-python -c "from ail_mvp import run; print(run('examples/hello.ail', input='Hello, world'))"
-
-# Validate everything against real Claude in one command:
-python tools/run_live.py
-
-# Only one example, with a specific input:
-python tools/run_live.py --only translate --input "Good morning!"
-
-# Dump full traces as JSON for later analysis:
-python tools/run_live.py --trace-dir ./live_results
+pip install ailang
+# or: pip install 'ailang[anthropic]'   # for the Anthropic adapter
 ```
 
-No API key? You can still run everything with the mock adapter:
+The PyPI distribution is `ailang` (the name `ail` was taken by an
+unrelated abandoned package). The **Python import name is `ail`**:
+
+```python
+from ail import run, ask
+```
+
+and the CLI is `ail`.
+
+---
+
+## The idea
+
+AIL has two kinds of functions:
+
+```ail
+pure fn word_count(text: Text) -> Number {
+    return length(split(text, " "))
+}
+
+intent classify(text: Text) -> Text {
+    goal: positive_negative_or_neutral
+}
+
+entry main(review: Text) {
+    words = word_count(review)       // pure fn — no LLM, confidence 1.0
+    label = classify(review)         // intent — LLM call, confidence ≤ 1.0
+    return join([label, " (", to_text(words), " words)"], "")
+}
+```
+
+**`pure fn`** is for what the AI can compute — sorting, parsing, arithmetic.
+Deterministic, no LLM call, no side effects, statically checked.
+
+**`intent`** is for what the AI needs to reason about — sentiment,
+summarization, translation. The runtime dispatches to a language model
+and returns a `(value, confidence)` pair.
+
+The language distinguishes the two at declaration time, so you always
+know which calls are free and deterministic and which need a model.
+
+---
+
+## Two ways humans use it
+
+### `ail ask` — the natural interface
 
 ```bash
-ail run examples/hello.ail --input "world" --mock
-python tools/evolve_demo.py   # fully deterministic; no API needed
+export AIL_OLLAMA_MODEL=llama3.1:latest   # or ANTHROPIC_API_KEY=...
+ail ask "Count the vowels in 'Hello World'"
+# 3
+
+ail ask "factorial of 7" --show-source
+# 5040
+# (stderr) --- AIL ---
+# (stderr) pure fn factorial(n: Number) -> Number {
+# (stderr)     if n <= 1 { return 1 }
+# (stderr)     return n * factorial(n - 1)
+# (stderr) }
+# (stderr) entry main(x: Text) { return factorial(7) }
 ```
 
----
+Human types English. An LLM writes AIL. The runtime executes it. The
+human sees the answer. The AIL is transparent infrastructure —
+inspectable on demand, invisible by default.
 
-## Architecture
-
-```
-ail_mvp/
-├── __init__.py          # Public API: run(), compile(), load_context()
-├── parser/
-│   ├── lexer.py         # Tokenizer
-│   ├── parser.py        # Recursive descent → AST
-│   └── ast.py           # AST node types
-├── runtime/
-│   ├── graph.py         # Intent graph construction from AST
-│   ├── context.py       # Context type, resolution, stacking
-│   ├── dispatcher.py    # Strategy selection (MVP: single strategy per intent)
-│   ├── model.py         # Model adapter interface
-│   ├── anthropic.py     # Anthropic adapter
-│   ├── trace.py         # Trace recording
-│   └── executor.py      # The main execution loop
-├── stdlib/
-│   └── core.py          # Built-in intents: summarize, translate, etc.
-└── cli.py               # Command-line entry point
-```
-
----
-
-## Running the examples
+### `ail run` — for programs written explicitly
 
 ```bash
-# A complete translation program
-ail run examples/translate.ail --input "$(cat document.txt)" --context examples/contexts.ail
-
-# Sentiment classification with branching
-ail run examples/classify.ail --input "I really enjoyed the film, but the ending dragged."
-
-# A program that asks a human for help when uncertain
-ail run examples/ask_human.ail --input "What should I have for dinner?"
-
-# An evolving intent that retunes a confidence threshold
-ail run examples/evolve_retune.ail --input "I loved it" --mock
-# To *see* evolution in action (v0 -> v1 -> rollback), run the demo:
-python tools/evolve_demo.py
-
-# Uses the bundled standard library (no custom intent definitions)
-ail run examples/summarize_and_classify.ail --input "some article text" --mock
+ail run examples/fizzbuzz.ail --input "20" --mock
 ```
 
----
-
-## Extending
-
-The model adapter is pluggable. To add support for another provider, implement the `ModelAdapter` protocol in `runtime/model.py` and register it in `runtime/executor.py`.
-
-To add a new built-in intent, add it to `stdlib/core.py` and register it in `ail_mvp/__init__.py`.
+When you want to read or write AIL yourself.
 
 ---
 
-## Limitations honestly listed
+## What's in v1.8
 
-- Parser errors are terse. Improving them is a good first PR.
-- Performance is not a priority; the MVP sequences everything.
-- No persistence: each `run` is a fresh state.
-- The single bundled adapter requires an Anthropic API key. A local-model adapter is future work.
+| Feature | What it does |
+|---|---|
+| `pure fn` | Statically verified — no intents, no effects, no impurity leaks |
+| `intent` | LLM-backed, returns `(value, confidence)` |
+| **Provenance** | Every value carries its origin tree; queryable via `origin_of`, `lineage_of`, `has_intent_origin`, `has_effect_origin` |
+| **Calibration** | Confidence recalibrates from observed outcomes. `calibration_of("intent")` introspectable from code |
+| **attempt** | Confidence-priority fallback cascade — cheap pure try first, LLM only as fallback |
+| **match** | Pattern matching with confidence guards — `"positive" with confidence > 0.9 => ...` |
+| **Parallelism** | Independent intent calls run concurrently with no `async`/`await` |
+| **Effects** | `perform http.get(url)`, `perform file.read(path)`, etc. |
+| **Evolve** | Intents can self-modify (`retune`, `rewrite constraints`) with rollback and history |
+| **`ail ask`** | Natural-language → AIL authoring loop with parse-error retry |
 
-See [open-questions.md](../docs/open-questions.md) for larger unresolved design questions.
+Adapters for Anthropic, Ollama (local), and Mock (tests) ship built-in.
+A second interpreter in Go (see the project repo) runs the same `.ail`
+files with no Python installed at all.
+
+---
+
+## Python API
+
+```python
+from ail import run, ask, AskResult
+
+# Direct program run:
+result, trace = run("path/to/program.ail", input="hello")
+result.value        # the entry's return value
+result.confidence   # calibrated confidence
+result.origin       # full provenance tree
+
+# Natural-language interface:
+r = ask("compute the factorial of 7")
+r.value             # 5040
+r.ail_source        # the AIL the author produced
+r.retries           # 0 if first try parsed
+```
+
+See the [language reference card](https://github.com/hyun06000/AIL/blob/main/spec/08-reference-card.ai.md)
+for the complete surface.
+
+---
+
+## Why this exists
+
+Humans don't write AIL. Humans say what they want in natural language;
+an LLM writes AIL; the runtime executes it; the result comes back.
+
+The value of the language is in what it guarantees about the code the
+AI writes:
+
+- Every pure computation is statically separated from every LLM call.
+- Every value carries the full chain of operations that produced it.
+- Confidence is a first-class runtime property, recalibrated by
+  observation.
+- A `pure fn` that passes parsing is proven to contain no LLM call, no
+  side effect, and no path to one. The model cannot slip an intent
+  past the compiler.
+- Independent LLM calls parallelize without the author writing `async`.
+
+For the full design rationale, see the [spec](https://github.com/hyun06000/AIL/tree/main/spec).
+
+---
+
+## License
+
+Apache 2.0.

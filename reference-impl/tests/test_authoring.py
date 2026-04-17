@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from ail_mvp import ask, AuthoringError
-from ail_mvp.runtime.model import ModelResponse
+from ail import ask, AuthoringError
+from ail.runtime.model import ModelResponse
 
 
 class ScriptedAuthor:

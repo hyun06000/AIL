@@ -362,14 +362,14 @@ def _normalize_single_quotes(s: str) -> str:
 def _strip_ail_run_wrapper(s: str) -> str:
     """If `s` looks like `ail run "..."`, extract the quoted body.
 
-    Accepts variants: `ail run`, `ail-go run`, `python -m ail_mvp.cli run`,
+    Accepts variants: `ail run`, `ail-go run`, `python -m ail.cli run`,
     optional `--input ...` flags. Any leading non-quote prefix up to the
     first quote, then everything up to the last quote, is treated as the
     AIL source. Embedded `\\n` and `\\"` sequences are unescaped because
     the model was string-quoting the source for shell.
     """
     stripped = s.lstrip()
-    triggers = ("ail run", "ail-go run", "ail-go", "python -m ail_mvp",
+    triggers = ("ail run", "ail-go run", "ail-go", "python -m ail",
                 "python -m ail")
     if not any(stripped.startswith(t) for t in triggers):
         return s

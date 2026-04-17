@@ -8,9 +8,9 @@ via origin_of / lineage_of / has_intent_origin builtins.
 """
 from __future__ import annotations
 
-from ail_mvp import run
-from ail_mvp.runtime import MockAdapter
-from ail_mvp.runtime.provenance import (
+from ail import run
+from ail.runtime import MockAdapter
+from ail.runtime.provenance import (
     Origin, LITERAL_ORIGIN, LITERAL, INPUT, FN, INTENT, BUILTIN,
 )
 

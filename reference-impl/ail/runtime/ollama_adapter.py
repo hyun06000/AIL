@@ -9,8 +9,8 @@ HTTP to `http://localhost:11434/api/chat` (the default ollama endpoint).
 
 Usage:
 
-    from ail_mvp.runtime.ollama_adapter import OllamaAdapter
-    from ail_mvp import run
+    from ail.runtime.ollama_adapter import OllamaAdapter
+    from ail import run
 
     adapter = OllamaAdapter(model="llama3.1:latest")
     result, trace = run("program.ail", input="hello", adapter=adapter)

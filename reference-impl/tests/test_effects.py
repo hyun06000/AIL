@@ -25,11 +25,11 @@ from pathlib import Path
 
 import pytest
 
-from ail_mvp import run
-from ail_mvp.parser import PurityError
-from ail_mvp.runtime import MockAdapter
-from ail_mvp.runtime.parallel import plan_groups
-from ail_mvp.parser.ast import Assignment, Call, Identifier, PerformExpr
+from ail import run
+from ail.parser import PurityError
+from ail.runtime import MockAdapter
+from ail.runtime.parallel import plan_groups
+from ail.parser.ast import Assignment, Call, Identifier, PerformExpr
 
 
 # ---------- parser: dotted effect names ----------
@@ -42,7 +42,7 @@ def test_parser_accepts_dotted_effect_name():
         return content
     }
     '''
-    from ail_mvp import compile_source
+    from ail import compile_source
     program = compile_source(src)
     assert program.entry() is not None
 
@@ -55,7 +55,7 @@ def test_parser_accepts_legacy_bare_effect_name():
         return answer
     }
     '''
-    from ail_mvp import compile_source
+    from ail import compile_source
     program = compile_source(src)
     assert program.entry() is not None
 
@@ -235,7 +235,7 @@ def test_pure_fn_cannot_contain_http_get():
     entry main(x: Text) { return fetch_and_use(x) }
     '''
     with pytest.raises(PurityError) as ei:
-        from ail_mvp import compile_source
+        from ail import compile_source
         compile_source(src)
     assert "perform" in str(ei.value).lower() or "http.get" in str(ei.value)
 
@@ -249,7 +249,7 @@ def test_pure_fn_cannot_contain_file_write():
     entry main(x: Text) { return sneaky(x) }
     '''
     with pytest.raises(PurityError) as ei:
-        from ail_mvp import compile_source
+        from ail import compile_source
         compile_source(src)
     assert "perform" in str(ei.value).lower() or "file.write" in str(ei.value)
 

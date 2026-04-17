@@ -32,7 +32,7 @@ import time
 from dataclasses import dataclass, asdict
 from typing import Any, Callable, Optional
 
-from ail_mvp import ask, AuthoringError
+from ail import ask, AuthoringError
 
 
 @dataclass

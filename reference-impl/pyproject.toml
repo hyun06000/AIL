@@ -3,38 +3,55 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ail-mvp"
-version = "1.0.0"
-description = "Reference implementation (MVP) of AIL — an AI-authored programming language"
+name = "ailang"
+version = "1.8.0"
+description = "AIL — an AI-authored programming language with provenance, purity contracts, confidence-aware match, and calibration"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "AIL Project Contributors" }
 ]
-keywords = ["ail", "ai", "language", "interpreter", "llm"]
+keywords = [
+    "ail", "ailang", "ai-language", "intent", "llm",
+    "language", "interpreter", "programming-language",
+    "confidence", "provenance", "calibration",
+]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Interpreters",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = []
 
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.34"]
 dev = ["pytest>=7.0"]
+all = ["anthropic>=0.34"]
 
 [project.scripts]
-ail = "ail_mvp.cli:main"
+ail = "ail.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/hyun06000/AIL"
 Repository = "https://github.com/hyun06000/AIL"
+Documentation = "https://github.com/hyun06000/AIL/blob/main/spec/08-reference-card.ai.md"
+Changelog = "https://github.com/hyun06000/AIL/blob/main/CHANGELOG.md"
+Issues = "https://github.com/hyun06000/AIL/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ail_mvp*"]
+include = ["ail*"]
+
+[tool.setuptools.package-data]
+# Ship the AIL-authored stdlib with the wheel so `import summarize from
+# "stdlib/language"` works for users who installed via pip.
+"ail.stdlib" = ["*.ail"]

@@ -118,8 +118,8 @@ def load_dotenv_if_present() -> None:
 def run_one(case: ExampleCase, user_input: str | None,
             trace_dir: Path | None) -> tuple[bool, str]:
     """Run a single example. Returns (success, summary)."""
-    from ail_mvp import run
-    from ail_mvp.runtime.anthropic_adapter import AnthropicAdapter
+    from ail import run
+    from ail.runtime.anthropic_adapter import AnthropicAdapter
 
     inp = user_input or case.default_input
 

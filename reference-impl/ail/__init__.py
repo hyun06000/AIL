@@ -1,7 +1,7 @@
 """AIL MVP — a working subset of AIL.
 
 Public API:
-    from ail_mvp import run, compile_source, MockAdapter, AnthropicAdapter
+    from ail import run, compile_source, MockAdapter, AnthropicAdapter
 
     # Run an AIL file:
     result, trace = run("path/to/program.ail", input="hello")
@@ -18,7 +18,7 @@ from .parser import parse
 from .runtime import Executor, ConfidentValue, MockAdapter
 from .runtime.model import ModelAdapter
 
-__version__ = "1.0.0"
+__version__ = "1.8.0"
 
 
 def compile_source(source: str):

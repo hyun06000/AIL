@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import pytest
 
-from ail_mvp import run
-from ail_mvp.runtime import MockAdapter
-from ail_mvp.runtime.model import ModelResponse
+from ail import run
+from ail.runtime import MockAdapter
+from ail.runtime.model import ModelResponse
 
 
 class ScriptedAdapter(MockAdapter):
@@ -296,8 +296,8 @@ def test_evolve_triggers_modification_when_metric_drops():
 def test_evolve_triggers_modification_with_persistent_executor():
     """Using a persistent executor across many invocations, verify that
     enough low-metric calls trigger a modification."""
-    from ail_mvp import compile_source
-    from ail_mvp.runtime.executor import Executor
+    from ail import compile_source
+    from ail.runtime.executor import Executor
 
     src = """
     intent classify(x: Text) -> Text { goal: label }
@@ -330,8 +330,8 @@ def test_evolve_triggers_modification_with_persistent_executor():
 
 def test_evolve_custom_metric_fn_overrides_default():
     """A caller-supplied metric_fn overrides the confidence-as-metric default."""
-    from ail_mvp import compile_source
-    from ail_mvp.runtime.executor import Executor
+    from ail import compile_source
+    from ail.runtime.executor import Executor
 
     src = """
     intent classify(x: Text) -> Text { goal: label }

@@ -11,8 +11,8 @@ try index was selected.
 """
 from __future__ import annotations
 
-from ail_mvp import run
-from ail_mvp.runtime import MockAdapter
+from ail import run
+from ail.runtime import MockAdapter
 
 
 # ---------- basic selection ----------
@@ -210,7 +210,7 @@ def test_pure_fn_can_contain_attempt_of_pure_tries():
 def test_pure_fn_cannot_attempt_an_intent():
     # A pure fn's attempt block also inherits purity: intents inside
     # any try are rejected at parse time.
-    from ail_mvp.parser import PurityError
+    from ail.parser import PurityError
     import pytest
     src = """
     intent guess(x: Text) -> Text { goal: label }
@@ -230,7 +230,7 @@ def test_pure_fn_cannot_attempt_an_intent():
 
 
 def test_empty_attempt_rejected():
-    from ail_mvp.parser import ParseError
+    from ail.parser import ParseError
     import pytest
     src = """
     entry main(x: Text) {

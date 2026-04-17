@@ -16,10 +16,10 @@ observable.
 """
 from pathlib import Path
 
-from ail_mvp import compile_source
-from ail_mvp.runtime import MockAdapter
-from ail_mvp.runtime.executor import Executor
-from ail_mvp.runtime.model import ModelResponse
+from ail import compile_source
+from ail.runtime import MockAdapter
+from ail.runtime.executor import Executor
+from ail.runtime.model import ModelResponse
 
 
 class ScriptedAdapter(MockAdapter):

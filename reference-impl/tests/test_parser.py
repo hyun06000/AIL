@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from ail_mvp import compile_source
-from ail_mvp.parser.ast import (
+from ail import compile_source
+from ail.parser.ast import (
     ContextDecl, IntentDecl, EntryDecl, EffectDecl,
     Literal, Identifier, BinaryOp,
 )
@@ -90,7 +90,7 @@ def test_parse_branch_with_otherwise():
     entry = prog.entry()
     assert entry is not None
     # branch statement should be 2nd stmt
-    from ail_mvp.parser.ast import BranchStmt
+    from ail.parser.ast import BranchStmt
     branch = entry.body[1]
     assert isinstance(branch, BranchStmt)
     assert len(branch.arms) == 2
@@ -133,7 +133,7 @@ def test_parse_evolve_block_full():
 
     entry main(x: Text) { return i(x) }
     """
-    from ail_mvp.parser.ast import EvolveDecl
+    from ail.parser.ast import EvolveDecl
     prog = compile_source(src)
     evolves = [d for d in prog.declarations if isinstance(d, EvolveDecl)]
     assert len(evolves) == 1
@@ -149,7 +149,7 @@ def test_parse_evolve_block_full():
 
 def test_parse_evolve_missing_required_fields_rejected():
     """An evolve block without rollback_on MUST be rejected (spec/04 §2)."""
-    from ail_mvp.parser.parser import ParseError
+    from ail.parser.parser import ParseError
     src = """
     intent i(x: Text) -> Text { goal: Text }
     evolve i {
@@ -184,7 +184,7 @@ def test_parse_evolve_with_bounded_by_and_review():
     }
     entry main(x: Text) { return i(x) }
     """
-    from ail_mvp.parser.ast import EvolveDecl
+    from ail.parser.ast import EvolveDecl
     prog = compile_source(src)
     ev = [d for d in prog.declarations if isinstance(d, EvolveDecl)][0]
     assert ev.review_by == "human"

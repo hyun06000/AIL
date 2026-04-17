@@ -18,9 +18,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ail_mvp import run, compile_source
-from ail_mvp.runtime import MockAdapter
-from ail_mvp.runtime.calibration import Calibrator
+from ail import run, compile_source
+from ail.runtime import MockAdapter
+from ail.runtime.calibration import Calibrator
 
 
 # ---------- Calibrator as a standalone class ----------

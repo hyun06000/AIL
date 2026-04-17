@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from ail_mvp import run, compile_source
-from ail_mvp.runtime import MockAdapter
+from ail import run, compile_source
+from ail.runtime import MockAdapter
 
 
 # ---------- fn basics ----------
@@ -232,7 +232,7 @@ def test_modulo_operator():
 
 def test_fn_and_intent_in_same_program():
     """fn handles the deterministic part, intent handles the LLM part."""
-    from ail_mvp.runtime.model import ModelResponse
+    from ail.runtime.model import ModelResponse
 
     class Scripted(MockAdapter):
         def invoke(self, **kw):

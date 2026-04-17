@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import pytest
 
-from ail_mvp.parser.ast import (
+from ail.parser.ast import (
     EvolveDecl, EvolveAction, BinaryOp, Literal, Identifier,
 )
-from ail_mvp.runtime.evolution import EvolutionSupervisor
+from ail.runtime.evolution import EvolutionSupervisor
 
 
 def _make_decl(
@@ -166,10 +166,10 @@ def test_history_keep_last_prunes_old_versions():
 
 def test_rewrite_constraints_tightens_greater_than():
     """A '>' threshold tightens UP by the declared delta."""
-    from ail_mvp import compile_source
-    from ail_mvp.runtime.executor import Executor
-    from ail_mvp.runtime import MockAdapter
-    from ail_mvp.runtime.model import ModelResponse
+    from ail import compile_source
+    from ail.runtime.executor import Executor
+    from ail.runtime import MockAdapter
+    from ail.runtime.model import ModelResponse
 
     class Low(MockAdapter):
         def invoke(self, **kw):
@@ -207,10 +207,10 @@ def test_rewrite_constraints_tightens_greater_than():
 
 def test_rewrite_constraints_tightens_less_than():
     """A '<' threshold tightens DOWN by the declared delta."""
-    from ail_mvp import compile_source
-    from ail_mvp.runtime.executor import Executor
-    from ail_mvp.runtime import MockAdapter
-    from ail_mvp.runtime.model import ModelResponse
+    from ail import compile_source
+    from ail.runtime.executor import Executor
+    from ail.runtime import MockAdapter
+    from ail.runtime.model import ModelResponse
 
     class Low(MockAdapter):
         def invoke(self, **kw):
@@ -246,10 +246,10 @@ def test_rewrite_constraints_tightens_less_than():
 def test_rewrite_constraints_always_forces_human_review():
     """Even without 'require review_by: human', rewrite_constraints
     must go through a reviewer. Denial blocks the change."""
-    from ail_mvp import compile_source
-    from ail_mvp.runtime.executor import Executor
-    from ail_mvp.runtime import MockAdapter
-    from ail_mvp.runtime.model import ModelResponse
+    from ail import compile_source
+    from ail.runtime.executor import Executor
+    from ail.runtime import MockAdapter
+    from ail.runtime.model import ModelResponse
 
     class Low(MockAdapter):
         def invoke(self, **kw):
@@ -292,10 +292,10 @@ def test_rewrite_constraints_always_forces_human_review():
 def test_rewrite_constraints_rejected_when_no_numeric_constraints():
     """If the intent has only symbolic constraints, there's nothing to
     tighten — emit modification_rejected."""
-    from ail_mvp import compile_source
-    from ail_mvp.runtime.executor import Executor
-    from ail_mvp.runtime import MockAdapter
-    from ail_mvp.runtime.model import ModelResponse
+    from ail import compile_source
+    from ail.runtime.executor import Executor
+    from ail.runtime import MockAdapter
+    from ail.runtime.model import ModelResponse
 
     class Low(MockAdapter):
         def invoke(self, **kw):

@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import pytest
 
-from ail_mvp import run, compile_source
-from ail_mvp.parser import PurityError
-from ail_mvp.runtime import MockAdapter
+from ail import run, compile_source
+from ail.parser import PurityError
+from ail.runtime import MockAdapter
 
 
 # ---------- positive cases: well-formed pure fns ----------

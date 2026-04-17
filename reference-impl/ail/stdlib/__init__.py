@@ -7,7 +7,7 @@ namespace.
 Resolution rules:
 
   "stdlib/<name>"
-      -> <ail_mvp package>/stdlib/<name>.ail
+      -> <ail package>/stdlib/<name>.ail
 
   "./path/to/foo" or "../foo"
       -> relative to the importing program's directory (not yet supported

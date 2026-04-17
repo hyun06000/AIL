@@ -1,4 +1,4 @@
-"""Tests for _load_dotenv_if_present in ail_mvp.__init__."""
+"""Tests for _load_dotenv_if_present in ail.__init__."""
 from __future__ import annotations
 import os
 from pathlib import Path
@@ -7,7 +7,7 @@ import pytest
 
 
 def test_loads_simple_key_value(tmp_path, monkeypatch):
-    from ail_mvp import _load_dotenv_if_present
+    from ail import _load_dotenv_if_present
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("AIL_TEST_VAR", raising=False)
@@ -18,7 +18,7 @@ def test_loads_simple_key_value(tmp_path, monkeypatch):
 
 
 def test_strips_quotes(tmp_path, monkeypatch):
-    from ail_mvp import _load_dotenv_if_present
+    from ail import _load_dotenv_if_present
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("AIL_TEST_QUOTED", raising=False)
@@ -29,7 +29,7 @@ def test_strips_quotes(tmp_path, monkeypatch):
 
 
 def test_ignores_comments_and_blanks(tmp_path, monkeypatch):
-    from ail_mvp import _load_dotenv_if_present
+    from ail import _load_dotenv_if_present
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("AIL_TEST_KEEP", raising=False)
@@ -46,7 +46,7 @@ def test_ignores_comments_and_blanks(tmp_path, monkeypatch):
 
 
 def test_does_not_overwrite_existing(tmp_path, monkeypatch):
-    from ail_mvp import _load_dotenv_if_present
+    from ail import _load_dotenv_if_present
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("AIL_TEST_EXISTING", "original")
@@ -59,7 +59,7 @@ def test_does_not_overwrite_existing(tmp_path, monkeypatch):
 
 def test_missing_file_is_silent(tmp_path, monkeypatch):
     """No .env anywhere in the searched dirs — should not raise."""
-    from ail_mvp import _load_dotenv_if_present
+    from ail import _load_dotenv_if_present
 
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
