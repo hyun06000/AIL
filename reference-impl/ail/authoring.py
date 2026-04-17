@@ -262,6 +262,16 @@ def _build_authoring_goal() -> str:
     # Deliberately verbose. Small models read the prompt literally; saying
     # "return the answer" makes them return the answer itself, not code
     # that computes the answer. We hammer the distinction multiple ways.
+    #
+    # The second half — the fn/intent decision block — addresses the
+    # issue Opus 4 flagged in CLAUDE.md: small models cannot choose
+    # between `fn` (computation) and `intent` (judgment) without
+    # concrete rules. The abstract constraint
+    # `prefer_pure_fn_over_fn_when_no_llm_call_is_needed` by itself was
+    # insufficient — bench_authoring.py showed 8B-class models would
+    # either avoid `intent` entirely or declare one and never call it.
+    # The explicit rules and the hybrid example in `_authoring_examples`
+    # work together to pin the correct pattern.
     return (
         "You are an AIL source-code author. Your output is source code, "
         "not an answer. The 'value' field of your response MUST be a "
@@ -271,7 +281,37 @@ def _build_authoring_goal() -> str:
         "you write AIL code that counts vowels — you do NOT put a number "
         "in the value field. The value is always AIL source text, no "
         "exceptions. Read the EXAMPLES carefully — they show what the "
-        "value field should contain for each kind of prompt."
+        "value field should contain for each kind of prompt.\n\n"
+        "DECIDING fn vs intent — this is the most important choice you "
+        "make when writing AIL. Every subtask routes through one of:\n\n"
+        "USE `fn` (or `pure fn`) WHEN the answer is computable:\n"
+        "  * counting, summing, averaging, any arithmetic\n"
+        "  * parsing, splitting, joining, slicing, reversing text\n"
+        "  * sorting, filtering, deduplicating, taking first N\n"
+        "  * comparing numbers or strings\n"
+        "  * converting types (to_number, to_text, upper, lower)\n"
+        "  * iterating a bounded collection to accumulate a result\n"
+        "  * anything with one deterministic, mechanical answer\n\n"
+        "USE `intent` WHEN the answer requires judgment about meaning:\n"
+        "  * classifying sentiment, tone, topic, or category\n"
+        "  * summarizing natural-language text\n"
+        "  * translating between languages\n"
+        "  * judging whether a word is formal, rare, unique, polite\n"
+        "  * rewriting text in a different style\n"
+        "  * extracting facts that require reading comprehension\n"
+        "  * any subjective or meaning-based interpretation\n\n"
+        "HYBRID: many prompts need BOTH. 'Count the words in X and "
+        "classify its sentiment' → one `pure fn` counts, one `intent` "
+        "classifies, the entry combines them. If the prompt has an "
+        "'and' joining a computable subtask with a judgment subtask, "
+        "you almost certainly want a hybrid program.\n\n"
+        "WHEN UNSURE, prefer `fn`. Only reach for `intent` when the "
+        "subtask genuinely cannot be expressed as computation.\n\n"
+        "CRITICAL RULE: if you declare an `intent`, the entry MUST "
+        "actually call it — either directly, or via a `fn` that calls "
+        "it. An intent that is declared but never invoked is an "
+        "authoring error. Trace every entry return value back to the "
+        "subtasks that produce it."
     )
 
 
@@ -280,8 +320,9 @@ def _build_authoring_constraints(prior_errors: list[str]) -> list[str]:
         "program_has_exactly_one_entry_declaration",
         "entry_signature_is_main_with_one_Text_parameter",
         "entry_returns_the_answer_directly",
-        "prefer_pure_fn_over_fn_when_no_llm_call_is_needed",
-        "use_intent_only_when_the_task_requires_judgment",
+        "use_pure_fn_for_computation_use_intent_for_judgment",
+        "hybrid_prompts_declare_both_fn_and_intent",
+        "every_declared_intent_must_be_invoked_in_entry",
         "no_markdown_fence_in_output",
     ]
     # If we've retried, include the prior error text as a correction hint.
@@ -448,6 +489,25 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
                 '    goal: positive_or_negative\n'
                 '}\n'
                 'entry main(x: Text) { return classify_sentiment("great!") }'
+            ),
+        ),
+        # Hybrid: one computable subtask AND one judgment subtask in
+        # the same program. Shows the canonical shape for "count X and
+        # also judge X" prompts. Keep it short — the goal is to pin
+        # shape, not demonstrate complexity.
+        (
+            [{"prompt": "Count the words in 'I love this' and classify its sentiment"}],
+            (
+                'intent classify_sentiment(text: Text) -> Text {\n'
+                '    goal: positive_or_negative\n'
+                '}\n'
+                'pure fn word_count(s: Text) -> Number {\n'
+                '    return length(split(trim(s), " "))\n'
+                '}\n'
+                'entry main(x: Text) {\n'
+                '    text = "I love this"\n'
+                '    return join([to_text(word_count(text)), " ", classify_sentiment(text)], "")\n'
+                '}'
             ),
         ),
     ]
