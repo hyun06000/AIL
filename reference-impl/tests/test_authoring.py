@@ -152,6 +152,31 @@ def test_ask_tolerates_markdown_fence_in_authors_output():
     assert result.value == 99
 
 
+def test_ask_tolerates_ail_run_cli_wrapping():
+    # Observed failure mode (bench_authoring.py): model emits a shell
+    # invocation rather than raw source: `ail run "fn add(...)..."`.
+    # The extractor unwraps this in one shot — no retry needed.
+    cli_wrapped = (
+        'ail run "fn add(a: Number, b: Number) -> Number { return a + b }\\n'
+        'entry main(x: Text) { return add(13, 29) }"'
+    )
+    result = ask("add 13 and 29", adapter=ScriptedAuthor([cli_wrapped]))
+    assert result.value == 42
+
+
+def test_ask_tolerates_backtick_then_ail_run_wrapping():
+    # Observed combination: backticks around an ail-run shell string.
+    # Both layers must come off (single-backticks first, then `ail run`).
+    # Use \\\" inside the Python literal to embed escaped quotes the way
+    # the model would in a shell string.
+    wrapped = (
+        '`ail run "pure fn char_count(s: Text) -> Number { return length(s) }\\n'
+        'entry main(x: Text) { return char_count(\\"banana\\") }"`'
+    )
+    result = ask("count chars in banana", adapter=ScriptedAuthor([wrapped]))
+    assert result.value == 6
+
+
 # ---------- wiring: author model identity ----------
 
 

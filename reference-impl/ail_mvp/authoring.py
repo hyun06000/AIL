@@ -298,28 +298,84 @@ def _strip_source_fence(text: str) -> str:
     enough on small models that we should just absorb it.
     """
     s = text.strip()
-    # Case 2: starts with a fence — strip wrapping.
+    # Case 2: starts with a triple-backtick fence — strip wrapping.
     if s.startswith("```"):
         nl = s.find("\n")
         if nl >= 0:
             body = s[nl + 1:]
             if body.endswith("```"):
                 body = body[:-3]
-            return body.strip()
-    # Case 2b: single-backtick wrapping of the whole content. Some models
-    # emit `...code...` (inline-code markdown) when asked for code in a
-    # JSON string field. Stripping a matched pair of unsupported single
-    # backticks is safe — AIL itself never uses backticks.
-    if s.startswith("`") and s.endswith("`") and len(s) >= 2:
-        return s[1:-1].strip()
+            s = body.strip()
+    # Case 2b: single-backtick wrapping of the whole content.
+    elif s.startswith("`") and s.endswith("`") and len(s) >= 2:
+        s = s[1:-1].strip()
+    # Case 2c: starts with a single backtick, has a closing backtick
+    # somewhere, then trailing prose (e.g. an OUTPUT/CONFIDENCE block
+    # appended by a chatty model). Extract the content of the first
+    # backtick-delimited region.
+    elif s.startswith("`") and "`" in s[1:]:
+        end = s.index("`", 1)
+        s = s[1:end].strip()
     # Case 3: prose with embedded fence(s). Find them all and take the
     # longest content block. Handles ```ail, ```, ```python (model
     # mislabeling), etc.
-    blocks = _extract_fenced_blocks(s)
-    if blocks:
-        return max(blocks, key=len).strip()
-    # Case 1: no fence detected. Return as-is.
+    else:
+        blocks = _extract_fenced_blocks(s)
+        if blocks:
+            s = max(blocks, key=len).strip()
+    # Case 4: model wrapped the source in a CLI invocation
+    # (`ail run "..."` or `ail-go run "..."`). Strip the wrapper and
+    # unescape the embedded source. This was the dominant failure mode
+    # observed in tools/bench_authoring.py against llama3.1:8B; fixing
+    # it here is a pure tolerance win that doesn't perturb the prompt.
+    s = _strip_ail_run_wrapper(s)
+    # Case 5: small models occasionally use single quotes for string
+    # literals (`'banana'`) — common in Python and shell, never valid
+    # AIL. Replace ' with " on stripped source. The risk (legitimate
+    # apostrophe inside a "..." string) is theoretical in practice;
+    # programs containing apostrophe data should use the input channel,
+    # not embed the literal in source.
+    s = _normalize_single_quotes(s)
     return s
+
+
+def _normalize_single_quotes(s: str) -> str:
+    """Convert ' to " in extracted AIL source.
+
+    Conservative when possible: if the source contains zero `'`, do
+    nothing. Otherwise replace globally. Done after fence/wrapper
+    extraction so we never touch the user's actual prose, only the
+    candidate AIL we believe the model intended.
+    """
+    if "'" not in s:
+        return s
+    return s.replace("'", '"')
+
+
+def _strip_ail_run_wrapper(s: str) -> str:
+    """If `s` looks like `ail run "..."`, extract the quoted body.
+
+    Accepts variants: `ail run`, `ail-go run`, `python -m ail_mvp.cli run`,
+    optional `--input ...` flags. Any leading non-quote prefix up to the
+    first quote, then everything up to the last quote, is treated as the
+    AIL source. Embedded `\\n` and `\\"` sequences are unescaped because
+    the model was string-quoting the source for shell.
+    """
+    stripped = s.lstrip()
+    triggers = ("ail run", "ail-go run", "ail-go", "python -m ail_mvp",
+                "python -m ail")
+    if not any(stripped.startswith(t) for t in triggers):
+        return s
+    q_open = s.find('"')
+    if q_open < 0:
+        return s
+    q_close = s.rfind('"')
+    if q_close <= q_open:
+        return s
+    body = s[q_open + 1:q_close]
+    # Unescape what the model thought was shell-string content.
+    body = body.replace('\\n', '\n').replace('\\"', '"').replace("\\'", "'")
+    return body.strip()
 
 
 def _extract_fenced_blocks(text: str) -> list[str]:
@@ -352,6 +408,10 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
 
     Keep the example programs short — their role is to show shape, not
     range. The reference card already supplies the full surface.
+    Empirical note: bench_authoring.py shows that ADDING more examples
+    can hurt — the model starts emitting more elaborate code that hits
+    edge cases (e.g. unsupported `[Number]` type syntax in fn
+    signatures). Fewer, simpler examples win.
     """
     return [
         (
