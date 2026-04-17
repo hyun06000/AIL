@@ -35,14 +35,14 @@ jobs:
       - name: Smoke-test examples (mock adapter)
         working-directory: reference-impl
         run: |
-          python -m ail_mvp.cli parse examples/hello.ail
-          python -m ail_mvp.cli parse examples/classify.ail
-          python -m ail_mvp.cli parse examples/evolve_retune.ail
-          python -m ail_mvp.cli run examples/hello.ail --input "world" --mock
-          python -m ail_mvp.cli run examples/translate.ail --input "hello" --mock
-          python -m ail_mvp.cli run examples/classify.ail --input "I love it" --mock
-          python -m ail_mvp.cli run examples/evolve_retune.ail --input "great" --mock
-          python -m ail_mvp.cli run examples/ask_human.ail --input "I am tired" --mock || true
+          python -m ail.cli parse examples/hello.ail
+          python -m ail.cli parse examples/classify.ail
+          python -m ail.cli parse examples/evolve_retune.ail
+          python -m ail.cli run examples/hello.ail --input "world" --mock
+          python -m ail.cli run examples/translate.ail --input "hello" --mock
+          python -m ail.cli run examples/classify.ail --input "I love it" --mock
+          python -m ail.cli run examples/evolve_retune.ail --input "great" --mock
+          python -m ail.cli run examples/ask_human.ail --input "I am tired" --mock || true
 
       - name: Run evolve demo (deterministic harness)
         working-directory: reference-impl
