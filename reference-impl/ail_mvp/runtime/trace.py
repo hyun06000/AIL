@@ -3,9 +3,16 @@
 Real AIRT writes to an append-only store. The MVP keeps traces in memory
 and can dump them as structured JSON. Every intent invocation, context
 resolution, constraint check, and model call appears as an entry.
+
+Thread-safety: `record`, `enter`, and `exit` are protected by an internal
+lock so that parallel execution (Phase 4) doesn't corrupt the entry list
+or produce interleaved `_depth` counters that end up negative. Trace
+order across parallel branches is not guaranteed to reflect wall-clock
+start order — it reflects the order in which record() was called.
 """
 from __future__ import annotations
 import json
+import threading
 import time
 from dataclasses import dataclass, field, asdict
 from typing import Any
@@ -23,20 +30,24 @@ class Trace:
     def __init__(self):
         self.entries: list[TraceEntry] = []
         self._depth = 0
+        self._lock = threading.Lock()
 
     def enter(self) -> None:
-        self._depth += 1
+        with self._lock:
+            self._depth += 1
 
     def exit(self) -> None:
-        self._depth = max(0, self._depth - 1)
+        with self._lock:
+            self._depth = max(0, self._depth - 1)
 
     def record(self, kind: str, **payload: Any) -> None:
-        self.entries.append(TraceEntry(
-            timestamp=time.time(),
-            kind=kind,
-            payload=payload,
-            depth=self._depth,
-        ))
+        with self._lock:
+            self.entries.append(TraceEntry(
+                timestamp=time.time(),
+                kind=kind,
+                payload=payload,
+                depth=self._depth,
+            ))
 
     def to_list(self) -> list[dict[str, Any]]:
         return [

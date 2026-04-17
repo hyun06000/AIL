@@ -33,6 +33,7 @@ from .provenance import (
     input_origin, fn_origin, intent_origin, builtin_origin, attempt_origin,
     parents_of,
 )
+from .parallel import plan_groups
 from ..stdlib import resolve as resolve_import, ImportResolutionError
 
 
@@ -243,12 +244,62 @@ class Executor:
                     None, 1.0, origin=input_origin(param_name))
 
         try:
-            for stmt in entry.body:
-                self._exec_stmt(stmt, local_scope)
+            self._exec_block(entry.body, local_scope)
         except ReturnSignal as r:
             return r.value
 
         return ConfidentValue(None, 1.0)
+
+    # --- statement-block execution (with implicit parallelism) ---
+
+    def _exec_block(self, stmts: list[Statement],
+                    scope: dict[str, ConfidentValue]) -> None:
+        """Execute a sequence of statements.
+
+        Consecutive Assignments whose RHS contain intent calls and are
+        pairwise independent are grouped into a parallel batch and issued
+        concurrently via a ThreadPoolExecutor. All other statements run
+        in source order. See runtime/parallel.py for the analysis rules.
+        """
+        groups = plan_groups(stmts, set(self.intents.keys()))
+        for group in groups:
+            if group.parallel:
+                self._exec_parallel_batch(group.stmts, scope)
+            else:
+                for s in group.stmts:
+                    self._exec_stmt(s, scope)
+
+    def _exec_parallel_batch(self, assignments: list[Statement],
+                             scope: dict[str, ConfidentValue]) -> None:
+        """Evaluate a batch of independent Assignments concurrently.
+
+        Each RHS is evaluated against a snapshot of the scope taken at
+        batch start; this means no sibling's result is visible during
+        evaluation. Results are committed back to the real scope in
+        source order after all evaluations complete. Source order
+        preserves determinism of any side channels a user might rely on
+        (though by construction there are none — parallel candidates
+        have no perform statements).
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        scope_snapshot = dict(scope)
+        names = [a.name for a in assignments]
+        self.trace.record("parallel_batch_start", size=len(assignments),
+                          names=names)
+
+        def eval_one(assign):
+            return self._eval_expr(assign.value, scope_snapshot)
+
+        with ThreadPoolExecutor(max_workers=len(assignments)) as ex:
+            results = list(ex.map(eval_one, assignments))
+
+        for assign, val in zip(assignments, results):
+            scope[assign.name] = val
+            self.trace.record("assignment", name=assign.name,
+                              value=val.value, confidence=val.confidence,
+                              parallel=True)
+        self.trace.record("parallel_batch_end", size=len(assignments))
 
     # --- statement execution ---
 
@@ -281,8 +332,7 @@ class Executor:
         self.ctx_stack.push(ctx)
         self.trace.record("context_push", name=ctx.name, chain=ctx.chain)
         try:
-            for s in stmt.body:
-                self._exec_stmt(s, scope)
+            self._exec_block(stmt.body, scope)
         finally:
             self.ctx_stack.pop()
             self.trace.record("context_pop", name=ctx.name)
@@ -290,11 +340,9 @@ class Executor:
     def _exec_if(self, stmt: IfStmt, scope: dict[str, ConfidentValue]) -> None:
         cond = self._eval_expr(stmt.condition, scope)
         if _truthy(cond):
-            for s in stmt.then_body:
-                self._exec_stmt(s, scope)
+            self._exec_block(stmt.then_body, scope)
         else:
-            for s in stmt.else_body:
-                self._exec_stmt(s, scope)
+            self._exec_block(stmt.else_body, scope)
 
     def _exec_for(self, stmt: ForStmt, scope: dict[str, ConfidentValue]) -> None:
         collection = self._eval_expr(stmt.collection, scope)
@@ -304,8 +352,7 @@ class Executor:
         for item in items:
             scope[stmt.var_name] = ConfidentValue(
                 item, collection.confidence, origin=collection.origin)
-            for s in stmt.body:
-                self._exec_stmt(s, scope)
+            self._exec_block(stmt.body, scope)
 
     def _exec_branch(self, stmt: BranchStmt, scope: dict[str, ConfidentValue]) -> None:
         subject_val = self._eval_expr(stmt.subject, scope)
@@ -558,8 +605,7 @@ class Executor:
         # Make other fns and intents callable from within this fn
         # by sharing the executor scope lookup
         try:
-            for stmt in fn_decl.body:
-                self._exec_stmt(stmt, local)
+            self._exec_block(fn_decl.body, local)
         except ReturnSignal as r:
             return ConfidentValue(r.value.value, r.value.confidence,
                                   origin=call_origin)
@@ -893,8 +939,7 @@ class Executor:
                                       actual=response.confidence)
                     handler_scope = dict(local)
                     try:
-                        for s in handler_body:
-                            self._exec_stmt(s, handler_scope)
+                        self._exec_block(handler_body, handler_scope)
                     except ReturnSignal as r:
                         # Supervisor still observes the handler's result
                         self._observe_evolution(intent.name, r.value.value,

@@ -308,6 +308,33 @@ fn pure if else for attempt try
 - Deterministic operations: confidence = min(input confidences)
 - Access via: value.confidence (not yet exposed in MVP)
 
+## IMPLICIT PARALLELISM
+
+```ail
+fn analyze(x: Text) -> Text {
+    sentiments = classify_each(x)   // intent  }
+    topics     = extract_topics(x)  // intent  } all three run concurrently
+    summary    = summarize(x)       // intent  }
+    return build_report(sentiments, topics, summary)
+}
+```
+
+Consecutive Assignments whose RHS contain intent calls and are pairwise
+independent are automatically grouped into parallel batches and issued
+concurrently via a ThreadPoolExecutor. The author writes sequential
+code; the runtime parallelizes the expensive (network-bound intent)
+parts. No `async` keyword, no `await`, no Promise.all — the independence
+is structural and the runtime uses it.
+
+A batch is valid iff every statement is an Assignment, every RHS
+contains at least one intent call, no two statements share an LHS, and
+no RHS references another LHS in the batch. A batch of 1 degenerates to
+serial execution. Dependent sequences fall through to serial.
+
+Results are committed to scope in source order after all evaluations
+complete, so determinism is preserved. Trace entries from a batch are
+tagged with `parallel=True`.
+
 ## ATTEMPT — CONFIDENCE-PRIORITY CASCADE
 
 ```ail

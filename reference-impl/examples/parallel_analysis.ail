@@ -1,0 +1,60 @@
+// parallel_analysis.ail — three independent intents run concurrently.
+//
+// Scenario: given a review, produce a three-dimensional analysis —
+// sentiment, topic, and summary. The three values are produced by
+// three independent intent calls.
+//
+// In Python you would reach for asyncio.gather or ThreadPoolExecutor.
+// In AIL the three assignments are pairwise independent (each reads
+// only `review`), so the runtime detects the independence and issues
+// the three LLM calls concurrently. Wall-clock latency drops from
+// ~3x a single call to ~1x.
+//
+// The program reads sequentially. No `async`, no `await`, no
+// `Promise.all`. The parallelism is a property of the runtime, not
+// something the AI author has to manage.
+//
+// Run with mock:
+//   ail run examples/parallel_analysis.ail \
+//       --input "I loved this product, the battery is incredible" \
+//       --mock
+
+intent sentiment_of(review: Text) -> Text {
+    goal: positive_negative_or_neutral
+    constraints {
+        one_word_only
+    }
+}
+
+intent primary_topic(review: Text) -> Text {
+    goal: the most salient topic noun
+    constraints {
+        one_word_only
+        lowercase
+    }
+}
+
+intent short_summary(review: Text) -> Text {
+    goal: a one-line summary of the review
+    constraints {
+        max_length_30
+    }
+}
+
+fn build_report(sent: Text, topic: Text, summary: Text) -> Text {
+    return join([
+        join(["sentiment: ", sent], ""),
+        join(["topic:     ", topic], ""),
+        join(["summary:   ", summary], "")
+    ], "\n")
+}
+
+entry main(review: Text) {
+    // These three run concurrently — they are structurally independent.
+    sent    = sentiment_of(review)
+    topic   = primary_topic(review)
+    summary = short_summary(review)
+
+    // This line reads all three; it runs AFTER the batch completes.
+    return build_report(sent, topic, summary)
+}
