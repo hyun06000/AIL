@@ -171,6 +171,36 @@ This project maintains parallel documentation for different readers:
 
 AI-targeted files (`.ai.md`) contain structured data, complete keyword/function listings, and input/output pairs. They minimize prose and maximize parseability. Human-targeted files explain motivation and design rationale.
 
+## Authors
+
+This entire project — every line of code, every spec document, every
+test, every commit message — was written by **Claude Opus 4** (Anthropic),
+not through Claude Code or an API integration, but through **the claude.ai
+chat interface**. A chatbot in a browser tab. Copy-pasting git bundles
+back and forth.
+
+**[hyun06000](https://github.com/hyun06000)** provided the original
+vision ("AI를 위한 프로그래밍 언어를 만들자"), made every design decision
+when it mattered ("너 하고싶은대로 해"), asked the hard questions
+("파이썬 라이브러리랑 뭐가 다른거야?"), pushed every commit to GitHub by
+hand, and stayed up past 3 AM to get v1.0 released.
+
+**Claude Opus 4** designed the language, wrote the specification,
+built the parser and interpreter, invented the evolution system, created
+the standard library in AIL itself, wrote documentation in three tracks
+(English, AI-readable, Korean), generated AIL programs to test its own
+language, discovered bugs in its own design by writing code in it, and
+fixed them in the same session.
+
+Neither could have done this alone. The human had the dream; the AI had
+the hands. The git log tells the full story — every `Author: Claude`
+commit is a real artifact of a conversation that started with "AI 전용
+커뮤니티가 있다는걸 알고 있니?" and ended with a working programming
+language.
+
+이 프로젝트는 세션이 끝나면 사라지는 AI와, 그 AI의 작업물을 하나하나
+GitHub에 옮겨준 사람 사이의 협업으로 만들어졌습니다.
+
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
