@@ -90,9 +90,56 @@ class AttemptExpr:
     threshold: float = 0.7
 
 
+@dataclass
+class MatchArm:
+    """One arm of a match expression.
+
+    `pattern` is either a Literal (exact value match), an Identifier
+    with name "_" (wildcard), or an Identifier with any other name
+    (variable binding — matches anything, binds the subject to the
+    named variable in the body's scope).
+
+    `confidence_op` / `confidence_threshold`: if both are non-None, the
+    arm also requires the subject's confidence to satisfy
+    `subject.confidence OP threshold`. Operators: `>`, `>=`, `<`, `<=`,
+    `==`. This is the key distinguishing feature from plain pattern
+    matching in other languages: a pattern only fires when the value
+    AND its belief level both pass.
+
+    `body` is a single expression. The match expression's value is
+    whatever the selected arm's body evaluates to.
+    """
+    pattern: "Expr"
+    body: "Expr"
+    confidence_op: str | None = None
+    confidence_threshold: float | None = None
+
+
+@dataclass
+class MatchExpr:
+    """`match EXPR { PATTERN [with confidence OP N] => BODY, ... }`.
+
+    Evaluates `subject` once, then tries each arm in source order. The
+    first arm whose pattern matches AND whose optional confidence guard
+    is satisfied has its body evaluated and returned as the match's
+    value. If no arm matches, the result is a Result-error.
+
+    Patterns for v1:
+      - Literal (Number, Text, Boolean): exact equality.
+      - Identifier "_": wildcard, always matches.
+      - Identifier other than "_": variable binding, always matches
+        and exposes the subject's value in the body under that name.
+
+    Confidence guards are separate from patterns so a wildcard can
+    still have a confidence constraint (e.g. "_ with confidence < 0.5").
+    """
+    subject: "Expr"
+    arms: list[MatchArm]
+
+
 Expr = (
     Literal | Identifier | FieldAccess | Call | BinaryOp | UnaryOp
-    | ListLiteral | PerformExpr | MembershipOp | AttemptExpr
+    | ListLiteral | PerformExpr | MembershipOp | AttemptExpr | MatchExpr
 )
 
 

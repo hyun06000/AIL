@@ -147,6 +147,7 @@ with context NAME: { BODY }                    // context activation
 perform EFFECT_NAME(ARGS)                      // side effect
 VARIABLE = perform EFFECT_NAME(ARGS)           // effect as expression
 VARIABLE = attempt { try EXPR; try EXPR; ... } // confidence-priority cascade
+VARIABLE = match EXPR { PATTERN => BODY, ... } // confidence-aware matching
 ```
 
 ## EXPRESSIONS
@@ -291,7 +292,7 @@ prefer require when calibrate_on rollback_on
 metric history keep_last under matching
 and or not in such that
 return true false threshold
-fn pure if else for attempt try
+fn pure if else for attempt try match confidence
 ```
 
 ## COMMENTS
@@ -336,6 +337,53 @@ serial execution. Dependent sequences fall through to serial.
 Results are committed to scope in source order after all evaluations
 complete, so determinism is preserved. Trace entries from a batch are
 tagged with `parallel=True`.
+
+## MATCH — CONFIDENCE-AWARE PATTERN DISPATCH
+
+```ail
+reply = match classify_sentiment(review) {
+    "positive" with confidence > 0.9 => write_thank_you(review),
+    "negative" with confidence > 0.9 => escalate_to_human(review),
+    _ with confidence < 0.5          => ask_human_to_verify(review),
+    "positive"                        => send_generic_happy(),
+    "negative"                        => send_generic_sorry(),
+    _                                 => send_generic_reply()
+}
+```
+
+Each arm has shape `PATTERN [with confidence OP NUMBER] => BODY`.
+Arms are tried in source order; the first whose pattern matches AND
+whose optional confidence guard is satisfied has its body evaluated.
+
+Patterns (v1):
+  - Literal — exact equality (`"positive"`, `42`, `true`)
+  - `_` — wildcard, matches anything
+  - Any other identifier — variable binding; matches anything and
+    exposes the subject's value in the arm body under that name
+
+Confidence operators: `>`, `<`, `>=`, `<=`, `==`. The guard checks
+the subject's confidence, not the pattern's.
+
+Fallthrough: if no arm matches, the result is a Result-typed error.
+Programs that want total coverage should end with a `_ =>` arm.
+
+Why AIL has this: `match` and `branch` are complementary. `branch`
+dispatches on arbitrary predicates (any truthy expression); `match`
+dispatches on exact value with an optional belief gate. The confidence
+guard is what no human language offers — because no human language
+has confidence as a first-class runtime property.
+
+Interactions with prior phases:
+  - Purity: match is pure iff subject AND all arm patterns/bodies are
+    pure. A pure fn containing `match intent_call() { ... }` is
+    rejected at parse time.
+  - Provenance: match does NOT introduce a new origin node; the
+    selected arm body's origin is returned unchanged, so lineage
+    queries see the underlying computation, not the dispatcher.
+  - Parallelism: a match whose subject or any arm body contains an
+    intent call is treated as "intent-bearing" for batching.
+  - Attempt: `attempt { try match x { ... } }` is valid — match is
+    an expression like any other.
 
 ## EFFECTS — INTERACTION WITH THE WORLD OUTSIDE THE INTERPRETER
 

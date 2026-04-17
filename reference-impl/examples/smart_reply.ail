@@ -1,0 +1,66 @@
+// smart_reply.ail — confidence-aware reply routing via `match`.
+//
+// A customer-support program. Given a review, it decides how to reply.
+// The decision is not just "what did the classifier say" — it's also
+// "how sure is the classifier about saying it". Low-confidence
+// classifications are always escalated to a human, even if the label
+// looks clean.
+//
+// This is the idiom AIL was designed for: two axes of branching at
+// once — value AND belief level — in a single expression, no
+// nested if/elses.
+//
+// Run with mock:
+//   ail run examples/smart_reply.ail --input "I love this product!" --mock
+//
+// Run with a real model:
+//   export AIL_OLLAMA_MODEL=llama3.1:latest
+//   ail run examples/smart_reply.ail --input "I love this product!"
+
+import classify from "stdlib/language"
+
+pure fn send_thank_you() -> Text {
+    return "ACTION: send thank-you email"
+}
+
+pure fn send_apology_with_refund_offer() -> Text {
+    return "ACTION: send apology + refund link"
+}
+
+pure fn send_generic_acknowledgement() -> Text {
+    return "ACTION: send neutral acknowledgement"
+}
+
+pure fn escalate_to_human(reason: Text) -> Text {
+    return join(["ACTION: escalate to human (", reason, ")"], "")
+}
+
+entry main(review: Text) {
+    label = classify(review, "positive_negative_neutral")
+
+    // Three axes of dispatch in one expression:
+    //   1. The stdlib's classify converts low-confidence to the
+    //      literal "unclear" via its on_low_confidence handler.
+    //      We match on that label first.
+    //   2. Confident positives/negatives take auto-action paths,
+    //      guarded by `with confidence > 0.85` so only high-belief
+    //      results skip human review.
+    //   3. Anything that matches the label but isn't confident enough
+    //      falls through to the generic acknowledgement arms.
+    return match label {
+        // The stdlib's sentinel for "I'm not sure enough" — always escalate.
+        "unclear" => escalate_to_human("classifier was unsure"),
+
+        // Confident labels get auto-replies.
+        "positive" with confidence > 0.85 => send_thank_you(),
+        "negative" with confidence > 0.85 => send_apology_with_refund_offer(),
+
+        // Moderate-confidence labels get generic acknowledgements.
+        "positive" => send_generic_acknowledgement(),
+        "negative" => send_generic_acknowledgement(),
+        "neutral"  => send_generic_acknowledgement(),
+
+        // Anything else (a weird label) → human.
+        _ => escalate_to_human("unexpected label")
+    }
+}

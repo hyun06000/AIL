@@ -21,7 +21,7 @@ from ..parser.ast import (
     Assignment, ReturnStmt, PerformStmt, BranchStmt, WithContextStmt,
     ExprStmt, IfStmt, ForStmt,
     Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
-    PerformExpr, MembershipOp, AttemptExpr,
+    PerformExpr, MembershipOp, AttemptExpr, MatchExpr, MatchArm,
     Expr, Statement,
 )
 from .context import ContextStack, ContextResolver, ResolvedContext
@@ -618,7 +618,60 @@ class Executor:
             )
         if isinstance(expr, AttemptExpr):
             return self._eval_attempt(expr, scope)
+        if isinstance(expr, MatchExpr):
+            return self._eval_match(expr, scope)
         raise RuntimeError(f"unknown expr type: {type(expr).__name__}")
+
+    def _eval_match(self, expr: MatchExpr,
+                    scope: dict[str, ConfidentValue]) -> ConfidentValue:
+        """Evaluate a match expression.
+
+        Semantics:
+          1. Evaluate the subject ONCE.
+          2. For each arm in source order:
+             - Check the pattern against the subject's value.
+             - If pattern matches and (optional) confidence guard
+               holds, evaluate the arm's body in a scope extended
+               with any binding from the pattern, and return its value.
+          3. If no arm matches, return a Result-error — the match was
+             non-exhaustive at runtime. Programs concerned about this
+             should end with a `_ =>` arm.
+
+        The body's origin is preserved unchanged (no new match-origin
+        node is introduced) — the match itself is a selection, not a
+        new operation, and wrapping would clutter lineage queries.
+        """
+        subject = self._eval_expr(expr.subject, scope)
+        self.trace.record("match_enter",
+                          value=_truncate(subject.value),
+                          confidence=subject.confidence,
+                          arms=len(expr.arms))
+        for idx, arm in enumerate(expr.arms):
+            match_ok, binding = _pattern_matches(arm.pattern, subject)
+            if not match_ok:
+                continue
+            if not _confidence_guard_passes(arm, subject.confidence):
+                self.trace.record("match_arm_skipped",
+                                  index=idx,
+                                  reason="confidence_guard",
+                                  confidence=subject.confidence,
+                                  required_op=arm.confidence_op,
+                                  required_threshold=arm.confidence_threshold)
+                continue
+            self.trace.record("match_arm_selected", index=idx)
+            arm_scope = dict(scope)
+            if binding is not None:
+                arm_scope[binding] = subject
+            return self._eval_expr(arm.body, arm_scope)
+        # No arm matched — surface as a Result error for the caller.
+        self.trace.record("match_no_arm")
+        return ConfidentValue(
+            {"_result": True, "ok": False,
+             "error": f"match: no arm matched value {subject.value!r} "
+                      f"(confidence {subject.confidence:.3f})"},
+            0.0,
+            origin=subject.origin,
+        )
 
     def _eval_attempt(self, expr: AttemptExpr,
                       scope: dict[str, ConfidentValue]) -> ConfidentValue:
@@ -1178,6 +1231,60 @@ def _truncate(v: Any, n: int = 200) -> Any:
     if len(s) <= n:
         return v
     return s[:n] + "…"
+
+
+def _pattern_matches(pattern: Expr,
+                     subject: "ConfidentValue") -> tuple[bool, str | None]:
+    """Check whether a pattern matches the subject's value.
+
+    Returns (matched, binding_name) where `binding_name` is non-None if
+    the pattern introduces a variable binding (identifier other than `_`).
+
+    v1 patterns:
+      - Literal: exact equality with subject.value.
+      - Identifier("_"): wildcard — always matches, no binding.
+      - Identifier(other): variable binding — always matches, binds.
+
+    Other expression types are rejected as invalid patterns. Restricting
+    now keeps match semantics crisp; richer patterns (list, record) can
+    be layered on without changing this base.
+    """
+    if isinstance(pattern, Literal):
+        return (pattern.value == subject.value, None)
+    if isinstance(pattern, Identifier):
+        if pattern.name == "_":
+            return (True, None)
+        # Treat bools as literals even though they lex as identifiers.
+        if pattern.name == "true":
+            return (subject.value is True, None)
+        if pattern.name == "false":
+            return (subject.value is False, None)
+        # Any other identifier is a variable binding.
+        return (True, pattern.name)
+    # Anything else is not a valid pattern shape in v1.
+    raise RuntimeError(
+        f"match pattern must be a literal, '_', or identifier; "
+        f"got {type(pattern).__name__}"
+    )
+
+
+def _confidence_guard_passes(arm: MatchArm, subject_conf: float) -> bool:
+    """Check the optional `with confidence OP N` guard on a match arm."""
+    if arm.confidence_op is None or arm.confidence_threshold is None:
+        return True
+    op = arm.confidence_op
+    t = arm.confidence_threshold
+    if op == ">":
+        return subject_conf > t
+    if op == "<":
+        return subject_conf < t
+    if op == ">=":
+        return subject_conf >= t
+    if op == "<=":
+        return subject_conf <= t
+    if op == "==":
+        return subject_conf == t
+    return False
 
 
 def _is_result_error(value: Any) -> bool:

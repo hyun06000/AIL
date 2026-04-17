@@ -41,7 +41,7 @@ from typing import Iterable
 
 from ..parser.ast import (
     Assignment, Call, Identifier, FieldAccess, BinaryOp, UnaryOp, ListLiteral,
-    PerformExpr, MembershipOp, AttemptExpr, Literal,
+    PerformExpr, MembershipOp, AttemptExpr, MatchExpr, Literal,
     Expr, Statement,
 )
 
@@ -139,6 +139,14 @@ def _contains_intent_call(expr: Expr, intents: set[str]) -> bool:
                 or _contains_intent_call(expr.collection, intents))
     elif isinstance(expr, AttemptExpr):
         return any(_contains_intent_call(t, intents) for t in expr.tries)
+    elif isinstance(expr, MatchExpr):
+        if _contains_intent_call(expr.subject, intents):
+            return True
+        for arm in expr.arms:
+            if _contains_intent_call(arm.pattern, intents):
+                return True
+            if _contains_intent_call(arm.body, intents):
+                return True
     elif isinstance(expr, PerformExpr):
         # A perform expression inside a batch makes it unsafe to parallelize
         # (side effects must execute in program order). Treat perform as
@@ -169,6 +177,12 @@ def _contains_perform(expr: Expr) -> bool:
         return _contains_perform(expr.element) or _contains_perform(expr.collection)
     elif isinstance(expr, AttemptExpr):
         return any(_contains_perform(t) for t in expr.tries)
+    elif isinstance(expr, MatchExpr):
+        if _contains_perform(expr.subject):
+            return True
+        for arm in expr.arms:
+            if _contains_perform(arm.pattern) or _contains_perform(arm.body):
+                return True
     return False
 
 
@@ -213,6 +227,13 @@ def _references_walk(expr: Expr, names: set[str]) -> bool:
                 or _references_walk(expr.collection, names))
     if isinstance(expr, AttemptExpr):
         return any(_references_walk(t, names) for t in expr.tries)
+    if isinstance(expr, MatchExpr):
+        if _references_walk(expr.subject, names):
+            return True
+        for arm in expr.arms:
+            if _references_walk(arm.body, names):
+                return True
+        return False
     if isinstance(expr, PerformExpr):
         for a in expr.args:
             if _references_walk(a, names):

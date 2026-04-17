@@ -32,7 +32,7 @@ from .ast import (
     Assignment, ReturnStmt, PerformStmt, BranchStmt, BranchArm,
     WithContextStmt, ExprStmt, IfStmt, ForStmt,
     Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
-    PerformExpr, MembershipOp, AttemptExpr,
+    PerformExpr, MembershipOp, AttemptExpr, MatchExpr,
     Expr, Statement,
 )
 
@@ -194,6 +194,17 @@ def _check_expr(expr: Expr, *, fn_name: str, pure_fns: set[str],
         # to an intent call.
         for t in expr.tries:
             _check_expr(t, fn_name=fn_name, pure_fns=pure_fns,
+                        all_fns=all_fns, intents=intents)
+    elif isinstance(expr, MatchExpr):
+        # A match is pure iff the subject and every arm's pattern/body
+        # are pure. Confidence guards are purely metadata — no need to
+        # check them.
+        _check_expr(expr.subject, fn_name=fn_name, pure_fns=pure_fns,
+                    all_fns=all_fns, intents=intents)
+        for arm in expr.arms:
+            _check_expr(arm.pattern, fn_name=fn_name, pure_fns=pure_fns,
+                        all_fns=all_fns, intents=intents)
+            _check_expr(arm.body, fn_name=fn_name, pure_fns=pure_fns,
                         all_fns=all_fns, intents=intents)
     # Literals and Identifiers carry no forbidden operations.
 

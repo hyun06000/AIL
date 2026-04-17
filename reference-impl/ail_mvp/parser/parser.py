@@ -771,6 +771,8 @@ class Parser:
             return UnaryOp(op="-", operand=self.parse_primary())
         if t.kind == Tok.IDENT and t.value == "attempt":
             return self.parse_attempt()
+        if t.kind == Tok.IDENT and t.value == "match":
+            return self.parse_match()
         if t.kind == Tok.IDENT:
             self.advance()
             if t.value == "true":
@@ -798,6 +800,84 @@ class Parser:
         if not tries:
             raise ParseError("attempt block must contain at least one `try`")
         return AttemptExpr(tries=tries)
+
+    def parse_match(self):
+        """Parse `match EXPR { PATTERN [with confidence OP N] => BODY, ... }`.
+
+        Arm separation is comma-delimited. Trailing comma is optional.
+        The pattern is a single expression (literal or identifier); the
+        optional confidence guard syntax is `with confidence OP NUMBER`.
+        """
+        from .ast import MatchExpr, MatchArm
+        self.expect_keyword("match")
+        subject = self.parse_expr()
+        self.expect(Tok.LBRACE)
+        arms: list[MatchArm] = []
+        while not self.check(Tok.RBRACE):
+            arm = self._parse_match_arm()
+            arms.append(arm)
+            # Optional comma between arms; trailing comma is fine.
+            if not self.match(Tok.COMMA):
+                # Next thing must be the closing brace.
+                if not self.check(Tok.RBRACE):
+                    t = self.peek()
+                    raise ParseError(
+                        f"expected ',' or '}}' after match arm, got "
+                        f"{tokName(t.kind)}({t.value!r}) at {t.line}:{t.col}"
+                    )
+        self.expect(Tok.RBRACE)
+        if not arms:
+            raise ParseError("match expression must contain at least one arm")
+        return MatchExpr(subject=subject, arms=arms)
+
+    def _parse_match_arm(self):
+        """Parse a single `PATTERN [with confidence OP N] => BODY`."""
+        from .ast import MatchArm
+        # Pattern: any expression (but typically literal or ident).
+        pattern = self.parse_expr()
+        # Optional confidence guard
+        conf_op: str | None = None
+        conf_threshold: float | None = None
+        if self.checkKW_with():
+            # `with confidence OP N`
+            self.advance()   # consume 'with'
+            self.expect_keyword("confidence")
+            op_tok = self.advance()
+            conf_op = _confidence_op_from_token(op_tok)
+            if conf_op is None:
+                raise ParseError(
+                    f"expected confidence operator (>, <, >=, <=, ==) at "
+                    f"{op_tok.line}:{op_tok.col}, got {op_tok.value!r}"
+                )
+            num_tok = self.expect(Tok.NUMBER)
+            conf_threshold = float(num_tok.value)
+        self.expect(Tok.FATARROW)
+        body = self.parse_expr()
+        return MatchArm(
+            pattern=pattern, body=body,
+            confidence_op=conf_op, confidence_threshold=conf_threshold,
+        )
+
+    def checkKW_with(self) -> bool:
+        """True if next token is the `with` keyword."""
+        return self.check(Tok.IDENT, "with")
+
+
+def _confidence_op_from_token(tok: Token) -> str | None:
+    """Map a Tok.* operator token to its string for confidence guards."""
+    mapping = {
+        Tok.GT: ">",
+        Tok.LT: "<",
+        Tok.GEQ: ">=",
+        Tok.LEQ: "<=",
+        Tok.EQEQ: "==",
+    }
+    return mapping.get(tok.kind)
+
+
+def tokName(kind: Tok) -> str:
+    """Human-readable token kind name (mirrors Go-impl's tokName)."""
+    return kind.name
 
 
 def parse(source: str) -> Program:
