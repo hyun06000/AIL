@@ -4,6 +4,112 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.5 — 2026-04-17
+
+**Implicit parallelism.** Independent intent calls run concurrently.
+
+- Consecutive Assignments whose RHS contain intent calls and are
+  pairwise independent are grouped into parallel batches and evaluated
+  via a ThreadPoolExecutor. No async/await — the independence is
+  structural.
+- Wall-clock latency for N independent intents drops from N·t to t.
+- Dependent sequences (`b = f(a)`) stay sequential; the planner
+  detects data flow.
+- Trace entries from a batch carry `parallel=True`; batches are
+  bracketed by `parallel_batch_start`/`_end` markers.
+- Thread-safety: `Trace.record/enter/exit` are now lock-protected.
+
+**Files:** `runtime/parallel.py` (new), `runtime/executor.py`,
+`runtime/trace.py`, `examples/parallel_analysis.ail` (new).
+
+**Tests:** 13 new (155 total).
+
+---
+
+## v1.4 — 2026-04-17
+
+**`attempt` blocks — confidence-priority cascade.**
+
+```ail
+extracted = attempt {
+    try direct_parse(x)     // pure, wins if ok
+    try scan_tokens(x)      // pure, cheap fallback
+    try infer_number(x)     // LLM — last resort
+}
+```
+
+- Evaluates each `try` in order. A try qualifies when the result is
+  not a Result-typed `error(...)` and its confidence ≥ 0.7.
+- First qualifying try wins; if none qualify, the last try's value is
+  returned with its low confidence preserved.
+- Selected index is recorded via a new `attempt` origin kind; upstream
+  lineage is preserved through the origin's parent chain.
+- `pure fn` bodies may contain `attempt` blocks, but every `try` must
+  itself be pure; intents inside a pure-fn attempt are rejected at
+  parse time.
+
+**Files:** `parser/ast.py` (`AttemptExpr`), `parser/parser.py`,
+`parser/lexer.py`, `parser/purity.py`, `runtime/executor.py`,
+`runtime/provenance.py` (`ATTEMPT` kind, `attempt_origin()`),
+`examples/cascade_extract.ail` (new).
+
+**Tests:** 11 new (142 total).
+
+---
+
+## v1.3 — 2026-04-17
+
+**Structural purity contracts — `pure fn`.**
+
+- `pure fn` declares a statically-verified contract: no `perform`
+  statements, no intent calls, no calls to non-pure fns, no
+  `eval_ail`. Violations raise `PurityError` at parse time.
+- Composed with provenance (v1.2): a pure fn's output is compile-time
+  guaranteed to have `has_intent_origin(result) == false`.
+- All 11 `stdlib/utils.ail` utilities upgraded to `pure fn`.
+- Unqualified `fn` retains unchanged semantics (backward compatible).
+
+**Files:** `parser/purity.py` (new), `parser/ast.py` (`purity` field),
+`parser/parser.py`, `parser/lexer.py`, `parser/__init__.py`,
+`stdlib/utils.ail`.
+
+**Tests:** 15 new (131 total).
+
+---
+
+## v1.2 — 2026-04-17
+
+**Provenance — every value knows where it came from.**
+
+- Each `ConfidentValue` now carries an `Origin` recording the
+  operation that produced it, linked to the origins of its inputs.
+- Origins are created at fn/intent/builtin/entry boundaries;
+  binary/unary/field operations inherit the dominant parent origin to
+  keep trees bounded.
+- Intent origins additionally carry `model_id` and an ISO-8601
+  timestamp for audit.
+- New builtins: `origin_of(value)`, `lineage_of(value)`,
+  `has_intent_origin(value)`. These cannot be shadowed by user fns
+  or intents.
+
+**Files:** `runtime/provenance.py` (new), `runtime/executor.py`,
+`examples/audit_provenance.ail` (new), `spec/08-reference-card.ai.md`.
+
+**Tests:** 18 new (116 total).
+
+---
+
+## v1.1 — 2026-04-17
+
+**Result type for explicit error handling.**
+
+- New builtins: `ok(value)`, `error(msg)`, `is_ok(r)`, `is_error(r)`,
+  `unwrap(r)`, `unwrap_or(r, d)`, `unwrap_error(r)`.
+- `to_number` now returns a Result on non-numeric input.
+- `examples/safe_csv_parser.ail` demonstrates Result-based pipelines.
+
+---
+
 ## v1.0.0 — 2026-04-17
 
 **The first stable release.** AIL is a programming language designed for AI as the primary author of code. This release contains a complete language specification, a working Python interpreter, a standard library written in AIL, and evidence that the language works as intended.
