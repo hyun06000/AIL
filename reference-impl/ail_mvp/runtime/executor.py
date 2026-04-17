@@ -28,6 +28,10 @@ from .context import ContextStack, ContextResolver, ResolvedContext
 from .trace import Trace
 from .model import ModelAdapter, ModelResponse
 from .evolution import EvolutionSupervisor
+from .provenance import (
+    Origin, LITERAL_ORIGIN,
+    input_origin, fn_origin, intent_origin, builtin_origin, parents_of,
+)
 from ..stdlib import resolve as resolve_import, ImportResolutionError
 
 
@@ -35,6 +39,7 @@ from ..stdlib import resolve as resolve_import, ImportResolutionError
 class ConfidentValue:
     value: Any
     confidence: float
+    origin: Origin = LITERAL_ORIGIN
 
     def __repr__(self):
         return f"{self.value!r} @ {self.confidence:.3f}"
@@ -230,9 +235,11 @@ class Executor:
         local_scope: dict[str, ConfidentValue] = {}
         for param_name, _ in entry.params:
             if param_name in inputs:
-                local_scope[param_name] = ConfidentValue(inputs[param_name], 1.0)
+                local_scope[param_name] = ConfidentValue(
+                    inputs[param_name], 1.0, origin=input_origin(param_name))
             else:
-                local_scope[param_name] = ConfidentValue(None, 1.0)
+                local_scope[param_name] = ConfidentValue(
+                    None, 1.0, origin=input_origin(param_name))
 
         try:
             for stmt in entry.body:
@@ -294,7 +301,8 @@ class Executor:
         if not hasattr(items, '__iter__') or isinstance(items, str):
             items = [items]
         for item in items:
-            scope[stmt.var_name] = ConfidentValue(item, collection.confidence)
+            scope[stmt.var_name] = ConfidentValue(
+                item, collection.confidence, origin=collection.origin)
             for s in stmt.body:
                 self._exec_stmt(s, scope)
 
@@ -383,33 +391,41 @@ class Executor:
                 return ConfidentValue(val, 1.0)
             target = self._eval_expr(expr.target, scope)
             if isinstance(target.value, dict):
-                return ConfidentValue(target.value.get(expr.field), target.confidence)
-            return ConfidentValue(getattr(target.value, expr.field, None), target.confidence)
+                return ConfidentValue(target.value.get(expr.field), target.confidence,
+                                      origin=target.origin)
+            return ConfidentValue(getattr(target.value, expr.field, None),
+                                  target.confidence, origin=target.origin)
         if isinstance(expr, ListLiteral):
             vals = [self._eval_expr(i, scope) for i in expr.items]
             items = [v.value for v in vals]
             conf = min((v.confidence for v in vals), default=1.0)
-            return ConfidentValue(items, conf)
+            return ConfidentValue(items, conf, origin=_dominant_origin(*vals))
         if isinstance(expr, BinaryOp):
             left = self._eval_expr(expr.left, scope)
             right = self._eval_expr(expr.right, scope)
+            merged_origin = _dominant_origin(left, right)
             if expr.op == "and":
                 return ConfidentValue(_truthy(left) and _truthy(right),
-                                      min(left.confidence, right.confidence))
+                                      min(left.confidence, right.confidence),
+                                      origin=merged_origin)
             if expr.op == "or":
                 return ConfidentValue(_truthy(left) or _truthy(right),
-                                      max(left.confidence, right.confidence))
+                                      max(left.confidence, right.confidence),
+                                      origin=merged_origin)
             try:
                 out = _apply_binop(expr.op, left.value, right.value)
             except Exception:
                 out = None
-            return ConfidentValue(out, min(left.confidence, right.confidence))
+            return ConfidentValue(out, min(left.confidence, right.confidence),
+                                  origin=merged_origin)
         if isinstance(expr, UnaryOp):
             operand = self._eval_expr(expr.operand, scope)
             if expr.op == "not":
-                return ConfidentValue(not _truthy(operand), operand.confidence)
+                return ConfidentValue(not _truthy(operand), operand.confidence,
+                                      origin=operand.origin)
             if expr.op == "-":
-                return ConfidentValue(-operand.value, operand.confidence)
+                return ConfidentValue(-operand.value, operand.confidence,
+                                      origin=operand.origin)
             return operand
         if isinstance(expr, Call):
             return self._eval_call(expr, scope)
@@ -424,7 +440,8 @@ class Executor:
                 contained = False
             result = (not contained) if expr.negated else contained
             # Confidence: min of element and collection (conservative, per spec/03 §3.1)
-            return ConfidentValue(result, min(elem.confidence, coll.confidence))
+            return ConfidentValue(result, min(elem.confidence, coll.confidence),
+                                  origin=_dominant_origin(elem, coll))
         if isinstance(expr, PerformExpr):
             # perform-as-expression: build a transient PerformStmt and execute
             return self._exec_perform(
@@ -446,6 +463,15 @@ class Executor:
         args = [self._eval_expr(a, scope) for a in call.args]
         kwargs = {k: self._eval_expr(v, scope) for k, v in call.kwargs.items()}
 
+        # Provenance-introspection builtins — resolved before normal dispatch
+        # so a user cannot shadow them with a fn or intent of the same name.
+        if name == "origin_of":
+            return self._provenance_origin_of(args)
+        if name == "lineage_of":
+            return self._provenance_lineage_of(args)
+        if name == "has_intent_origin":
+            return self._provenance_has_intent(args)
+
         # Is it a declared fn (pure deterministic)?
         if name in self.fns:
             return self._invoke_fn(self.fns[name], args, kwargs)
@@ -457,7 +483,13 @@ class Executor:
         # Built-in functions (spec/07 §5)
         builtin_result = self._try_builtin_fn(name, args)
         if builtin_result is not None:
-            return builtin_result
+            # Wrap with provenance so we can trace that this value
+            # originated from a builtin call; parents are the arg origins.
+            return ConfidentValue(
+                builtin_result.value,
+                builtin_result.confidence,
+                origin=builtin_origin(name, parents_of(args)),
+            )
 
         # Symbolic fallback (constraint checks etc.)
         return self._builtin_call(name, args, kwargs)
@@ -474,14 +506,18 @@ class Executor:
             local[pname] = argval
         for k, v in kwargs.items():
             local[k] = v
+        # Provenance: the fn-call origin wraps whatever the body returns.
+        # Parents are the origins of the arguments (literal args filtered out).
+        call_origin = fn_origin(fn_decl.name, parents_of(args))
         # Make other fns and intents callable from within this fn
         # by sharing the executor scope lookup
         try:
             for stmt in fn_decl.body:
                 self._exec_stmt(stmt, local)
         except ReturnSignal as r:
-            return r.value
-        return ConfidentValue(None, 1.0)
+            return ConfidentValue(r.value.value, r.value.confidence,
+                                  origin=call_origin)
+        return ConfidentValue(None, 1.0, origin=call_origin)
 
     def _try_builtin_fn(self, name: str,
                         args: list[ConfidentValue]) -> ConfidentValue | None:
@@ -689,7 +725,53 @@ class Executor:
         # Used mainly for symbolic constraint checks in MVP.
         # Returns True (confidence from args) — real AIRT would actually check.
         conf = min((a.confidence for a in args), default=1.0)
-        return ConfidentValue(True, conf)
+        return ConfidentValue(True, conf,
+                              origin=builtin_origin(name, parents_of(args)))
+
+    # --- provenance-introspection builtins ---
+
+    def _provenance_origin_of(self, args: list[ConfidentValue]) -> ConfidentValue:
+        """origin_of(value) -> Record describing the immediate origin node.
+
+        Returns a dict with fields kind, name, model_id, at, parents (nested
+        dicts). A literal's origin has kind="literal" and no parents.
+        """
+        if not args:
+            return ConfidentValue(None, 1.0)
+        o = args[0].origin
+        return ConfidentValue(
+            o.to_dict(), 1.0,
+            origin=builtin_origin("origin_of", parents_of(args)),
+        )
+
+    def _provenance_lineage_of(self, args: list[ConfidentValue]) -> ConfidentValue:
+        """lineage_of(value) -> [Record]
+
+        Flattens the origin tree to a list of origin records (post-order).
+        Useful for audit: iterate and check which operations produced the
+        value.
+        """
+        if not args:
+            return ConfidentValue([], 1.0)
+        events = [o.to_dict() for o in args[0].origin.lineage()]
+        return ConfidentValue(
+            events, 1.0,
+            origin=builtin_origin("lineage_of", parents_of(args)),
+        )
+
+    def _provenance_has_intent(self, args: list[ConfidentValue]) -> ConfidentValue:
+        """has_intent_origin(value) -> Boolean
+
+        True iff any node in the value's origin tree has kind="intent" —
+        i.e., an LLM was involved somewhere in this value's history.
+        """
+        if not args:
+            return ConfidentValue(False, 1.0)
+        result = args[0].origin.has_kind("intent")
+        return ConfidentValue(
+            result, 1.0,
+            origin=builtin_origin("has_intent_origin", parents_of(args)),
+        )
 
     def _invoke_intent(
         self, intent: IntentDecl,
@@ -773,7 +855,12 @@ class Executor:
                                                 r.value.confidence)
                         return r.value
 
-            result = ConfidentValue(response.value, response.confidence)
+            result = ConfidentValue(
+                response.value,
+                response.confidence,
+                origin=intent_origin(intent.name, parents_of(args),
+                                     model_id=response.model_id),
+            )
 
             # Feed the supervisor (no-op if intent has no evolve block)
             self._observe_evolution(intent.name, result.value, result.confidence)
@@ -863,6 +950,23 @@ def _truncate(v: Any, n: int = 200) -> Any:
     if len(s) <= n:
         return v
     return s[:n] + "…"
+
+
+def _dominant_origin(*values) -> Origin:
+    """Return the first non-literal origin among the given ConfidentValues.
+
+    If every argument is a literal, returns LITERAL_ORIGIN. Used by
+    binary/unary/field operations that don't themselves create a new origin
+    node but inherit from their operand's history. This keeps origin trees
+    bounded in hot loops (a + b + c + ...) while preserving the essential
+    lineage: the tracked operation that produced each value still carries
+    its own origin node.
+    """
+    for v in values:
+        o = v.origin if hasattr(v, "origin") else LITERAL_ORIGIN
+        if o is not LITERAL_ORIGIN:
+            return o
+    return LITERAL_ORIGIN
 
 
 def _default_ask_human(question: str, *, expect: str = "text") -> Any:

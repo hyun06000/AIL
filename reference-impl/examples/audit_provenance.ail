@@ -1,0 +1,57 @@
+// audit_provenance.ail — demonstrate runtime provenance tracking.
+//
+// Scenario: produce a report about a piece of text. Some fields are
+// computed deterministically (word count, char count). Others ask an LLM
+// for judgment (sentiment, key topic). The program then *audits itself*
+// at runtime: for each field in the final report, it asks "was an LLM
+// involved in producing this?" and annotates the output accordingly.
+//
+// This is the kind of feature that is noisy and error-prone to
+// implement in Python (you thread a "this came from an LLM" bit
+// through every helper). In AIL it is a first-class runtime property:
+// every value carries its own origin. `has_intent_origin(value)` walks
+// the tree and tells you.
+//
+// Run with mock:
+//   ail run examples/audit_provenance.ail --input "I love this product" --mock
+
+import classify from "stdlib/language"
+
+intent extract_topic(source: Text) -> Text {
+    goal: the single most salient topic word from the source
+    constraints {
+        one_word_only
+        lowercase
+    }
+}
+
+fn label_source(audited: Boolean) -> Text {
+    if audited {
+        return " [LLM]"
+    }
+    return " [pure]"
+}
+
+fn describe(label: Text, value: Text, audited: Boolean) -> Text {
+    return join([label, ": ", value, label_source(audited)], "")
+}
+
+entry main(source: Text) {
+    // Deterministic facts — pure fn/builtin lineage.
+    word_count = length(split(source, " "))
+    char_count = length(source)
+
+    // LLM-involving facts — intent lineage.
+    sentiment = classify(source, "positive_negative_neutral")
+    topic = extract_topic(source)
+
+    // Ask each value about its own history.
+    lines = [
+        describe("words", to_text(word_count), has_intent_origin(word_count)),
+        describe("chars", to_text(char_count), has_intent_origin(char_count)),
+        describe("sentiment", sentiment, has_intent_origin(sentiment)),
+        describe("topic", topic, has_intent_origin(topic))
+    ]
+
+    return join(lines, "\n")
+}

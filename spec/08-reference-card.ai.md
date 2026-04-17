@@ -207,6 +207,27 @@ unwrap_or(result: Result, default: Any) -> Any  // value if ok, default if error
 
 Note: to_number() returns a Result error on non-numeric input. Use is_error() to check before using the value.
 
+### Provenance (every value knows where it came from)
+```
+origin_of(value: Any) -> Record              // {kind, name, model_id?, at?, parents?}
+lineage_of(value: Any) -> [Record]           // flat post-order list of origin nodes
+has_intent_origin(value: Any) -> Boolean     // true iff an intent is anywhere in the origin tree
+```
+
+Origin kinds: `"literal"`, `"input"`, `"fn"`, `"intent"`, `"builtin"`.
+Intent origins additionally carry `model_id` and `at` (ISO-8601 timestamp).
+
+Rules:
+- Literal values have kind `"literal"`.
+- Entry parameters have kind `"input"` with `name` = parameter name.
+- Each fn/intent/builtin call creates a new origin node; the parents are the
+  origins of its arguments (literal parents are elided to keep trees small).
+- Binary/unary/field/membership operations do NOT create new nodes — they
+  inherit the first non-literal origin from their operands. This keeps
+  origin trees bounded in tight loops.
+
+These builtins cannot be shadowed by user-declared fns or intents.
+
 ## STDLIB MODULES
 
 ### stdlib/core
@@ -268,6 +289,18 @@ fn if else for
 - intent results have model-reported confidence
 - Deterministic operations: confidence = min(input confidences)
 - Access via: value.confidence (not yet exposed in MVP)
+
+## PROVENANCE MODEL
+
+Every value also carries an `origin` — a runtime record of how it was
+produced. Unlike confidence (one number), origin is a tree linking a value
+to the origins of the inputs that fed into it. Use the builtins
+`origin_of`, `lineage_of`, `has_intent_origin` to query it from AIL code.
+
+This is unique to AIL — no human language tracks value lineage at runtime.
+It exists because AI-authored code often mixes deterministic computation
+with LLM calls, and the author (an AI) must be able to ask "was a model
+involved in producing this number?" without manually threading it through.
 
 ## GRAMMAR LIMITATIONS (KNOWN)
 
