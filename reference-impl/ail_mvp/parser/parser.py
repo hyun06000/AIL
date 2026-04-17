@@ -90,6 +90,8 @@ class Parser:
                 return self.parse_evolve()
             if t.value == "fn":
                 return self.parse_fn()
+            if t.value == "pure" and self.peek(1).kind == Tok.IDENT and self.peek(1).value == "fn":
+                return self.parse_fn(purity="pure")
         raise ParseError(f"unexpected top-level token {t!r}")
 
     # --- context ---
@@ -564,9 +566,16 @@ class Parser:
             body.append(self.parse_statement())
         return WithContextStmt(context_name=name, body=body)
 
-    def parse_fn(self):
-        """Parse a `fn` declaration — a pure deterministic function."""
+    def parse_fn(self, *, purity: str = "default"):
+        """Parse a `fn` declaration.
+
+        When called with purity="pure" the caller has already seen the
+        `pure` keyword; we consume `fn` and continue. The purity field is
+        attached to the resulting FnDecl for later static checking.
+        """
         from .ast import FnDecl
+        if purity == "pure":
+            self.expect_keyword("pure")
         self.expect_keyword("fn")
         name = self.expect(Tok.IDENT).value
         params = self.parse_params()
@@ -578,7 +587,8 @@ class Parser:
         while not self.check(Tok.RBRACE):
             body.append(self.parse_statement())
         self.expect(Tok.RBRACE)
-        return FnDecl(name=name, params=params, return_type=return_type, body=body)
+        return FnDecl(name=name, params=params, return_type=return_type,
+                      body=body, purity=purity)
 
     def parse_if(self):
         """Parse `if COND { ... } else if ... { ... } else { ... }`."""
@@ -760,4 +770,10 @@ class Parser:
 
 def parse(source: str) -> Program:
     tokens = tokenize(source)
-    return Parser(tokens).parse_program()
+    program = Parser(tokens).parse_program()
+    # Static purity check: verify every `pure fn` body respects the
+    # structural contract. Raises PurityError (a subclass of ParseError
+    # via re-raise in __init__.py) on violation.
+    from .purity import check_program
+    check_program(program)
+    return program

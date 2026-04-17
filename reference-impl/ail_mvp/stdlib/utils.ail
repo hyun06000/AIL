@@ -1,22 +1,24 @@
 // stdlib/utils — reusable pure functions for common tasks.
 //
-// Every function here is a fn — deterministic, no LLM, confidence 1.0.
+// Every function here is a `pure fn` — structurally verified to have no
+// side effects and no LLM involvement. Importers can rely on this
+// statically: `has_intent_origin(word_count(x)) == false` is guaranteed.
 // Import with: import word_count from "stdlib/utils"
 
-fn word_count(text: Text) -> Number {
+pure fn word_count(text: Text) -> Number {
     words = split(text, " ")
     return length(words)
 }
 
-fn char_count(text: Text) -> Number {
+pure fn char_count(text: Text) -> Number {
     return length(text)
 }
 
-fn is_empty(text: Text) -> Boolean {
+pure fn is_empty(text: Text) -> Boolean {
     return length(trim(text)) == 0
 }
 
-fn repeat(text: Text, times: Number) -> Text {
+pure fn repeat(text: Text, times: Number) -> Text {
     result = ""
     for i in range(0, times) {
         result = join([result, text], "")
@@ -24,7 +26,7 @@ fn repeat(text: Text, times: Number) -> Text {
     return result
 }
 
-fn pad_left(text: Text, target_length: Number, pad_char: Text) -> Text {
+pure fn pad_left(text: Text, target_length: Number, pad_char: Text) -> Text {
     current = length(text)
     if current >= target_length {
         return text
@@ -33,13 +35,13 @@ fn pad_left(text: Text, target_length: Number, pad_char: Text) -> Text {
     return join([padding, text], "")
 }
 
-fn clamp(value: Number, lo: Number, hi: Number) -> Number {
+pure fn clamp(value: Number, lo: Number, hi: Number) -> Number {
     if value < lo { return lo }
     if value > hi { return hi }
     return value
 }
 
-fn sum_list(numbers: Number) -> Number {
+pure fn sum_list(numbers: Number) -> Number {
     total = 0
     for n in numbers {
         total = total + n
@@ -47,12 +49,12 @@ fn sum_list(numbers: Number) -> Number {
     return total
 }
 
-fn average(numbers: Number) -> Number {
+pure fn average(numbers: Number) -> Number {
     if length(numbers) == 0 { return 0 }
     return sum_list(numbers) / length(numbers)
 }
 
-fn flatten(nested: Text) -> Text {
+pure fn flatten(nested: Text) -> Text {
     result = []
     for sublist in nested {
         for item in sublist {
@@ -62,7 +64,7 @@ fn flatten(nested: Text) -> Text {
     return result
 }
 
-fn unique(items: Text) -> Text {
+pure fn unique(items: Text) -> Text {
     seen = []
     result = []
     for item in items {
@@ -74,7 +76,7 @@ fn unique(items: Text) -> Text {
     return result
 }
 
-fn zip_lists(a: Text, b: Text) -> Text {
+pure fn zip_lists(a: Text, b: Text) -> Text {
     result = []
     limit = length(a)
     if length(b) < limit { limit = length(b) }
@@ -84,7 +86,7 @@ fn zip_lists(a: Text, b: Text) -> Text {
     return result
 }
 
-fn take(items: Text, n: Number) -> Text {
+pure fn take(items: Text, n: Number) -> Text {
     if n >= length(items) { return items }
     result = []
     for i in range(0, n) {

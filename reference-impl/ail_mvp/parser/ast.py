@@ -241,16 +241,26 @@ class EvolveDecl:
 
 @dataclass
 class FnDecl:
-    """A pure, deterministic function — no LLM, confidence always 1.0.
+    """A deterministic function — no LLM involvement at the fn boundary.
 
     This is where AI writes actual algorithms: sorting, parsing,
     transforming data. The body contains real control flow (if, for,
     assignments, returns) rather than goals and constraints.
+
+    The `purity` field declares a structural contract:
+    - "default": no contract; the fn may call intents (LLM) or use
+      `perform` statements if its body does so. No static guarantee.
+    - "pure": guaranteed no intent calls, no `perform` statements, and
+      no calls to other non-pure fns. The purity checker rejects the
+      program at parse time if this guarantee can be violated. Values
+      produced by a `pure fn` are guaranteed to have no intent anywhere
+      in their origin tree.
     """
     name: str
     params: list[tuple[str, str | None]]   # (name, optional type)
     return_type: str | None
     body: list[Statement]
+    purity: str = "default"   # "default" | "pure"
 
 
 TopLevel = ContextDecl | IntentDecl | EffectDecl | EntryDecl | ImportDecl | EvolveDecl | FnDecl

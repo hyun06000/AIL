@@ -39,9 +39,26 @@ fn NAME(param1: Type, param2: Type) -> ReturnType {
     // body: assignments, if, for, return, function calls
     return EXPR
 }
+
+pure fn NAME(param1: Type) -> ReturnType {
+    // body with structural purity contract
+    return EXPR
+}
 ```
 
 Properties: no LLM, confidence always 1.0, no side effects, can be recursive.
+
+`pure fn` adds a **static structural contract**, verified at parse time:
+- No `perform` statements in the body (no effects).
+- No calls to intents (no LLM).
+- No calls to non-pure fns.
+- No calls to `eval_ail` (runs arbitrary AIL).
+- All builtins in `length, split, join, ...` plus `origin_of, lineage_of,
+  has_intent_origin` are trusted pure and may be called.
+
+A pure fn's output is guaranteed to have `has_intent_origin(result) == false`
+— compile-time proof, not runtime observation. Violating the contract
+raises `PurityError` at parse time; the program never runs.
 
 ## intent — LLM-BACKED DECLARATION
 
@@ -271,7 +288,7 @@ prefer require when calibrate_on rollback_on
 metric history keep_last under matching
 and or not in such that
 return true false threshold
-fn if else for
+fn pure if else for
 ```
 
 ## COMMENTS

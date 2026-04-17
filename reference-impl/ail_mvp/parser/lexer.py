@@ -54,7 +54,7 @@ KEYWORDS = {
     "metric", "history", "keep_last", "under", "matching",
     "and", "or", "not", "in", "such", "that",
     "return", "true", "false", "threshold",
-    "fn", "if", "else", "for",
+    "fn", "pure", "if", "else", "for",
 }
 
 
