@@ -164,6 +164,33 @@ def test_ask_tolerates_ail_run_cli_wrapping():
     assert result.value == 42
 
 
+def test_ask_tolerates_malformed_json_wrapping():
+    # Observed failure mode on llama3.1:8B (bench_authoring.py baseline,
+    # 2026-04-17): model wraps its output in `{"value": "...",
+    # "confidence": 1.0}` but fails to escape internal `"` characters
+    # (e.g. inside `split(s, "")`). Strict json.loads rejects the whole
+    # thing. The authoring layer recovers the AIL source via a lenient
+    # regex-based extractor that locates `"value": "...` and the
+    # right-side `", "confidence"` boundary, then applies JSON unescapes.
+    malformed = (
+        '{"value": "pure fn first_char(s: Text) -> Text {\\n'
+        '    return get(split(s, ""), 0)\\n'
+        '}\\n'
+        'entry main(x: Text) { return first_char(\\"banana\\") }", '
+        '"confidence": 1.0}'
+    )
+    result = ask("first char of banana", adapter=ScriptedAuthor([malformed]))
+    assert result.value == "b"
+
+
+def test_ask_tolerates_malformed_json_no_confidence_key():
+    # Variant: model emits `{"value": "..."}` with no confidence field.
+    # The fallback boundary patterns must still find the closing `"}`.
+    malformed = '{"value": "entry main(x: Text) { return 7 }"}'
+    result = ask("return 7", adapter=ScriptedAuthor([malformed]))
+    assert result.value == 7
+
+
 def test_ask_tolerates_backtick_then_ail_run_wrapping():
     # Observed combination: backticks around an ail-run shell string.
     # Both layers must come off (single-backticks first, then `ail run`).

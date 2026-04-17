@@ -239,6 +239,15 @@ def _unwrap_json_if_any(s: str) -> str:
     This handles the case where the adapter returned a string containing
     JSON rather than a parsed dict — common when adapters fall through
     their JSON detection on unexpected shapes.
+
+    When `json.loads` fails (the model's AIL value contains unescaped
+    `"` characters, a frequent failure mode on 8B-class models), fall
+    back to a lenient regex-based extraction. `bench_authoring.py`
+    showed this wrapper-leak was the dominant cause of hybrid-case
+    failures on llama3.1:8B — the model correctly wrapped its output
+    in `{"value": "..."}` but forgot to escape internal quotes, so
+    strict JSON parsing rejected it and the parser then barfed on the
+    leading `{`. The lenient path recovers the AIL source anyway.
     """
     stripped = s.strip()
     if not stripped.startswith("{"):
@@ -247,7 +256,8 @@ def _unwrap_json_if_any(s: str) -> str:
     try:
         obj = _json.loads(stripped)
     except _json.JSONDecodeError:
-        return s
+        lenient = _lenient_value_extract(stripped)
+        return lenient if lenient is not None else s
     if isinstance(obj, dict):
         for k in ("value", "source", "code", "output", "program", "ail"):
             if k in obj and isinstance(obj[k], str):
@@ -256,6 +266,69 @@ def _unwrap_json_if_any(s: str) -> str:
         if str_values:
             return max(str_values, key=len)
     return s
+
+
+def _lenient_value_extract(s: str) -> str | None:
+    """Recover the AIL source from `{"value": "...", ...}` when strict
+    JSON parsing fails.
+
+    Strategy: locate the `"value":` key, take everything from the
+    opening `"` up to the right-side boundary (`", "confidence"` if
+    present, else `", "<any other key>"`, else the final `"}`).
+    Unescape JSON escape sequences.
+
+    Returns the extracted AIL source string, or None if no plausible
+    value region could be found. Conservative: if in doubt, returns
+    None so the caller keeps the original string unchanged.
+    """
+    import re
+    m = re.search(r'"value"\s*:\s*"', s)
+    if not m:
+        return None
+    start = m.end()
+    # Preferred right boundary: the confidence field's opening quote.
+    # Use the LAST occurrence — the AIL source may contain the literal
+    # substring `"confidence"` as a string constant inside its own code.
+    boundary_patterns = [
+        r'"\s*,\s*"confidence"',
+        r'"\s*,\s*"[A-Za-z_]+"\s*:',
+        r'"\s*}\s*$',
+    ]
+    body = s[start:]
+    for pattern in boundary_patterns:
+        matches = list(re.finditer(pattern, body))
+        if matches:
+            end = matches[-1].start()
+            return _unescape_json_string(body[:end])
+    # Fallback: right-most `"` in the string.
+    last_quote = body.rfind('"')
+    if last_quote > 0:
+        return _unescape_json_string(body[:last_quote])
+    return None
+
+
+def _unescape_json_string(s: str) -> str:
+    """Apply the standard JSON escape sequences to a raw extracted
+    value. Handles \\n, \\t, \\r, \\", \\\\, \\/. Unknown escapes pass
+    through literally (preserving the backslash), which is safer than
+    dropping characters when the value contains shell-style escapes
+    the model used incorrectly.
+    """
+    out: list[str] = []
+    i = 0
+    mapping = {
+        'n': '\n', 't': '\t', 'r': '\r',
+        '"': '"', '\\': '\\', '/': '/',
+    }
+    while i < len(s):
+        c = s[i]
+        if c == '\\' and i + 1 < len(s) and s[i + 1] in mapping:
+            out.append(mapping[s[i + 1]])
+            i += 2
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
 
 
 def _build_authoring_goal() -> str:
