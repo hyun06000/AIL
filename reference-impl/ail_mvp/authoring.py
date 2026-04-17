@@ -306,6 +306,12 @@ def _strip_source_fence(text: str) -> str:
             if body.endswith("```"):
                 body = body[:-3]
             return body.strip()
+    # Case 2b: single-backtick wrapping of the whole content. Some models
+    # emit `...code...` (inline-code markdown) when asked for code in a
+    # JSON string field. Stripping a matched pair of unsupported single
+    # backticks is safe — AIL itself never uses backticks.
+    if s.startswith("`") and s.endswith("`") and len(s) >= 2:
+        return s[1:-1].strip()
     # Case 3: prose with embedded fence(s). Find them all and take the
     # longest content block. Handles ```ail, ```, ```python (model
     # mislabeling), etc.
