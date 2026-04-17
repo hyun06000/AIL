@@ -57,7 +57,7 @@ ail-project/
 ├── runtime/           # AIRT runtime design documents
 ├── os/                # NOOS operating system design documents
 ├── reference-impl/    # Python MVP interpreter
-│   ├── ail_mvp/       # Source
+│   ├── ail/       # Source
 │   ├── examples/      # .ail example programs
 │   └── tests/         # pytest tests
 └── docs/              # Tutorials, FAQ, open questions

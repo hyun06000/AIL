@@ -639,12 +639,12 @@ export AIL_OLLAMA_MODEL=llama3.1:latest
 ail run PROGRAM.ail --input "INPUT"
 
 # Programmatically:
-from ail_mvp import run
+from ail import run
 result, trace = run("program.ail", input="hello")
 # result.value, result.confidence
 
 # Explicit adapter selection:
-from ail_mvp.runtime.ollama_adapter import OllamaAdapter
+from ail.runtime.ollama_adapter import OllamaAdapter
 result, trace = run("program.ail", input="hi",
                     adapter=OllamaAdapter(model="gemma2:latest"))
 ```
@@ -652,7 +652,7 @@ result, trace = run("program.ail", input="hi",
 ## PYTHON API
 
 ```python
-from ail_mvp import run, compile_source, MockAdapter
+from ail import run, compile_source, MockAdapter
 
 # Run with mock (no API key):
 result, trace = run(source_or_path, input="text", adapter=MockAdapter())

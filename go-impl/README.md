@@ -22,7 +22,7 @@ installed.
 
 ```bash
 # Python runtime:
-cd reference-impl && python -m ail_mvp.cli run examples/fizzbuzz.ail --input 15
+cd reference-impl && python -m ail.cli run examples/fizzbuzz.ail --input 15
 #  -> 1, 2, Fizz, 4, Buzz, Fizz, 7, 8, Fizz, Buzz, 11, Fizz, 13, 14, FizzBuzz
 
 # Go runtime (same .ail file):

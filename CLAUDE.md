@@ -25,7 +25,7 @@ Examples: 10 programs (.ail files only in examples/)
 
 ### What exists and works
 
-LANGUAGE FEATURES (implemented in reference-impl/ail_mvp/):
+LANGUAGE FEATURES (implemented in reference-impl/ail/):
 - `fn` — pure deterministic functions (no LLM, confidence 1.0)
 - `intent` — goal declarations delegating to a language model
 - `if / else if / else` — deterministic branching

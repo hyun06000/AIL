@@ -2,7 +2,7 @@
 
 > A programming language designed for AI as the primary author of code.
 
-**Status:** v1.0.0 · Python interpreter with 88 tests · FizzBuzz runs without an LLM
+**Status:** v1.8 · PyPI: `ailang` · Python interpreter (211 tests) · Second runtime in Go · `ail ask` natural-language interface
 
 🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md)
 🤖 **AI/LLM:** [`README.ai.md`](README.ai.md) — structured reference, no prose. Start with [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md).
@@ -140,37 +140,39 @@ entry, control flow, core builtins). Provenance, purity checking,
 
 ---
 
-## What the language can do today
+## What the language can do today (v1.8)
 
-| Feature | Example |
+| Since | Feature |
 |---|---|
-| Pure functions | `fn factorial(n) -> Number { if n <= 1 { return 1 } return n * factorial(n-1) }` |
-| Loops | `for item in list { ... }` |
-| Conditionals | `if / else if / else` |
-| 20 built-in functions | `split`, `join`, `sort`, `map`, `filter`, `reduce`, `range`... |
-| LLM-backed intents | `intent classify(text) -> Text { goal: sentiment_label }` |
-| Context system | `with context formal_korean: translate(doc)` |
-| Self-modification | `evolve { retune ... }`, `rewrite constraints` (human review enforced) |
-| Module system | `import summarize from "stdlib/language"` |
-| Confidence tracking | Every value carries a confidence in [0, 1] |
-| Standard library | `stdlib/core`, `stdlib/language` (intents), `stdlib/utils` (fns) — all written in AIL |
+| v1.0 | `fn`, `intent`, `entry`, `if`/`else`, `for`, `branch`, `context`, `import`, `evolve`, `eval_ail`, 21+ builtins, stdlib written in AIL |
+| v1.1 | Result type: `ok`/`error`/`is_ok`/`unwrap`/`unwrap_or` |
+| **v1.2** | **Provenance:** every value carries an origin tree. `origin_of`, `lineage_of`, `has_intent_origin` |
+| **v1.3** | **Purity contracts:** `pure fn` statically verified — no intents, no effects, no impure calls |
+| **v1.4** | **`attempt` blocks:** confidence-priority cascade. First try with confidence ≥ threshold wins |
+| **v1.5** | **Implicit parallelism:** independent intent calls run concurrently. No `async`/`await` |
+| **v1.6** | **Effects:** `perform http.get(url)`, `perform file.read(path)`. `has_effect_origin` |
+| **v1.7** | **`match` with confidence guards:** `"positive" with confidence > 0.9 => ...` |
+| **v1.8** | **Calibration:** confidence replaced by observed mean once enough samples accumulate. `calibration_of("intent")` introspectable from AIL |
 
 ---
 
-## Examples (8 programs)
+## Examples (14 programs)
 
-| Program | What it shows | LLM needed? |
+Highlights — one per language feature added since v1.0:
+
+| Program | What it shows | Since |
 |---|---|---|
-| `hello.ail` | Simplest possible program | Yes |
-| `translate.ail` | Context inheritance + override | Yes |
-| `classify.ail` | Branch dispatch on classifier output | Yes |
-| `ask_human.ail` | Low-confidence fallback to human | Yes |
-| `evolve_retune.ail` | Evolution with version chain | Yes |
-| `summarize_and_classify.ail` | stdlib imports | Yes |
-| **`fizzbuzz.ail`** | **Pure fn — no LLM at all** | **No** |
-| **`review_analyzer.ail`** | **Hybrid: fn parses data, intent judges sentiment** | **Partially** |
-
-The last two are the most important. FizzBuzz proves AIL is a real language. The review analyzer shows the hybrid model working in practice: 23 fn calls (free, fast) + 6 intent calls (LLM, for judgment only).
+| `fizzbuzz.ail` | **Pure fn — no LLM at all.** Proof AIL is a real programming language. | v1.0 |
+| `review_analyzer.ail` | Hybrid pipeline: fn parses data, intent judges sentiment | v1.0 |
+| `evolve_retune.ail` | Self-modifying intent with version chain + rollback | v1.0 |
+| `safe_csv_parser.ail` | Result-based error handling without exceptions | v1.1 |
+| `audit_provenance.ail` | Runtime self-audit: label each field `[pure]` vs `[LLM]` | v1.2 |
+| `cascade_extract.ail` | Three-tier attempt: cheap → cheaper-still → LLM fallback | v1.4 |
+| `parallel_analysis.ail` | Three independent intents run concurrently, no `async` | v1.5 |
+| `agent_fetch_summarize.ail` | HTTP → intent → file.write in one program | v1.6 |
+| `smart_reply.ail` | Confidence-aware match: value × belief → action | v1.7 |
+| `meta_codegen.ail` | AIL generates AIL at runtime via `eval_ail` | v1.0 |
+| + 4 more small programs ([examples/](reference-impl/examples/)) | | |
 
 ---
 
@@ -178,24 +180,21 @@ The last two are the most important. FizzBuzz proves AIL is a real language. The
 
 ```
 ail-project/
-├── spec/              # Language specification (7 documents)
-│   ├── 01-language    # Core syntax: intent, context, branch, entry
-│   ├── 02-context     # Context system
-│   ├── 03-confidence  # Confidence model
-│   ├── 04-evolution   # Self-modification
-│   ├── 05-effects     # Effects and authorization
-│   ├── 06-stdlib      # Standard library spec
-│   └── 07-computation # fn, if, for, types (v0.2)
-├── runtime/           # AIRT runtime design (document, not full impl)
-├── os/                # NOOS OS design (document only)
-├── reference-impl/    # Python interpreter (working)
-│   ├── ail_mvp/       # Parser, executor, adapters, stdlib
-│   ├── examples/      # 8 example programs
-│   └── tests/         # 84 tests
-├── docs/
-│   ├── ko/            # Korean documentation
-│   └── open-questions.md
-└── .github/           # CI with optional live-test against Claude
+├── spec/                    # Language specification
+│   ├── 00-overview.md ... 07-computation.md
+│   └── 08-reference-card.ai.md  ← complete machine-readable reference
+├── reference-impl/          # Python interpreter (full feature set)
+│   ├── ail/                 # The `ail` package — published as `ailang`
+│   │   ├── parser/          # Lexer, parser, purity checker
+│   │   ├── runtime/         # Executor, provenance, calibration, parallelism
+│   │   └── stdlib/          # Standard library — written in AIL
+│   ├── examples/            # 14 example programs
+│   ├── tests/               # 211 tests
+│   └── tools/               # Benchmarks, demos
+├── go-impl/                 # Second interpreter in Go (no deps)
+├── docs/ko/                 # Korean documentation
+├── RELEASING.md             # PyPI release process
+└── .github/                 # CI
 ```
 
 ### What is implemented vs what is design-only

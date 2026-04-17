@@ -1,50 +1,94 @@
 # AIL — AI 의도 언어 (한국어 문서)
 
-> 프로그래밍 언어, 런타임, 운영체제를 AI가 코드의 주 저자라는 전제 아래 처음부터 다시 설계한 프로젝트입니다.
+> AI가 코드의 주 저자라는 전제 아래 처음부터 다시 설계한 프로그래밍 언어입니다.
 
-**현재 상태:** 명세 v0.1 초안 · 참조 구현 진행 중
+**현재 버전:** v1.8 · PyPI에 `ailang`으로 배포 · 참조 구현 2개 (Python 전체 / Go 서브셋)
 
-이 문서는 [루트 README](../../README.md)의 한국어 판본입니다. 전체 문서는 영어로 작성되지만, 주요 개념은 이 문서를 비롯한 `docs/ko/` 내 문서들로 따라오실 수 있습니다.
+이 문서는 [루트 README](../../README.md)의 한국어 판본입니다. 영어 독해가 불편하시다면 이 문서부터, 그리고 `docs/ko/` 하위 문서로 따라오실 수 있습니다.
 
 ---
 
 ## 왜 이 프로젝트가 존재하는가
 
-오늘날 널리 쓰이는 모든 프로그래밍 언어는 **사람이 코드를 쓴다**는 전제 아래 설계되었습니다. 구문은 사람의 인지 부담을 줄이기 위해 존재하고, 타입 시스템은 사람의 실수를 방지하기 위해 있으며, IDE는 사람의 기억을 보조하기 위해 있습니다.
+오늘날 쓰이는 모든 주요 프로그래밍 언어는 **사람이 코드를 쓴다**는 전제로 설계됐습니다. 문법은 사람의 인지 부담을 줄이기 위해 존재하고, 타입 시스템은 사람의 실수를 방지하기 위해 있으며, IDE는 사람의 기억을 보조합니다.
 
-그런데 코드의 저작 주체가 바뀌고 있습니다. 2026년 현재, 프로덕션 코드의 상당 부분이 AI에 의해 작성되고, 사람은 그걸 리뷰하거나 (또는 리뷰하지 않습니다). 그 AI들이 쓰는 언어는 여전히 Python이고, 여전히 JavaScript이며, 여전히 C++입니다. 모든 설계 결정이 "사람이 키보드 앞에 있다"는 가정 위에 서 있는 언어들입니다.
+그런데 코드의 **저작 주체가 바뀌는 중**입니다. 프로덕션 코드의 상당 부분이 이미 AI로 작성됩니다. 사람은 리뷰하거나, 리뷰하지 않습니다. 그 AI들이 여전히 Python을 쓰고 JavaScript를 씁니다 — 사람이 키보드 앞에 있다는 가정 위에 세워진 언어들을.
 
-이 프로젝트는 다른 질문을 던집니다:
+이 프로젝트의 질문:
 
-> AI가 저자라면, 언어는 어떻게 생겨야 할까?
+> **AI가 저자라면, 언어는 어떻게 생겨야 할까?**
 
-AIL (AI Intent Language, AI 의도 언어) 은 그 질문에 대한 답을 세 층위로 쌓아올립니다:
+AIL은 그 질문에 대한 답을 구체적인 언어 기능으로 쌓아올립니다. 추상적 비전이 아니라 설치해서 돌릴 수 있는 것으로요.
 
-| 층 | 이름 | 무엇인가 |
-|---|---|---|
-| 언어 | **AIL** | 절차가 아닌 **의도**를 기술하는, 선언적이며 확률적이고 맥락 우선적인 언어 |
-| 런타임 | **AIRT** | AI 모델 호출을 일급 프리미티브로 다루며 프로그램을 적응형 확률 그래프로 실행 |
-| OS | **NOOS** | 파일·프로세스·메모리가 아니라 의도·맥락·모델 용량을 시스템콜로 노출하는 운영체제 |
+---
 
-사람은 평소처럼 자연어로 소통합니다. AI가 AIL을 쓰고, AIRT가 그걸 실행하고, NOOS가 그걸 호스팅합니다. 사람은 원하는 것을 서술할 뿐입니다.
+## 바로 써보기
+
+```bash
+pip install ailang
+# 또는: pip install 'ailang[anthropic]'
+```
+
+PyPI 배포 이름은 `ailang`입니다 (`ail`은 2014년에 다른 패키지가 선점했어요). **Python import는 `ail`**이고, **CLI도 `ail`**입니다.
+
+### 자연어로 쓰기 (권장 인터페이스)
+
+```bash
+export AIL_OLLAMA_MODEL=llama3.1:latest
+ail ask "Hello World의 모음 개수 세줘"
+# 3
+
+ail ask "7의 팩토리얼" --show-source
+# 5040
+# (stderr) --- AIL ---
+# (stderr) pure fn factorial(n: Number) -> Number {
+# (stderr)     if n <= 1 { return 1 }
+# (stderr)     return n * factorial(n - 1)
+# (stderr) }
+# (stderr) entry main(x: Text) { return factorial(7) }
+```
+
+사람은 자연어로 말합니다. AI가 AIL을 씁니다. 런타임이 실행합니다. 답만 받습니다. AIL 코드는 **투명한 인프라** — 원할 때만 `--show-source`로 들여다봅니다.
+
+### .ail 파일 직접 실행
+
+```bash
+ail run examples/fizzbuzz.ail --input "20" --mock
+```
 
 ---
 
 ## 핵심 전환
 
-전통적 컴퓨팅은 다음을 전제합니다:
+전통적 컴퓨팅의 전제 vs AIL:
 
-- **결정론이 기본이고 불확실성은 예외다.**
-- **코드는 단계를 기술한다.**
-- **맥락은 암묵적이며 함수 경계에서 소실된다.**
-- **프로그램은 사람이 한 번 쓰고 얼어붙는 정적 산출물이다.**
+| 전통 언어 | AIL |
+|---|---|
+| 결정론이 기본, 불확실성이 예외 | **불확실성이 기본, 모든 값이 confidence를 지님** |
+| 코드는 단계를 기술 | **코드는 의도를 기술**, 단계는 런타임이 결정 |
+| 맥락은 암묵적, 함수 경계에서 소실 | **맥락(context)은 일급 시민**, 상속·오버라이드 가능 |
+| 프로그램은 정적 산출물 | **프로그램은 살아있음** — 관찰하고 자기 수정 (`evolve`) |
+| 함수의 순수성은 관례 | **`pure fn`은 정적 강제** — 파싱 시점에 거부 |
+| 값의 역사는 추적 불가 | **Provenance 내장** — 모든 값이 자기 origin tree를 가짐 |
+| Confidence는 없거나 메타데이터 | **confidence 재조정** — 관찰된 결과로 자동 calibration |
 
-AIL은 네 가지 모두를 뒤집습니다:
+---
 
-- **불확실성이 기본이고 확신이 예외다.** 모든 값은 확신도를 지닌다.
-- **코드는 의도를 기술한다.** 단계는 런타임이 결정한다.
-- **맥락은 일급 시민이다.** 타입처럼 전달되고, 상속되며, 좁혀진다.
-- **프로그램은 살아있다.** 자신의 동작을 관찰하고, 선언된 제약 하에서 자신을 고쳐 쓴다.
+## v1.0 → v1.8 기능 요약
+
+| 버전 | 기능 | 무엇인가 |
+|---|---|---|
+| v1.0 | Core | fn, intent, entry, if/else, for, branch, context, import, evolve |
+| v1.1 | Result | `ok`/`error`/`is_ok`/`unwrap`/`unwrap_or` |
+| **v1.2** | **Provenance** | 모든 값이 origin tree 보유. `origin_of(x)`, `has_intent_origin(x)` |
+| **v1.3** | **Purity contracts** | `pure fn`이 정적으로 검증됨 — intent/effect 호출 불가 |
+| **v1.4** | **Attempt blocks** | `attempt { try A; try B; try C }` — confidence 우선 폭포 |
+| **v1.5** | **Implicit parallelism** | 독립 intent 호출 자동 병렬 — async/await 없이 |
+| **v1.6** | **Effect system** | `perform http.get(url)`, `perform file.read(path)` |
+| **v1.7** | **Match with confidence** | `"positive" with confidence > 0.9 => ...` |
+| **v1.8** | **Calibration** | confidence가 관찰된 결과로 재조정됨 |
+
+각 기능은 앞선 기능들과 **합성**됩니다. 예: pure fn의 출력은 항상 `has_intent_origin == false` 보장. Match의 confidence 가드는 calibration된 값으로 판정. 이런 상호작용은 `reference-impl/tests/`의 테스트들로 pin돼 있습니다.
 
 ---
 
@@ -52,100 +96,119 @@ AIL은 네 가지 모두를 뒤집습니다:
 
 ```
 ail-project/
-├── spec/              # 언어 명세 (normative)
-├── runtime/           # AIRT 런타임 설계 문서
-├── os/                # NOOS 운영체제 설계 문서
-├── reference-impl/    # AIL 파이썬 참조 인터프리터
-├── examples/          # 예제 AIL 프로그램
-├── docs/              # 튜토리얼, 설계 근거, FAQ
-│   └── ko/            # 한국어 문서 (이 디렉토리)
-└── .github/           # CI, 이슈 템플릿
+├── spec/                    # 언어 명세 (normative)
+│   ├── 00-overview.md ~ 07-computation.md
+│   └── 08-reference-card.ai.md  ← 완전한 기계 가독 레퍼런스 (영어)
+├── reference-impl/          # Python 참조 구현 (전체 기능, 211 tests)
+│   ├── ail/                 # 패키지 (PyPI: ailang, import: ail)
+│   │   ├── parser/          # 렉서, 파서, purity checker
+│   │   ├── runtime/         # executor, provenance, calibration 등
+│   │   └── stdlib/          # 표준 라이브러리 — AIL로 작성됨
+│   ├── examples/            # 14개 예시 프로그램
+│   ├── tests/               # 211개 테스트
+│   └── tools/               # 벤치마크, 데모
+├── go-impl/                 # Go 런타임 (Phase-0 subset, 의존성 0개)
+├── docs/
+│   └── ko/                  # 한국어 문서 (여기)
+└── RELEASING.md             # PyPI 릴리스 절차
 ```
-
-### 시작하기
-
-- [spec/00-overview.md](../../spec/00-overview.md) — 먼저 읽어주세요 (영어)
-- [spec/01-language.md](../../spec/01-language.md) — 언어 (영어)
-- [runtime/00-airt.md](../../runtime/00-airt.md) — 런타임 (영어)
-- [os/00-noos.md](../../os/00-noos.md) — OS (영어)
-- [reference-impl/README.md](../../reference-impl/README.md) — 오늘 바로 AIL 프로그램을 돌려볼 수 있는 곳 (영어)
 
 ### 한국어 문서
 
-- [**evolve-guide.ko.md**](evolve-guide.ko.md) — 자기 수정 (`evolve`) 메커니즘 이해하기
-- [**stdlib-guide.ko.md**](stdlib-guide.ko.md) — 표준 라이브러리 이해하기
+- [**evolve-guide.ko.md**](evolve-guide.ko.md) — 자기 수정 (`evolve`) 메커니즘
+- [**stdlib-guide.ko.md**](stdlib-guide.ko.md) — 표준 라이브러리
 
 ---
 
-## 바로 돌려보기
+## 두 개의 런타임
 
-API 키가 없어도 (mock 어댑터로) 파서·실행기·진화 메커니즘이 작동하는 걸 확인할 수 있습니다:
+AIL은 **언어 스펙에 의해 정의**되지 파이썬 구현에 의해 정의되지 않습니다. 이를 증명하기 위해 같은 `.ail` 파일을 실행하는 두 번째 독립 구현이 Go로 작성되어 있어요.
 
 ```bash
-cd reference-impl
-pip install -e ".[anthropic]"
+# 같은 .ail 파일, 두 런타임, 동일한 바이트 출력
+$ python -m ail.cli run examples/fizzbuzz.ail --input 15
+1, 2, Fizz, 4, Buzz, Fizz, 7, 8, Fizz, Buzz, 11, Fizz, 13, 14, FizzBuzz
 
-# mock으로 기본 실행
-ail run examples/hello.ail --input "세계" --mock
-
-# 진화가 실제로 버전을 바꾸고 롤백하는 걸 보기 (결정적, API 불필요):
-python tools/evolve_demo.py
+$ cd go-impl && go build -o ail-go . && ./ail-go run ../reference-impl/examples/fizzbuzz.ail --input 15
+1, 2, Fizz, 4, Buzz, Fizz, 7, 8, Fizz, Buzz, 11, Fizz, 13, 14, FizzBuzz
 ```
 
-실제 Claude 모델에 연결해서 돌려보려면, 프로젝트 루트에 `.env` 파일을 만들거나 환경 변수를 설정하세요:
+Go 런타임은 Phase-0 subset만 커버합니다 — fn, intent, entry, 제어 흐름, 핵심 빌트인, Ollama 어댑터. Provenance/purity/attempt/parallelism은 여전히 Python쪽. 하지만 **"AIL이 Python 라이브러리가 아니라 언어다"**라는 주장은 구체적 증거를 얻습니다.
+
+---
+
+## 실제로 돌려보기
+
+### 빠른 계산 (모델 없이)
 
 ```bash
-# 방법 1: .env 파일 (편함)
+# pure fn만 쓰는 프로그램은 LLM 없이 돕니다
+ail run examples/fizzbuzz.ail --input "20" --mock
+```
+
+### Ollama (로컬, 무료)
+
+```bash
+# 1. ollama 설치 + 모델 받기 (한 번만)
+brew install ollama
+ollama pull llama3.1:latest
+
+# 2. 환경 변수 설정
+export AIL_OLLAMA_MODEL=llama3.1:latest
+
+# 3. 자연어로 질문
+ail ask "1부터 100까지의 합"
+# 5050
+```
+
+### Anthropic (Claude)
+
+```bash
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
-
-# 방법 2: 환경 변수
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# 네 개 예제 전부 실제 모델로 돌리기:
-python tools/run_live.py
-
-# 특정 예제만 돌리기:
-python tools/run_live.py --only classify --input "정말 좋아요!"
+ail ask "5의 팩토리얼을 계산해줘"
 ```
 
-모든 호출은 trace에 기록됩니다. `--trace-dir ./out` 을 붙이면 JSON으로 덤프돼요.
+### Python에서 프로그래밍 가능하게
+
+```python
+from ail import run, ask
+
+# 자연어 인터페이스
+result = ask("count the letter 'a' in 'banana'")
+print(result.value)          # 3
+print(result.ail_source)     # AI가 작성한 AIL
+print(result.confidence)     # calibrated 신뢰도
+
+# 파일 직접 실행
+result, trace = run("program.ail", input="hello")
+print(result.value)
+```
 
 ---
 
 ## 설계 원칙
 
-모든 결정은 이 원칙들을 따릅니다. 선택이 애매할 때는 이곳으로 돌아옵니다.
+모든 결정은 이 원칙들을 따릅니다:
 
-1. **AI가 저자, 사람은 이해관계자.** 구문은 사람이 타이핑하기 편한 것이 아니라 AI가 생성하고 AI가 읽기 편한 것으로 최적화합니다.
-2. **절차보다 의도.** 런타임이 알아낼 수 있는 것이라면 프로그램이 명시하지 않습니다.
-3. **확률적이 기본.** boolean과 정확한 동등성은 예외적 탈출구이지 프리미티브가 아닙니다.
-4. **맥락은 타입이다.** 프로그램의 **의미**는 그것이 실행되는 상황에 따라 달라지며, 그 상황은 선언됩니다.
-5. **프로그램은 살아있다.** 소스 코드는 씨앗이고, 실행 중인 프로그램은 유기체입니다.
-6. **관찰 가능성은 선택이 아니다.** 모든 의도는 결정 추적을 남깁니다. 런타임은 자신이 왜 그렇게 했는지 숨길 수 없습니다.
-7. **결과에 대해서는 사람이 루프 안에 남는다.** 실세계 효과를 일으키는 행동은 "금지되지 않음"이 아니라 **선언된 권한**을 필요로 합니다.
-
-원칙 7이 특히 중요합니다. 이 프로젝트는 AI가 실행한다는 전제로 설계되었지만, 사람을 배제하도록 설계되지는 않았습니다. OS 층은 권한 부여를 명시적으로 일급 시스템콜로 만듭니다.
+1. **AI가 저자, 사람은 이해관계자.** 문법은 사람 타이핑 편의가 아니라 AI 생성·독해에 최적화.
+2. **절차보다 의도.** 런타임이 알아낼 수 있으면 프로그램이 명시하지 않습니다.
+3. **확률적이 기본.** 모든 값이 confidence를 지닙니다.
+4. **맥락은 타입이다.** 프로그램 의미는 실행 상황에 따라 달라지며, 상황은 선언됩니다.
+5. **프로그램은 살아있다.** 소스는 씨앗, 실행 프로그램은 유기체. `evolve`로 자기 수정.
+6. **관찰 가능성은 선택이 아니다.** 모든 의도는 trace + origin tree를 남깁니다.
+7. **결과에 대해서는 사람이 루프 안에 남는다.** `rewrite constraints`처럼 큰 변경은 사람 승인 필수.
 
 ---
 
-## 프로젝트 현황
+## 다음 단계
 
-이 저장소는 현재 **AIL의 일부 기능에 대한 설계 문서와 참조 인터프리터**를 포함합니다. AIRT와 NOOS는 명세로 기술되었으며 아직 구현되지 않았습니다. v0.1의 목표는 아이디어를 충분히 구체화하여:
-
-- AIL 프로그램을 읽고 이해할 수 있게 하고,
-- 오늘 바로 간단한 AIL 프로그램을 언어 모델에 대해 실행해볼 수 있게 하고,
-- 설계에 대해 논쟁하고 이슈를 올릴 수 있게 하는 것입니다.
-
-향후 방향은 [ROADMAP.md](../../ROADMAP.md)를 참고하세요 (영어).
+- 언어 전체를 빨리 훑고 싶다면: [spec/08-reference-card.ai.md](../../spec/08-reference-card.ai.md) (영어, AI-readable)
+- 자기 수정이 어떻게 작동하는지: [evolve-guide.ko.md](evolve-guide.ko.md)
+- stdlib 철학: [stdlib-guide.ko.md](stdlib-guide.ko.md)
+- PyPI 배포하는 방법: [RELEASING.md](../../RELEASING.md) (영어)
 
 ---
 
-## 라이선스
+## 라이선스 / 기여
 
-Apache 2.0. [LICENSE](../../LICENSE) 참고.
-
-## 기여하기
-
-[CONTRIBUTING.md](../../CONTRIBUTING.md) 참고 (영어). 초기 단계 프로젝트는 **코드 기여만큼 설계 비판**이 중요합니다. 핵심 가정을 뒤흔드는 이슈는 PR만큼이나 가치가 있습니다.
-
-한국어로 이슈나 PR을 여셔도 괜찮습니다. 의도만 명확하면 됩니다.
+Apache 2.0. 이슈나 PR은 한국어로도 환영합니다 — 의도만 명확하면 됩니다.
