@@ -52,3 +52,7 @@ calibration.db
 .env.local
 *.key
 *.pem
+
+# Go runtime build artifacts
+go-impl/ail-go
+go-impl/*.test

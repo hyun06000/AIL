@@ -56,6 +56,28 @@ ail run examples/audit_provenance.ail --input "I love this product"
 python tools/evolve_demo.py
 ```
 
+### Running without Python — the Go runtime
+
+AIL ships a second interpreter in Go (`go-impl/`) that compiles to a
+standalone binary and has no external dependencies. Same `.ail` files,
+identical output — the point is that AIL is defined by its
+[spec](spec/08-reference-card.ai.md), not by any one runtime.
+
+```bash
+cd go-impl
+go build -o ail-go .
+
+# Same program, different interpreter:
+./ail-go run ../reference-impl/examples/fizzbuzz.ail --input 15
+./ail-go run MY_PROGRAM.ail --model llama3.1:latest   # intents via Ollama
+go test ./...                                          # Go unit tests
+```
+
+The Go runtime covers a Phase-0 subset (fn, intent via Ollama,
+entry, control flow, core builtins). Provenance, purity checking,
+`attempt`, and parallelism remain Python-side for now — see
+[`go-impl/README.md`](go-impl/README.md) for the coverage matrix.
+
 ---
 
 ## What the language can do today
