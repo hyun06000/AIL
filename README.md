@@ -35,13 +35,53 @@ entry main(text: Text) {
 
 ---
 
+## How a human uses AIL
+
+The intended interaction model has four steps:
+
+1. **Human prompts** in plain language (CLI, app, whatever).
+2. **AI authors AIL** that answers the prompt. (From here, the human
+   doesn't need to read the code.)
+3. **Runtime executes** the AIL.
+4. **Result is served back** to the human.
+
+`ail ask` is the entry point that does all four:
+
+```bash
+export AIL_OLLAMA_MODEL=llama3.1:latest   # or set ANTHROPIC_API_KEY
+ail ask "Count the vowels in 'Hello World'"
+# 3
+
+ail ask "1부터 5까지 곱해줘"
+# 120
+
+ail ask "Compute the sum of 1 to 100" --show-source
+# 5050
+# (stderr) --- AIL ---
+# (stderr) fn sum_range(start: Number, end: Number) -> Number {
+# (stderr)     total = 0
+# (stderr)     for i in range(start, end + 1) { total = total + i }
+# (stderr)     return total
+# (stderr) }
+# (stderr) entry main() { return sum_range(1, 100) }
+# (stderr) --- confidence=1.000 retries=0 author=ollama ---
+```
+
+The human sees only `5050`. The AIL is transparent infrastructure —
+inspectable when wanted (`--show-source`), invisible by default. If the
+author emits invalid AIL (parse or purity error), the loop feeds the
+error back to the model and retries up to three times.
+
 ## Quick start
 
 ```bash
 cd reference-impl
 pip install -e ".[anthropic]"
 
-# No API key needed — pure fn programs run without an LLM:
+# AI-as-author (the natural interface):
+ail ask "factorial of 7"
+
+# Or run a hand-written .ail file the old-fashioned way:
 ail run examples/fizzbuzz.ail --input "20" --mock
 
 # With Anthropic:

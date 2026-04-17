@@ -63,6 +63,14 @@ class OllamaAdapter:
                                            expected_type, examples)
         user = self._build_user_prompt(inputs)
 
+        # JSON mode is the right default for AIL intent calls (we want
+        # structured (value, confidence) back). For the authoring layer,
+        # asking the model to also wrap its output in JSON makes a small
+        # model fight two constraints at once and tends to fail. The
+        # __author_ail__ intent name is the signal to skip JSON mode and
+        # take whatever raw text the model produces.
+        format_json = context.get("_intent_name") != "__author_ail__"
+
         payload = {
             "model": self.model,
             "messages": [
@@ -70,11 +78,12 @@ class OllamaAdapter:
                 {"role": "user", "content": user},
             ],
             "stream": False,
-            "format": "json",     # ask ollama for JSON mode when available
             "options": {
                 "temperature": self.temperature,
             },
         }
+        if format_json:
+            payload["format"] = "json"
         body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             f"{self.host}/api/chat",

@@ -1,12 +1,16 @@
 """Command-line interface for the AIL MVP.
 
 Usage:
-    ail run program.ail [--input TEXT] [--trace] [--mock] [--context-file FILE]
+    ail ask "what I want to know"           # the primary interface
+    ail run program.ail [--input TEXT] [--trace] [--mock]
     ail parse program.ail                   # show AST
     ail version
 
-The CLI is intentionally tiny. Most users will drive the interpreter via
-the Python API.
+`ask` is the AI-native interface: you write a plain-language prompt, an
+LLM writes AIL to answer it, the runtime executes, you get the answer.
+The other subcommands are the programming-language-shaped fallback —
+useful for debugging, learning the syntax, or running a program someone
+else wrote.
 """
 from __future__ import annotations
 import argparse
@@ -14,13 +18,21 @@ import json
 import sys
 from pathlib import Path
 
-from . import run, compile_source, __version__
+from . import run, compile_source, ask, AuthoringError, __version__
 from .runtime import MockAdapter
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ail", description="AIL MVP interpreter")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_ask = sub.add_parser("ask",
+        help="Ask AIL in natural language — the AI writes AIL and runs it for you")
+    p_ask.add_argument("prompt", help="Natural-language request")
+    p_ask.add_argument("--show-source", action="store_true",
+                       help="Also print the AIL source the author produced (stderr)")
+    p_ask.add_argument("--retries", type=int, default=3,
+                       help="Max retries if the author emits invalid AIL (default 3)")
 
     p_run = sub.add_parser("run", help="Run an AIL program")
     p_run.add_argument("file", help="Path to .ail source file")
@@ -39,6 +51,33 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "version":
         print(f"ail-mvp {__version__}")
+        return 0
+
+    if args.cmd == "ask":
+        try:
+            result = ask(args.prompt, max_retries=args.retries)
+        except AuthoringError as e:
+            print(f"AuthoringError: {e}", file=sys.stderr)
+            if e.partial is not None and args.show_source:
+                print("--- last attempt ---", file=sys.stderr)
+                print(e.partial.ail_source, file=sys.stderr)
+                print("--- errors ---", file=sys.stderr)
+                for err in e.partial.errors:
+                    print(f"  {err}", file=sys.stderr)
+            return 1
+        except Exception as e:
+            print(f"Error: {type(e).__name__}: {e}", file=sys.stderr)
+            return 1
+        # The human sees only the answer by default.
+        print(result.value)
+        if args.show_source:
+            print("--- AIL ---", file=sys.stderr)
+            print(result.ail_source, file=sys.stderr)
+            print(
+                f"--- confidence={result.confidence:.3f} "
+                f"retries={result.retries} author={result.author_model} ---",
+                file=sys.stderr,
+            )
         return 0
 
     if args.cmd == "parse":

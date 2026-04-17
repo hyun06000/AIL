@@ -140,4 +140,10 @@ def run(
     return result, executor.trace
 
 
-__all__ = ["run", "compile_source", "MockAdapter", "__version__"]
+from .authoring import ask, AskResult, AuthoringError
+
+__all__ = [
+    "run", "compile_source", "MockAdapter",
+    "ask", "AskResult", "AuthoringError",
+    "__version__",
+]
