@@ -234,6 +234,11 @@ has_intent_origin(value: Any) -> Boolean     // true iff an intent is anywhere i
 has_effect_origin(value: Any) -> Boolean     // true iff a perform is anywhere in the origin tree
 ```
 
+### Calibration (confidence that has been validated)
+```
+calibration_of(intent_name: Text) -> Record  // bucket stats for an intent
+```
+
 Origin kinds: `"literal"`, `"input"`, `"fn"`, `"intent"`, `"builtin"`, `"attempt"`, `"effect"`.
 Intent and effect origins additionally carry `at` (ISO-8601 timestamp).
 Intent origins also carry `model_id`.
@@ -307,9 +312,37 @@ fn pure if else for attempt try match confidence
 - Every value is a pair: (value, confidence) where confidence ∈ [0, 1]
 - Literals have confidence 1.0
 - fn results have confidence 1.0
-- intent results have model-reported confidence
+- intent results have model-reported confidence, **calibrated** if
+  enough past observations exist
 - Deterministic operations: confidence = min(input confidences)
 - Access via: value.confidence (not yet exposed in MVP)
+
+### Calibration loop
+
+When the host program supplies a `metric_fn(intent, value, confidence)
+-> (metric, rollback)`, every intent invocation also feeds the
+calibrator: the (reported confidence, observed metric) pair is stored
+in a bucket indexed by reported confidence (bucket width 0.1 by
+default). Once a bucket accumulates `min_samples` observations (5 by
+default), subsequent invocations whose reported confidence falls into
+that bucket get their confidence REPLACED by the bucket's observed
+mean — an empirically-grounded value.
+
+Persistence: set `AIL_CALIBRATION_PATH` to a JSON path. The calibrator
+loads at runtime init and saves on every observation. Multiple
+processes converging on the same file accumulate a shared calibration
+without coordinating.
+
+Introspection from AIL: `calibration_of("intent_name")` returns a
+record of `{bucket_range: {count, mean_observed, calibrated}}`, so a
+program can say "if my classifier has no calibration data yet, route
+around it" without special-casing.
+
+The low-confidence handler (`on_low_confidence(threshold)` in intent
+declarations) fires against the CALIBRATED value, not the reported
+one. The reported number is what the model claimed; the calibrated
+number is closer to truth, and that's the one users actually want to
+gate on.
 
 ## IMPLICIT PARALLELISM
 

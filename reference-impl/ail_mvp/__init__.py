@@ -89,6 +89,7 @@ def run(
     ask_human=None,
     metric_fn=None,
     approve_review=None,
+    calibrator=None,
 ) -> tuple[ConfidentValue, "Trace"]:
     """Run an AIL program. Returns (result, trace).
 
@@ -96,10 +97,16 @@ def run(
     `input` is a convenience alias for the first entry parameter.
     `inputs` is a dict of all entry parameters.
     `metric_fn(intent_name, value, confidence) -> (metric, rollback)`
-       supplies feedback for evolving intents. When omitted, confidence
-       itself is used as both metric and rollback signal.
+       supplies feedback for evolving intents AND updates the
+       confidence calibrator. The metric signal (in [0, 1]) is
+       interpreted as ground truth for calibration bucketing.
     `approve_review(info) -> bool` handles `require review_by: human`
        gates. Returns True to approve, False to hold.
+    `calibrator` — optional Calibrator instance to share across
+       multiple run() invocations (useful for programs that run a
+       pipeline many times and want calibration to accumulate).
+       When None, the executor builds a default one that honors
+       AIL_CALIBRATION_PATH for persistence.
     """
     text: str
     # Only treat as a path if it looks like one (short, no newlines) to avoid
@@ -135,6 +142,7 @@ def run(
     executor = Executor(
         program, adapter, ask_human=ask_human,
         metric_fn=metric_fn, approve_review=approve_review,
+        calibrator=calibrator,
     )
     result = executor.run_entry(resolved_inputs)
     return result, executor.trace

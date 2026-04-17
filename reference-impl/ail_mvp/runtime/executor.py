@@ -35,6 +35,7 @@ from .provenance import (
     parents_of,
 )
 from .parallel import plan_groups
+from .calibration import Calibrator, default_calibrator
 from ..stdlib import resolve as resolve_import, ImportResolutionError
 
 
@@ -62,7 +63,8 @@ class ConstraintViolation(Exception):
 
 class Executor:
     def __init__(self, program: Program, adapter: ModelAdapter,
-                 ask_human=None, metric_fn=None, approve_review=None):
+                 ask_human=None, metric_fn=None, approve_review=None,
+                 calibrator: Optional[Calibrator] = None):
         """
         Parameters:
           program       — compiled AIL program
@@ -73,9 +75,13 @@ class Executor:
                           confidence) -> (metric, rollback_value). Returning
                           (None, None) suppresses evolution observation for
                           a given call. Used by evolve blocks to get
-                          real-world feedback signals.
+                          real-world feedback signals AND to feed the
+                          calibrator.
           approve_review — callable(review_info) -> bool, for
                           `require review_by: human` gates
+          calibrator    — optional Calibrator. When None, builds a
+                          default one (in-memory, respects
+                          AIL_CALIBRATION_PATH env var for persistence).
         """
         self.program = program
         self.adapter = adapter
@@ -84,6 +90,7 @@ class Executor:
         self.ask_human = ask_human or _default_ask_human
         self.metric_fn = metric_fn   # may be None; evolution then idles
         self.approve_review = approve_review or (lambda _info: False)
+        self.calibrator = calibrator if calibrator is not None else default_calibrator()
 
         # index declarations
         self.intents: dict[str, IntentDecl] = {}
@@ -739,6 +746,8 @@ class Executor:
             return self._provenance_has_intent(args)
         if name == "has_effect_origin":
             return self._provenance_has_effect(args)
+        if name == "calibration_of":
+            return self._calibration_of(args)
 
         # Is it a declared fn (pure deterministic)?
         if name in self.fns:
@@ -1055,6 +1064,33 @@ class Executor:
             origin=builtin_origin("has_effect_origin", parents_of(args)),
         )
 
+    def _calibration_of(self, args: list[ConfidentValue]) -> ConfidentValue:
+        """calibration_of(intent_name: Text) -> Record
+
+        Returns the calibrator's per-bucket statistics for the named
+        intent, shaped like:
+            {
+                "0.8-0.9": {"count": 12, "mean_observed": 0.71,
+                            "calibrated": true},
+                ...
+            }
+        Empty record if the intent has not been observed yet.
+
+        Exposing this to AIL programs lets a program introspect its
+        own belief quality at runtime — "if my classifier has no
+        calibration data, fall back to a cheaper heuristic" is a
+        real pattern this enables.
+        """
+        if not args:
+            return ConfidentValue({}, 1.0,
+                origin=builtin_origin("calibration_of", ()))
+        intent_name = str(args[0].value)
+        stats = self.calibrator.stats_for(intent_name)
+        return ConfidentValue(
+            stats, 1.0,
+            origin=builtin_origin("calibration_of", parents_of(args)),
+        )
+
     def _invoke_intent(
         self, intent: IntentDecl,
         args: list[ConfidentValue],
@@ -1120,56 +1156,106 @@ class Executor:
                               value=_truncate(response.value),
                               confidence=response.confidence)
 
-            # Low-confidence handler
+            # Apply calibration: replace the model-reported confidence
+            # with whatever past observations of this intent say the
+            # true success rate is in this confidence band. If the
+            # calibrator has not seen enough samples yet, the reported
+            # value passes through unchanged.
+            reported_conf = response.confidence
+            applied_conf, was_calibrated = self.calibrator.apply(
+                intent.name, reported_conf,
+            )
+            if was_calibrated:
+                self.trace.record("calibration_applied",
+                                  intent=intent.name,
+                                  reported=reported_conf,
+                                  calibrated=applied_conf)
+
+            # Low-confidence handler runs against the CALIBRATED value —
+            # a user asking "if confidence < 0.6 bail out" wants that to
+            # fire when the *calibrated* belief is below 0.6, which is
+            # the closer-to-truth number.
             if intent.low_confidence_handler is not None:
                 threshold, handler_body = intent.low_confidence_handler
-                if response.confidence < threshold:
+                if applied_conf < threshold:
                     self.trace.record("low_confidence_handler",
                                       threshold=threshold,
-                                      actual=response.confidence)
+                                      actual=applied_conf,
+                                      reported=reported_conf)
                     handler_scope = dict(local)
                     try:
                         self._exec_block(handler_body, handler_scope)
                     except ReturnSignal as r:
-                        # Supervisor still observes the handler's result
+                        # Observation still uses the REPORTED confidence
+                        # for calibration bucket assignment — we want to
+                        # learn from what the model claimed, not from
+                        # what we already post-processed it to.
                         self._observe_evolution(intent.name, r.value.value,
-                                                r.value.confidence)
+                                                r.value.confidence,
+                                                reported_confidence=reported_conf)
                         return r.value
 
             result = ConfidentValue(
                 response.value,
-                response.confidence,
+                applied_conf,
                 origin=intent_origin(intent.name, parents_of(args),
                                      model_id=response.model_id),
             )
 
-            # Feed the supervisor (no-op if intent has no evolve block)
-            self._observe_evolution(intent.name, result.value, result.confidence)
+            # Feed supervisor AND calibrator. The reported_confidence
+            # parameter preserves the pre-calibration number so buckets
+            # remain indexed by what the model claimed (calibration's
+            # learning signal would collapse otherwise).
+            self._observe_evolution(intent.name, result.value,
+                                    result.confidence,
+                                    reported_confidence=reported_conf)
 
             return result
         finally:
             self.trace.exit()
 
     def _observe_evolution(self, intent_name: str,
-                           value: Any, confidence: float) -> None:
-        """Feed the supervisor a metric sample and rollback signal.
+                           value: Any, confidence: float,
+                           reported_confidence: Optional[float] = None) -> None:
+        """Feed the supervisor a metric sample AND the calibrator.
 
-        The metric_fn callback is the primary source of evolution signals;
-        it receives (intent_name, value, confidence) and returns
-        (metric, rollback) where both are Optional[float]. If no
-        metric_fn is registered, a sensible default is used: the
-        intent's own confidence serves as both the metric (higher is
-        better) and the rollback value (lower is worse).
+        `confidence` is the post-calibration value (what the program
+        saw). `reported_confidence` is the pre-calibration model
+        output; when None it defaults to `confidence`. The calibrator
+        needs the REPORTED number to bucket observations correctly —
+        learning a mapping from "what the model claimed" to "what
+        actually happened."
+
+        metric_fn is the primary source of the "what actually happened"
+        signal. Its metric is [0, 1]-ish (we clamp inside the
+        calibrator). If metric_fn is None, no calibration update
+        occurs — we have no ground-truth signal to learn from, and
+        stuffing `confidence` back in as its own metric would teach the
+        calibrator nothing useful.
         """
+        raw_reported = (reported_confidence
+                        if reported_confidence is not None else confidence)
         sup = self._get_supervisor(intent_name)
-        if sup is None:
-            return
+
         if self.metric_fn is not None:
             metric, rollback = self.metric_fn(intent_name, value, confidence)
-        else:
-            # Default heuristic: use confidence as the feedback signal.
-            metric = confidence
-            rollback = confidence
+            if metric is not None:
+                self.calibrator.observe(intent_name, raw_reported, metric)
+            if sup is not None:
+                events = sup.observe(metric_value=metric, rollback_value=rollback)
+                for ev in events:
+                    payload = dict(ev.payload)
+                    payload.setdefault("intent", intent_name)
+                    self.trace.record(f"evolution_{ev.kind}", **payload)
+            return
+
+        # No metric_fn: evolution uses confidence as a self-signal for
+        # backward compatibility; calibration stays silent (no
+        # ground truth to learn from).
+        if sup is None:
+            return
+        metric = confidence
+        rollback = confidence
         events = sup.observe(metric_value=metric, rollback_value=rollback)
         for ev in events:
             # Avoid collision if the payload already carries 'intent'
