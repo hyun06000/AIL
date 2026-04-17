@@ -32,7 +32,7 @@ from .ast import (
     Assignment, ReturnStmt, PerformStmt, BranchStmt, BranchArm,
     WithContextStmt, ExprStmt, IfStmt, ForStmt,
     Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
-    PerformExpr, MembershipOp,
+    PerformExpr, MembershipOp, AttemptExpr,
     Expr, Statement,
 )
 
@@ -188,6 +188,13 @@ def _check_expr(expr: Expr, *, fn_name: str, pure_fns: set[str],
                     all_fns=all_fns, intents=intents)
         _check_expr(expr.collection, fn_name=fn_name, pure_fns=pure_fns,
                     all_fns=all_fns, intents=intents)
+    elif isinstance(expr, AttemptExpr):
+        # An attempt block is pure iff every try expression inside it is
+        # pure. This means a `pure fn` cannot use attempt as a sneaky path
+        # to an intent call.
+        for t in expr.tries:
+            _check_expr(t, fn_name=fn_name, pure_fns=pure_fns,
+                        all_fns=all_fns, intents=intents)
     # Literals and Identifiers carry no forbidden operations.
 
 

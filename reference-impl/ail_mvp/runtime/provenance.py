@@ -43,6 +43,7 @@ INPUT = "input"
 FN = "fn"
 INTENT = "intent"
 BUILTIN = "builtin"
+ATTEMPT = "attempt"
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,16 @@ def intent_origin(name: str, parents: tuple,
 
 def builtin_origin(name: str, parents: tuple) -> Origin:
     return Origin(kind=BUILTIN, name=name, parents=parents)
+
+
+def attempt_origin(selected_index: int, selected_parent: "Origin") -> Origin:
+    """Origin for the result of an attempt block.
+
+    `name` is the 0-based index of the try that won. The single parent is
+    the origin of that try's result, preserving the upstream lineage.
+    """
+    return Origin(kind=ATTEMPT, name=str(selected_index),
+                  parents=(selected_parent,))
 
 
 def parents_of(values) -> tuple:

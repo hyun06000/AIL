@@ -73,9 +73,26 @@ class MembershipOp:
     negated: bool = False     # `x not in [...]`
 
 
+@dataclass
+class AttemptExpr:
+    """`attempt { try EXPR; try EXPR; ... }` — confidence-priority cascade.
+
+    Evaluates each `try` expression in order. The first result that
+    qualifies (not an error(), confidence >= threshold) is returned. If
+    none qualify, the last try's result is returned. This is AIL's
+    native idiom for "prefer the cheap deterministic strategy; fall back
+    to the expensive LLM call only when the earlier strategies don't
+    produce a confident answer."
+
+    threshold: minimum confidence for a try to qualify (default 0.7).
+    """
+    tries: list["Expr"]
+    threshold: float = 0.7
+
+
 Expr = (
     Literal | Identifier | FieldAccess | Call | BinaryOp | UnaryOp
-    | ListLiteral | PerformExpr | MembershipOp
+    | ListLiteral | PerformExpr | MembershipOp | AttemptExpr
 )
 
 

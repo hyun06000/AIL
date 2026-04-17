@@ -1,0 +1,53 @@
+// cascade_extract.ail — three-tier extraction with confidence fallback.
+//
+// Scenario: extract a number from arbitrary text. The natural strategy:
+//   1. Try the cheap path first — pure numeric parse.
+//   2. If that fails, try a slightly smarter pure scan of tokens.
+//   3. Only if both fail, fall back to asking an LLM.
+//
+// Cost discipline: cheap strategies run first. We only pay for an LLM
+// call when the deterministic paths cannot produce a confident answer.
+// This is what `attempt` buys — the cascade is a single expression,
+// not a pyramid of if/else.
+//
+// Run with mock:
+//   ail run examples/cascade_extract.ail --input "42" --mock
+//   ail run examples/cascade_extract.ail --input "order #17" --mock
+//   ail run examples/cascade_extract.ail --input "I need several things" --mock
+
+import classify from "stdlib/language"
+
+// Strategy 1: direct parse. Returns ok(n) or error(...).
+pure fn direct_parse(text: Text) -> Number {
+    return to_number(trim(text))
+}
+
+// Strategy 2: scan each whitespace-separated token for a parseable number.
+// Returns the first parseable token's value, or error() if none found.
+pure fn scan_tokens(text: Text) -> Number {
+    tokens = split(text, " ")
+    for t in tokens {
+        parsed = to_number(t)
+        if is_ok(parsed) {
+            return parsed
+        }
+    }
+    return error("no numeric token")
+}
+
+// Strategy 3: LLM extraction. Expensive — only reached if both pure
+// strategies exhaust without a confident answer.
+intent infer_number(text: Text) -> Text {
+    goal: the single number the user refers to as a numeric literal
+    constraints {
+        output_is_a_number_or_the_word_unknown
+    }
+}
+
+entry main(text: Text) {
+    return attempt {
+        try direct_parse(text)
+        try scan_tokens(text)
+        try infer_number(text)
+    }
+}

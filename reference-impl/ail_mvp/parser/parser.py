@@ -758,6 +758,8 @@ class Parser:
             return e
         if self.match(Tok.MINUS):
             return UnaryOp(op="-", operand=self.parse_primary())
+        if t.kind == Tok.IDENT and t.value == "attempt":
+            return self.parse_attempt()
         if t.kind == Tok.IDENT:
             self.advance()
             if t.value == "true":
@@ -766,6 +768,25 @@ class Parser:
                 return Literal(value=False)
             return Identifier(name=t.value)
         raise ParseError(f"unexpected token {t!r}")
+
+    def parse_attempt(self):
+        """Parse `attempt { try EXPR; try EXPR; ... }`.
+
+        Each `try` introduces a single candidate expression. Evaluation is
+        left-to-right at runtime; first qualifying result wins. Threshold
+        configuration is reserved for a future syntax extension.
+        """
+        from .ast import AttemptExpr
+        self.expect_keyword("attempt")
+        self.expect(Tok.LBRACE)
+        tries: list[Expr] = []
+        while not self.check(Tok.RBRACE):
+            self.expect_keyword("try")
+            tries.append(self.parse_expr())
+        self.expect(Tok.RBRACE)
+        if not tries:
+            raise ParseError("attempt block must contain at least one `try`")
+        return AttemptExpr(tries=tries)
 
 
 def parse(source: str) -> Program:

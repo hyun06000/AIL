@@ -55,6 +55,7 @@ KEYWORDS = {
     "and", "or", "not", "in", "such", "that",
     "return", "true", "false", "threshold",
     "fn", "pure", "if", "else", "for",
+    "attempt", "try",
 }
 
 

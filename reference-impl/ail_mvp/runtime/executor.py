@@ -21,7 +21,7 @@ from ..parser.ast import (
     Assignment, ReturnStmt, PerformStmt, BranchStmt, WithContextStmt,
     ExprStmt, IfStmt, ForStmt,
     Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
-    PerformExpr, MembershipOp,
+    PerformExpr, MembershipOp, AttemptExpr,
     Expr, Statement,
 )
 from .context import ContextStack, ContextResolver, ResolvedContext
@@ -30,7 +30,8 @@ from .model import ModelAdapter, ModelResponse
 from .evolution import EvolutionSupervisor
 from .provenance import (
     Origin, LITERAL_ORIGIN,
-    input_origin, fn_origin, intent_origin, builtin_origin, parents_of,
+    input_origin, fn_origin, intent_origin, builtin_origin, attempt_origin,
+    parents_of,
 )
 from ..stdlib import resolve as resolve_import, ImportResolutionError
 
@@ -448,7 +449,52 @@ class Executor:
                 PerformStmt(effect=expr.effect, args=expr.args, kwargs=expr.kwargs),
                 scope,
             )
+        if isinstance(expr, AttemptExpr):
+            return self._eval_attempt(expr, scope)
         raise RuntimeError(f"unknown expr type: {type(expr).__name__}")
+
+    def _eval_attempt(self, expr: AttemptExpr,
+                      scope: dict[str, ConfidentValue]) -> ConfidentValue:
+        """Evaluate an attempt block: confidence-priority cascade.
+
+        Evaluate each try in order. A try qualifies when:
+          - its value is not a Result-typed error, AND
+          - its confidence is >= the block's threshold.
+        First qualifying try wins. If none qualify, return the last try's
+        result as-is (low confidence propagates to the caller). The final
+        value is wrapped with an attempt_origin so the selected index and
+        upstream lineage are queryable at runtime.
+        """
+        self.trace.record("attempt_enter", threshold=expr.threshold,
+                          tries=len(expr.tries))
+        last: ConfidentValue | None = None
+        for idx, try_expr in enumerate(expr.tries):
+            candidate = self._eval_expr(try_expr, scope)
+            last = candidate
+            if _is_result_error(candidate.value):
+                self.trace.record("attempt_try_skipped",
+                                  index=idx, reason="result_error")
+                continue
+            if candidate.confidence < expr.threshold:
+                self.trace.record("attempt_try_skipped",
+                                  index=idx, reason="low_confidence",
+                                  confidence=candidate.confidence)
+                continue
+            self.trace.record("attempt_selected", index=idx,
+                              confidence=candidate.confidence)
+            return ConfidentValue(
+                candidate.value, candidate.confidence,
+                origin=attempt_origin(idx, candidate.origin),
+            )
+        # Fall-through: no try qualified.
+        self.trace.record("attempt_exhausted",
+                          fallback_index=len(expr.tries) - 1)
+        if last is None:   # unreachable given parser guarantees >=1 try
+            return ConfidentValue(None, 0.0)
+        return ConfidentValue(
+            last.value, last.confidence,
+            origin=attempt_origin(len(expr.tries) - 1, last.origin),
+        )
 
     def _eval_call(self, call: Call, scope: dict[str, ConfidentValue]) -> ConfidentValue:
         # Resolve callee name
@@ -950,6 +996,13 @@ def _truncate(v: Any, n: int = 200) -> Any:
     if len(s) <= n:
         return v
     return s[:n] + "…"
+
+
+def _is_result_error(value: Any) -> bool:
+    """True if `value` is a Result wrapping an error (i.e. error(...))."""
+    return (isinstance(value, dict)
+            and value.get("_result") is True
+            and value.get("ok") is False)
 
 
 def _dominant_origin(*values) -> Origin:

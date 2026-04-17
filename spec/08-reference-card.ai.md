@@ -146,6 +146,7 @@ branch EXPR { [COND] => STMT ... }             // probabilistic branch
 with context NAME: { BODY }                    // context activation
 perform EFFECT_NAME(ARGS)                      // side effect
 VARIABLE = perform EFFECT_NAME(ARGS)           // effect as expression
+VARIABLE = attempt { try EXPR; try EXPR; ... } // confidence-priority cascade
 ```
 
 ## EXPRESSIONS
@@ -288,7 +289,7 @@ prefer require when calibrate_on rollback_on
 metric history keep_last under matching
 and or not in such that
 return true false threshold
-fn pure if else for
+fn pure if else for attempt try
 ```
 
 ## COMMENTS
@@ -306,6 +307,30 @@ fn pure if else for
 - intent results have model-reported confidence
 - Deterministic operations: confidence = min(input confidences)
 - Access via: value.confidence (not yet exposed in MVP)
+
+## ATTEMPT — CONFIDENCE-PRIORITY CASCADE
+
+```ail
+result = attempt {
+    try fast_method(x)       // try first; if qualifies, stop
+    try slower_method(x)     // otherwise this
+    try expensive_fallback(x) // last resort
+}
+```
+
+A try *qualifies* when its result is NOT a Result-typed `error(...)`
+AND its confidence is at least 0.7 (the default threshold). The first
+qualifying try's value is returned; if none qualify, the last try's
+value is returned (with its low confidence preserved, so the caller
+can detect fallthrough).
+
+The returned value carries an `attempt` origin node whose `name` field
+is the index (as a string) of the try that was selected. Upstream
+lineage is preserved through the origin's `parents` field.
+
+Unique to AIL: confidence-aware fallback cascade is first-class control
+flow. `branch` expresses explicit probabilistic dispatch; `attempt`
+expresses "try cheap first, fall back to expensive if unconfident."
 
 ## PROVENANCE MODEL
 
