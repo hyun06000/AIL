@@ -204,3 +204,29 @@ def test_comments_are_ignored():
     prog = compile_source(src)
     assert prog.intent_by_name("i") is not None
     assert prog.entry() is not None
+
+
+def test_hash_comments_are_accepted_as_alias():
+    # AI authors often reach for `#` out of Python reflex, especially
+    # when self-correcting. The lexer accepts `#` as an alias for `//`
+    # (spec keeps `//` canonical) — a pragmatic tolerance that removes
+    # a whole class of parse failures without expanding the language.
+    src = """
+    # top-level hash comment
+    fn add(a: Number, b: Number) -> Number {
+        # body comment
+        return a + b  # trailing comment
+    }
+    entry main(x: Text) { return add(3, 4) }
+    """
+    prog = compile_source(src)
+    assert prog.entry() is not None
+
+
+def test_hash_inside_string_literal_is_not_a_comment():
+    # Guardrail: `#` inside a string must be preserved verbatim. If the
+    # comment skip mis-fires inside a string, numeric CSS-style values
+    # and hashtags would get eaten.
+    src = 'entry main(x: Text) { return "#tag is fine" }'
+    prog = compile_source(src)
+    assert prog.entry() is not None

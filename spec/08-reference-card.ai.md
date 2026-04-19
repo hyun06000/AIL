@@ -304,6 +304,7 @@ fn pure if else for attempt try match confidence
 
 ```ail
 // line comment
+# also line comment (alias, accepted for Python-trained authors)
 /* block comment */
 ```
 

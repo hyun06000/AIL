@@ -109,8 +109,13 @@ class Lexer:
             if ch in " \t\r\n":
                 self.advance()
                 continue
-            # Comments: // to end of line, /* */ block
-            if ch == "/" and self.peek(1) == "/":
+            # Comments: // or # to end of line, /* */ block.
+            # `#` is accepted as an alias for `//` because AI authors
+            # trained heavily on Python reach for it reflexively — every
+            # failure to tolerate that is a loss-of-confidence moment
+            # when the author is self-correcting a small syntax mistake.
+            # The spec still documents `//` as canonical.
+            if (ch == "/" and self.peek(1) == "/") or ch == "#":
                 while self.pos < len(self.src) and self.peek() != "\n":
                     self.advance()
                 continue

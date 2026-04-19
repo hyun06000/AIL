@@ -7,7 +7,7 @@ import (
 )
 
 // TokKind enumerates the token types the AIL lexer produces. Keep this in
-// sync with the Python reference implementation (reference-impl/ail_mvp/
+// sync with the Python reference implementation (reference-impl/ail/
 // parser/lexer.py) — the tokens are the language, not an implementation
 // detail.
 type TokKind int
@@ -152,8 +152,10 @@ func (l *Lexer) advance() byte {
 }
 
 // Tokenize consumes the entire source, returning the token stream terminated
-// by TokEOF. Whitespace, // line comments, and /* block comments */ are
-// skipped. Braces delimit blocks; colons introduce fields.
+// by TokEOF. Whitespace, // or # line comments, and /* block comments */
+// are skipped. Braces delimit blocks; colons introduce fields.
+// `#` is accepted as an alias for `//` — Python-trained AI authors
+// reach for it reflexively; mirrors the tolerance in the Python lexer.
 func (l *Lexer) Tokenize() ([]Token, error) {
 	var out []Token
 	for l.pos < len(l.src) {
@@ -163,8 +165,8 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 			l.advance()
 			continue
 		}
-		// // line comment
-		if ch == '/' && l.peekAt(1) == '/' {
+		// // or # line comment
+		if (ch == '/' && l.peekAt(1) == '/') || ch == '#' {
 			for l.pos < len(l.src) && l.peek() != '\n' {
 				l.advance()
 			}
