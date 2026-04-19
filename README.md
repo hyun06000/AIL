@@ -116,6 +116,16 @@ pip install -e ".[anthropic,dev]"
 pytest tests/
 ```
 
+> **Heads up:** make sure the install is editable. If you previously
+> did `pip install ailang` (non-editable) in this environment, local
+> edits to `ail/` will silently NOT flow into scripts you run from
+> subdirectories (`python tools/bench_authoring.py`, etc.) — those
+> invocations put the script's own dir on `sys.path[0]` and Python
+> then resolves `import ail` from site-packages instead of the
+> working copy. `pip install -e .` replaces the non-editable install
+> cleanly; verify with `python -c "import ail; print(ail.__file__)"`
+> pointing at your checkout.
+
 ### Running without Python — the Go runtime
 
 AIL ships a second interpreter in Go (`go-impl/`) that compiles to a
