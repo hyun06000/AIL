@@ -2,9 +2,11 @@
 
 > AI가 코드의 주 저자라는 전제 아래 처음부터 다시 설계한 프로그래밍 언어입니다.
 
-**현재 버전:** v1.8 · PyPI에 `ail-interpreter`로 배포 · 참조 구현 2개 (Python 전체 / Go 서브셋)
+**현재 버전:** v1.8.2 · PyPI에 `ail-interpreter`로 배포 · 참조 구현 2개 (Python 전체 / Go 서브셋)
 
 이 문서는 [루트 README](../../README.md)의 한국어 판본입니다. 영어 독해가 불편하시다면 이 문서부터, 그리고 `docs/ko/` 하위 문서로 따라오실 수 있습니다.
+
+❓ **"Python 써도 되잖아?"** — [`why-ail.ko.md`](why-ail.ko.md) 가 AIL 이 Python+LLM SDK 조합 대비 제공하는 6 가지 차별점을 실행 가능한 증명과 함께 설명합니다.
 
 ---
 
