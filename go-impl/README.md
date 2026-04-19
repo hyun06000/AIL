@@ -86,11 +86,36 @@ go test ./...
 
 ## Cross-runtime consistency test
 
+Two layers of consistency checks now exist:
+
+**1. Single-embedded fizzbuzz, in-Go.**
 `eval_test.go::TestFizzBuzzMatchesPython` embeds the fizzbuzz source and
 asserts the output matches the Python runtime's output character for
-character. This test is the concrete guarantee that both runtimes
-interpret the spec the same way — future changes to either
-implementation have to preserve it.
+character.
+
+**2. Full conformance suite, in-Python.** A directory of `.ail` cases
+each with its own `.input` and `.expected` files lives at
+`reference-impl/tests/conformance/cases/`. The pytest driver at
+`reference-impl/tests/conformance/test_conformance.py` runs each case
+through BOTH runtimes and asserts byte-identical stdout. CI gates
+every PR on this.
+
+Current conformance coverage (as of v1.8.2):
+
+| Case | Topic | Python | Go |
+|---|---|---|---|
+| 001_fizzbuzz | `if/else`, modulo, `for in range`, `join` | ✅ | ✅ |
+| 002_vowels | string `split`/`lower`, `in` membership | ✅ | ✅ |
+| 003_factorial | pure fn recursion, Number formatting | ✅ | ✅ |
+| 004_insertion_sort | list manipulation, append, `to_text` | ✅ | ✅ |
+| 005_korean_concat | Unicode strings, `trim` | ✅ | ✅ |
+| 006_result_handling | `ok`/`error`/`is_ok`/`unwrap` | ✅ | ⏭ not yet in go-impl |
+| 007_nested_lists | nested `for` over `[[…]]` | ✅ | ✅ |
+| 008_empty_list | empty-list edge in length/for | ✅ | ✅ |
+
+Adding a case is zero-code: drop `NNN_name.ail`, `NNN_name.input`,
+`NNN_name.expected` into `cases/`. Mark known Go gaps with a
+`NNN_name.skip-go` file containing the skip reason.
 
 ## Why this matters
 

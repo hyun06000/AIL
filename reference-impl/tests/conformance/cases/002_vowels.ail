@@ -1,0 +1,17 @@
+// Conformance: count vowels in input string. Pure fn only, pure text.
+
+pure fn is_vowel(c: Text) -> Boolean {
+    return c in ["a", "e", "i", "o", "u"]
+}
+
+pure fn count_vowels(s: Text) -> Number {
+    total = 0
+    for c in split(lower(s), "") {
+        if is_vowel(c) { total = total + 1 }
+    }
+    return total
+}
+
+entry main(text: Text) {
+    return count_vowels(text)
+}

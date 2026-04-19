@@ -1,0 +1,22 @@
+// Conformance: edge case — empty list in aggregations and control flow.
+
+pure fn safe_sum(xs: Number) -> Number {
+    total = 0
+    for n in xs {
+        total = total + n
+    }
+    return total
+}
+
+pure fn safe_avg(xs: Number) -> Text {
+    if length(xs) == 0 {
+        return "empty"
+    }
+    return to_text(safe_sum(xs) / length(xs))
+}
+
+entry main(x: Text) {
+    nothing = []
+    something = [4, 8, 12]
+    return join([safe_avg(nothing), ";", safe_avg(something)], "")
+}

@@ -901,7 +901,17 @@ class Executor:
                     {"_result": True, "ok": False, "error": f"cannot convert to number: {raw[0]}"},
                     conf)
         if name == "to_text":
-            return ConfidentValue(str(raw[0]) if raw else "", conf)
+            if not raw:
+                return ConfidentValue("", conf)
+            v = raw[0]
+            # Number in AIL is backed by float in Python, so `to_text(5)`
+            # of a whole number naturally prints as "5.0". That makes
+            # output ugly and — more importantly — breaks conformance
+            # with the Go runtime, which prints integer-valued numbers
+            # without the trailing `.0`. Match Go's shape here.
+            if isinstance(v, float) and v.is_integer():
+                return ConfidentValue(str(int(v)), conf)
+            return ConfidentValue(str(v), conf)
         if name == "to_boolean":
             return ConfidentValue(bool(raw[0]) if raw else False, conf)
 

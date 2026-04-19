@@ -1,0 +1,9 @@
+// Conformance: Korean string handling. Tests Unicode length, split, join.
+
+pure fn greet(name: Text) -> Text {
+    return join(["안녕하세요, ", name, "님! 오늘도 좋은 하루 보내세요."], "")
+}
+
+entry main(name: Text) {
+    return greet(trim(name))
+}

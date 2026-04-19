@@ -1,0 +1,45 @@
+// Conformance: insertion sort of comma-separated integers, ascending.
+
+pure fn parse_ints(raw: Text) -> Text {
+    parts = split(raw, ",")
+    result = []
+    for p in parts {
+        n = to_number(trim(p))
+        result = append(result, n)
+    }
+    return result
+}
+
+pure fn sort_asc(nums: Number) -> Text {
+    sorted = []
+    for n in nums {
+        inserted = false
+        new_sorted = []
+        for s in sorted {
+            if inserted == false {
+                if n <= s {
+                    new_sorted = append(new_sorted, n)
+                    inserted = true
+                }
+            }
+            new_sorted = append(new_sorted, s)
+        }
+        if inserted == false {
+            new_sorted = append(new_sorted, n)
+        }
+        sorted = new_sorted
+    }
+    return sorted
+}
+
+pure fn render(nums: Number) -> Text {
+    parts = []
+    for n in nums {
+        parts = append(parts, to_text(n))
+    }
+    return join(parts, ",")
+}
+
+entry main(raw: Text) {
+    return render(sort_asc(parse_ints(raw)))
+}

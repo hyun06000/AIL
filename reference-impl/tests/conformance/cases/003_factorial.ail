@@ -1,0 +1,10 @@
+// Conformance: recursive factorial. Tests pure fn recursion.
+
+pure fn factorial(n: Number) -> Number {
+    if n <= 1 { return 1 }
+    return n * factorial(n - 1)
+}
+
+entry main(n_text: Text) {
+    return factorial(to_number(n_text))
+}

@@ -1,0 +1,20 @@
+// Conformance: fizzbuzz up to N. Pure fn only.
+
+pure fn label(n: Number) -> Text {
+    if n % 15 == 0 { return "FizzBuzz" }
+    if n % 3 == 0 { return "Fizz" }
+    if n % 5 == 0 { return "Buzz" }
+    return to_text(n)
+}
+
+pure fn run_fizzbuzz(up_to: Number) -> Text {
+    parts = []
+    for i in range(1, up_to + 1) {
+        parts = append(parts, label(i))
+    }
+    return join(parts, ", ")
+}
+
+entry main(n_text: Text) {
+    return run_fizzbuzz(to_number(n_text))
+}

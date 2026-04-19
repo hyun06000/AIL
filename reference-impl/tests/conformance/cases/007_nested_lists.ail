@@ -1,0 +1,23 @@
+// Conformance: nested list iteration — table of pairs → row-wise sum.
+
+pure fn row_sum(row: Number) -> Number {
+    total = 0
+    for n in row {
+        total = total + n
+    }
+    return total
+}
+
+pure fn sum_rows(table: Number) -> Text {
+    parts = []
+    for row in table {
+        parts = append(parts, to_text(row_sum(row)))
+    }
+    return join(parts, ";")
+}
+
+entry main(x: Text) {
+    // Hard-coded 3×3 matrix because we haven't written a table parser.
+    table = [[1, 2, 3], [10, 20, 30], [100, 200, 300]]
+    return sum_rows(table)
+}

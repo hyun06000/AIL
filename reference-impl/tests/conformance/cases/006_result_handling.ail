@@ -1,0 +1,29 @@
+// Conformance: Result type — ok/error/is_ok/is_error/unwrap/unwrap_or.
+
+pure fn parse_positive(raw: Text) -> Text {
+    n = to_number(trim(raw))
+    if is_error(n) {
+        return error("not a number")
+    }
+    if n < 0 {
+        return error("negative")
+    }
+    return ok(n)
+}
+
+pure fn process(raw: Text) -> Text {
+    results = []
+    for part in split(raw, ",") {
+        r = parse_positive(part)
+        if is_ok(r) {
+            results = append(results, to_text(unwrap(r)))
+        } else {
+            results = append(results, "skipped")
+        }
+    }
+    return join(results, "|")
+}
+
+entry main(raw: Text) {
+    return process(raw)
+}

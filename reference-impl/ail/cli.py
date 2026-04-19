@@ -41,6 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--trace-json", action="store_true", help="Print trace as JSON")
     p_run.add_argument("--mock", action="store_true",
                        help="Use mock adapter (no model calls)")
+    p_run.add_argument("--raw", action="store_true",
+                       help="Print only the return value on a single line "
+                            "(no header, no confidence, no trace). "
+                            "Matches the Go runtime's default output shape, "
+                            "enabling shell-level conformance comparison.")
 
     p_parse = sub.add_parser("parse", help="Parse and print AST")
     p_parse.add_argument("file", help="Path to .ail source file")
@@ -98,6 +103,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Error: {type(e).__name__}: {e}", file=sys.stderr)
             return 1
 
+        if args.raw:
+            # Value only — matches go-impl's default output shape so
+            # the two runtimes can be compared byte-for-byte. Python
+            # floats print as `5040.0`; Go prints whole-valued numbers
+            # without the trailing `.0`. Normalize Python output to
+            # match so conformance cases agree across runtimes.
+            print(_format_value_raw(result.value))
+            return 0
+
         print("=" * 60)
         print("RESULT")
         print("=" * 60)
@@ -120,6 +134,22 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     return 0
+
+
+def _format_value_raw(value) -> str:
+    """Render a ConfidentValue.value for `ail run --raw` in a shape
+    that matches go-impl's default printer.
+
+    - Floats that happen to be whole numbers (5040.0) drop the `.0`
+      and print as integers. This reconciles the two runtimes on the
+      common case without changing runtime semantics — Number in AIL
+      is still float-backed in Python.
+    - Everything else falls through to the default str() so lists,
+      dicts, booleans, and non-integer floats are unchanged.
+    """
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
 
 
 def _declaration_label(d) -> str:
