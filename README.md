@@ -171,12 +171,19 @@ entry, control flow, core builtins). Provenance, purity checking,
 
 ---
 
-## Examples (14 programs)
+## Examples (15 programs)
+
+**If you only read one, read `expense_analyzer.ail`** — a month of transactions in, a report with numeric facts (pure fn) and natural-language saving advice (intent) out. Shows what AIL is *for* in one screen:
+
+```bash
+ail run examples/expense_analyzer.ail --input "$(cat examples/sample_expenses.txt)" --mock
+```
 
 Highlights — one per language feature added since v1.0:
 
 | Program | What it shows | Since |
 |---|---|---|
+| `expense_analyzer.ail` | **The canonical example.** fn computes the numbers, intent writes saving advice in natural language, provenance labels the two apart. | v1.8.2 |
 | `fizzbuzz.ail` | **Pure fn — no LLM at all.** Proof AIL is a real programming language. | v1.0 |
 | `review_analyzer.ail` | Hybrid pipeline: fn parses data, intent judges sentiment | v1.0 |
 | `evolve_retune.ail` | Self-modifying intent with version chain + rollback | v1.0 |

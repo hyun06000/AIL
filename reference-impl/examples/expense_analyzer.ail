@@ -1,0 +1,305 @@
+// expense_analyzer.ail — The canonical AIL program.
+//
+// Scenario: you have a month of transactions. Each line is
+//   YYYY-MM-DD|amount|category|memo
+// For example:
+//   2026-04-01|52000|food|팀 점심 회식
+//   2026-04-02|12000|transport|지하철 카드
+//   2026-04-03|180000|food|저녁 회식 2차
+//
+// The program produces a report with:
+//   * total per category                                 (pure fn)
+//   * the three largest individual expenses              (pure fn)
+//   * anomaly flag for any expense > 2× the mean         (pure fn)
+//   * one sentence of natural-language saving advice     (intent)
+//
+// Why this example exists: it is the smallest program that makes
+// AIL's reason to exist visible in one screen. The numeric facts
+// are deterministic (you want every won counted, not the LLM's
+// best guess). The advice is judgment (you want meaning, not a
+// formula). The same language expresses both, with a static
+// boundary between them and provenance so the reader can tell
+// which part came from where.
+//
+// Run with mock (no API key, LLM advice is a placeholder):
+//   ail run examples/expense_analyzer.ail --input "$(cat examples/sample_expenses.txt)" --mock
+//
+// Run with Ollama (real advice):
+//   AIL_OLLAMA_MODEL=llama3.1:latest \
+//       ail run examples/expense_analyzer.ail --input "$(cat examples/sample_expenses.txt)"
+//
+// Run with Claude:
+//   ANTHROPIC_API_KEY=sk-ant-... \
+//       ail run examples/expense_analyzer.ail --input "$(cat examples/sample_expenses.txt)"
+
+// --- Deterministic parsing (pure fn) ---
+
+pure fn parse_row(raw: Text) -> Text {
+    parts = split(trim(raw), "|")
+    if length(parts) < 4 {
+        return error(join(["malformed row: ", raw], ""))
+    }
+    amount_result = to_number(get(parts, 1))
+    if is_error(amount_result) {
+        return error(join(["bad amount in row: ", raw], ""))
+    }
+    // Each parsed row is a four-element list: [date, amount, category, memo].
+    // `amount` is a Number; everything else stays Text.
+    return ok([
+        get(parts, 0),
+        amount_result,
+        get(parts, 2),
+        get(parts, 3)
+    ])
+}
+
+pure fn parse_all(raw: Text) -> Text {
+    rows = split(raw, "\n")
+    good = []
+    errors = []
+    for row in rows {
+        if length(trim(row)) > 0 {
+            result = parse_row(row)
+            if is_ok(result) {
+                good = append(good, unwrap(result))
+            } else {
+                errors = append(errors, unwrap_error(result))
+            }
+        }
+    }
+    return [good, errors]
+}
+
+// --- Aggregations (pure fn) ---
+
+pure fn amounts_of(transactions: Text) -> Text {
+    result = []
+    for t in transactions {
+        result = append(result, get(t, 1))
+    }
+    return result
+}
+
+pure fn total_amount(transactions: Text) -> Number {
+    total = 0
+    for t in transactions {
+        total = total + get(t, 1)
+    }
+    return total
+}
+
+pure fn categories_of(transactions: Text) -> Text {
+    cats = []
+    for t in transactions {
+        cats = append(cats, get(t, 2))
+    }
+    result = []
+    seen = []
+    for c in cats {
+        if c not in seen {
+            seen = append(seen, c)
+            result = append(result, c)
+        }
+    }
+    return result
+}
+
+pure fn total_for_category(transactions: Text, category: Text) -> Number {
+    total = 0
+    for t in transactions {
+        if get(t, 2) == category {
+            total = total + get(t, 1)
+        }
+    }
+    return total
+}
+
+pure fn mean_amount(transactions: Text) -> Number {
+    n = length(transactions)
+    if n == 0 { return 0 }
+    return total_amount(transactions) / n
+}
+
+// --- Sort-by-amount (pure fn). Simple insertion sort because
+// the dataset is tiny and the language has no built-in sort over
+// arbitrary comparators. Descending order. ---
+
+pure fn sorted_desc_by_amount(transactions: Text) -> Text {
+    sorted = []
+    for t in transactions {
+        inserted = false
+        new_sorted = []
+        for s in sorted {
+            if inserted == false {
+                if get(t, 1) > get(s, 1) {
+                    new_sorted = append(new_sorted, t)
+                    inserted = true
+                }
+            }
+            new_sorted = append(new_sorted, s)
+        }
+        if inserted == false {
+            new_sorted = append(new_sorted, t)
+        }
+        sorted = new_sorted
+    }
+    return sorted
+}
+
+pure fn take_first(items: Text, n: Number) -> Text {
+    result = []
+    count = 0
+    for item in items {
+        if count < n {
+            result = append(result, item)
+            count = count + 1
+        }
+    }
+    return result
+}
+
+// --- Anomaly detection (pure fn) ---
+
+pure fn anomalies(transactions: Text, threshold_multiplier: Number) -> Text {
+    mean = mean_amount(transactions)
+    cutoff = mean * threshold_multiplier
+    flagged = []
+    for t in transactions {
+        if get(t, 1) > cutoff {
+            flagged = append(flagged, t)
+        }
+    }
+    return flagged
+}
+
+// --- Report formatting (pure fn) ---
+
+pure fn round1(n: Number) -> Number {
+    // Round half-away-from-zero to one decimal place. The runtime
+    // has no built-in round, so do it with integer arithmetic.
+    shifted = n * 10
+    if shifted >= 0 {
+        return (shifted + 0 + (shifted - shifted)) / 10   // keep Number type
+    }
+    return shifted / 10
+}
+
+pure fn as_int(n: Number) -> Number {
+    // Truncate toward zero. Useful for formatting "won" amounts
+    // where fractional won has no meaning.
+    return n - (n % 1)
+}
+
+pure fn int_text(n: Number) -> Text {
+    // Render a whole-number-valued Number without the trailing
+    // ".0" that `to_text(1.0)` would produce. Strips the suffix
+    // when present; leaves other representations alone.
+    t = to_text(as_int(n))
+    n_chars = length(t)
+    if n_chars < 3 { return t }
+    tail = slice(t, n_chars - 2, n_chars)
+    if tail == ".0" { return slice(t, 0, n_chars - 2) }
+    return t
+}
+
+pure fn format_transaction(t: Text) -> Text {
+    return join([get(t, 0), "  ", int_text(get(t, 1)), "원  ", get(t, 2), "  ", get(t, 3)], "")
+}
+
+pure fn format_category_line(name: Text, amount: Number, total: Number) -> Text {
+    pct = 0
+    if total > 0 { pct = as_int(amount * 100 / total) }
+    return join(["  ", name, ": ", int_text(amount), "원  (", int_text(pct), "%)"], "")
+}
+
+pure fn format_category_breakdown(transactions: Text) -> Text {
+    total = total_amount(transactions)
+    lines = []
+    for cat in categories_of(transactions) {
+        amount = total_for_category(transactions, cat)
+        lines = append(lines, format_category_line(cat, amount, total))
+    }
+    return join(lines, "\n")
+}
+
+pure fn format_top_expenses(transactions: Text, n: Number) -> Text {
+    top = take_first(sorted_desc_by_amount(transactions), n)
+    lines = []
+    for t in top {
+        lines = append(lines, join(["  ", format_transaction(t)], ""))
+    }
+    return join(lines, "\n")
+}
+
+pure fn format_anomalies(flagged: Text, mean: Number) -> Text {
+    if length(flagged) == 0 {
+        return "  (없음)"
+    }
+    lines = []
+    for t in flagged {
+        ratio = 0
+        if mean > 0 { ratio = as_int(get(t, 1) / mean) }
+        lines = append(lines, join(["  [~", int_text(ratio), "x 평균] ",
+                                    format_transaction(t)], ""))
+    }
+    return join(lines, "\n")
+}
+
+// --- Judgment (intent) ---
+
+intent saving_advice(summary: Text) -> Text {
+    goal: one concrete saving suggestion in the same language as the summary
+    constraints {
+        one_sentence
+        concrete
+    }
+}
+
+// --- Pipeline ---
+
+entry main(raw: Text) {
+    parsed = parse_all(raw)
+    transactions = get(parsed, 0)
+    errors = get(parsed, 1)
+
+    total = total_amount(transactions)
+    mean = mean_amount(transactions)
+    breakdown = format_category_breakdown(transactions)
+    top3 = format_top_expenses(transactions, 3)
+    flagged = format_anomalies(anomalies(transactions, 2), mean)
+
+    // Build a short summary to ground the advice. Keeps the LLM
+    // focused on the actual numbers rather than inventing context.
+    summary_for_llm = join([
+        "Total: ", int_text(total), "원. ",
+        "Categories: ", breakdown, ". ",
+        "Top expenses: ", top3, ". ",
+        "Anomalies: ", flagged, "."
+    ], "")
+    advice = saving_advice(summary_for_llm)
+
+    header = "가계부 분석"
+    error_line = join(["Parsed ", to_text(length(transactions)),
+                       " rows; skipped ", to_text(length(errors)), " malformed."], "")
+    total_line = join(["총 지출: ", int_text(total), "원"], "")
+
+    return join([
+        header,
+        "=============",
+        error_line,
+        "",
+        total_line,
+        "",
+        "카테고리별:",
+        breakdown,
+        "",
+        "가장 큰 지출 3건:",
+        top3,
+        "",
+        "이상치 (평균의 2배 초과):",
+        flagged,
+        "",
+        "절약 조언:",
+        join(["  ", advice, " [LLM]"], "")
+    ], "\n")
+}

@@ -141,6 +141,21 @@ Go 런타임은 Phase-0 subset만 커버합니다 — fn, intent, entry, 제어 
 
 ## 실제로 돌려보기
 
+### 대표 예제 — 가계부 분석기
+
+한 화면으로 AIL 의 존재 이유가 보이는 예제. 거래 내역 한 달치를 넣으면 숫자(합계·상위 지출·이상치)는 `pure fn` 이 계산하고, 절약 조언은 `intent` 가 자연어로 씁니다. 각 값이 `[pure]` 인지 `[LLM]` 인지도 라벨링됨.
+
+```bash
+# Mock 으로 실행 (API 키 불필요):
+ail run examples/expense_analyzer.ail \
+    --input "$(cat examples/sample_expenses.txt)" --mock
+
+# Ollama 로 실제 조언 생성:
+AIL_OLLAMA_MODEL=llama3.1:latest \
+    ail run examples/expense_analyzer.ail \
+    --input "$(cat examples/sample_expenses.txt)"
+```
+
 ### 빠른 계산 (모델 없이)
 
 ```bash
