@@ -59,52 +59,83 @@ with a different version number.
    python -m pytest tests/ -q
    ```
 
-4. **Clean old build artifacts and rebuild**:
+4. **Refresh the bundled language reference card.** The wheel ships a
+   copy of the spec at `ail/reference_card.md` so `ail ask` has the
+   full reference available on pip installs. The single source of
+   truth is `spec/08-reference-card.ai.md`; the bundled copy is a
+   release artifact that must be refreshed before every build:
    ```bash
+   cp spec/08-reference-card.ai.md reference-impl/ail/reference_card.md
+   ```
+   `tests/test_spec_bundled.py` fails if the two files have drifted,
+   so running `pytest` above also verifies this is in sync.
+
+5. **Clean old build artifacts and rebuild**:
+   ```bash
+   cd reference-impl
    rm -rf dist build *.egg-info
    python -m build
    ```
    This produces `dist/ailang-X.Y.Z.tar.gz` and
-   `dist/ailang-X.Y.Z-py3-none-any.whl`.
-
-5. **Smoke-test the wheel in a clean venv**:
+   `dist/ailang-X.Y.Z-py3-none-any.whl`. Verify the wheel contains
+   `ail/reference_card.md` and does NOT contain a stray `ail_mvp/`
+   directory (a leftover from the v1.8 package rename):
    ```bash
-   python -m venv /tmp/ail_verify
-   source /tmp/ail_verify/bin/activate
-   pip install dist/ailang-X.Y.Z-py3-none-any.whl
-   ail version
-   echo 'entry main(x: Text) { return "ok" }' | ail run /dev/stdin
-   deactivate
-   rm -rf /tmp/ail_verify
+   python -m zipfile -l dist/ailang-X.Y.Z-py3-none-any.whl \
+       | grep -E 'reference_card|ail_mvp'
+   # expected: one line with ail/reference_card.md, and no ail_mvp.
    ```
 
-6. **(Recommended) Upload to TestPyPI first**:
+6. **Smoke-test the wheel in a clean venv**:
+   ```bash
+   python -m venv /tmp/ail_verify
+   /tmp/ail_verify/bin/pip install dist/ailang-X.Y.Z-py3-none-any.whl
+   /tmp/ail_verify/bin/ail version
+   echo 'entry main(x: Text) { return "ok" }' > /tmp/test.ail
+   /tmp/ail_verify/bin/ail run /tmp/test.ail --mock
+   # Also verify the reference card loads (not the degraded fallback):
+   /tmp/ail_verify/bin/python -c "from ail.authoring import _load_reference_card; c = _load_reference_card(); assert len(c) > 5000, f'fallback leaked: {len(c)} chars'"
+   rm -rf /tmp/ail_verify /tmp/test.ail
+   ```
+   The `--mock` flag is important — a clean venv has no Ollama or
+   Anthropic credentials, so an intent call would fail without it.
+   The reference-card check guards against the spec file being
+   silently absent from the wheel.
+
+7. **(Recommended) Upload to TestPyPI first** — but note TestPyPI
+   does not allow re-uploading the same version number, so if you've
+   used TestPyPI for this X.Y.Z before, either bump to X.Y.Z+1 or
+   skip this step. Check with
+   `curl -s https://test.pypi.org/pypi/ailang/json | python -c "import sys,json;print(json.load(sys.stdin)['releases'].keys())"`.
    ```bash
    python -m twine upload --repository testpypi dist/*
    ```
    Then verify the install-from-TestPyPI works:
    ```bash
    python -m venv /tmp/ail_test_pypi
-   source /tmp/ail_test_pypi/bin/activate
-   pip install --index-url https://test.pypi.org/simple/ \
-               --extra-index-url https://pypi.org/simple/ \
-               ailang
-   ail version
-   deactivate
+   /tmp/ail_test_pypi/bin/pip install \
+       --index-url https://test.pypi.org/simple/ \
+       --extra-index-url https://pypi.org/simple/ \
+       ailang
+   /tmp/ail_test_pypi/bin/ail version
+   rm -rf /tmp/ail_test_pypi
    ```
 
-7. **Upload to real PyPI**:
+8. **Upload to real PyPI**:
    ```bash
    python -m twine upload dist/*
    ```
+   This is irreversible — PyPI does not allow re-uploading the same
+   version under any circumstances. If the upload fails halfway, the
+   fix is to bump to the next patch version and try again.
 
-8. **Tag the release in git**:
+9. **Tag the release in git**:
    ```bash
    git tag -a vX.Y.Z -m "AIL vX.Y.Z"
    git push origin vX.Y.Z
    ```
 
-9. **Verify from PyPI**:
+10. **Verify from PyPI**:
    ```bash
    pip install --upgrade ailang
    ail version

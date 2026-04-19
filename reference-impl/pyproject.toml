@@ -49,9 +49,20 @@ Issues = "https://github.com/hyun06000/AIL/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ail*"]
+# Include only the `ail` package and its subpackages. The wildcard
+# `ail*` would also pick up a stray `ail_mvp/` folder left on a
+# contributor's disk from the v1.8 rename, which then lands in the
+# wheel and gets installed into site-packages as a second copy —
+# confusing at best, source of silent-stale-import bugs at worst.
+include = ["ail", "ail.*"]
+exclude = ["ail_mvp*", "tests*", "tools*"]
 
 [tool.setuptools.package-data]
 # Ship the AIL-authored stdlib with the wheel so `import summarize from
 # "stdlib/language"` works for users who installed via pip.
 "ail.stdlib" = ["*.ail"]
+# Ship the language reference card with the wheel so `ail ask`'s
+# authoring prompt has the full spec available on pip installs.
+# Kept in sync with the canonical spec/08-reference-card.ai.md by
+# tests/test_spec_bundled.py and the RELEASING.md pre-build step.
+"ail" = ["reference_card.md"]

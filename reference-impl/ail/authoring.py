@@ -44,10 +44,22 @@ from .runtime.json_parsing import parse_value_confidence
 from .stdlib import ImportResolutionError
 
 
-# Path to the language reference card, relative to the installed package.
-# `parent.parent` is `reference-impl/`, from which we reach the repo root
-# and then the spec directory.
-_SPEC_PATH = Path(__file__).parent.parent.parent / "spec" / "08-reference-card.ai.md"
+# The language reference card. We try two locations so the same code
+# works in both shapes:
+#   1. A copy bundled INSIDE the package (`ail/reference_card.md`) —
+#      this is what wheel users get. It ships with every release and
+#      is kept identical to the canonical spec by tests/test_spec_bundled.py.
+#   2. The canonical spec file in the repo's `spec/` directory —
+#      this is what contributors on a fresh checkout hit when the
+#      bundled copy hasn't been refreshed yet. Picked up via
+#      `Path(__file__).parent.parent.parent / "spec" / ...`.
+# First file found wins; the fallback in `_load_reference_card` runs
+# only if neither exists (edge case, e.g. installing the source tar
+# without the spec file).
+_SPEC_CANDIDATES = [
+    Path(__file__).parent / "reference_card.md",
+    Path(__file__).parent.parent.parent / "spec" / "08-reference-card.ai.md",
+]
 
 
 @dataclass
@@ -619,20 +631,23 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
 
 
 def _load_reference_card() -> str:
-    try:
-        return _SPEC_PATH.read_text(encoding="utf-8")
-    except OSError:
-        # If the spec is not reachable from the installed package
-        # (e.g. packaged without the repo), return a terse fallback
-        # that names the essential constructs. Programs generated
-        # under this fallback will be simple but may still run.
-        return (
-            "AIL is an AI-native language. A program has one "
-            "`entry main(input: Text) { return EXPR }` plus optional "
-            "fn/pure fn/intent declarations. Builtins: length, split, "
-            "join, append, range, to_text, to_number, upper, lower, "
-            "trim, get, ok, error, is_ok, is_error, unwrap, unwrap_or."
-        )
+    for candidate in _SPEC_CANDIDATES:
+        try:
+            return candidate.read_text(encoding="utf-8")
+        except OSError:
+            continue
+    # Neither the bundled copy nor the dev-repo path resolved. Return a
+    # terse fallback that names the essential constructs. Programs
+    # generated under this fallback will be simple but may still run.
+    # This path fires only for unusual install shapes (sdist extracted
+    # without the spec, editable install pointed at a truncated tree).
+    return (
+        "AIL is an AI-native language. A program has one "
+        "`entry main(input: Text) { return EXPR }` plus optional "
+        "fn/pure fn/intent declarations. Builtins: length, split, "
+        "join, append, range, to_text, to_number, upper, lower, "
+        "trim, get, ok, error, is_ok, is_error, unwrap, unwrap_or."
+    )
 
 
 def _adapter_name(adapter: ModelAdapter) -> str:
