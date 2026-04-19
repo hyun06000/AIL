@@ -47,9 +47,19 @@ with a different version number.
 
 ## Per-release checklist
 
+> The commands below use `$VERSION` as a shell variable so you don't
+> have to retype the version number in every line. Export it once
+> before starting:
+>
+>     export VERSION=1.8.1   # or whatever you're releasing
+>
+> Do NOT copy a command that contains `$VERSION` into a shell that
+> doesn't have the variable set — `pip install` will error with
+> "No such file or directory" on the wheel path.
+
 1. **Bump the version** in two places (must match):
-   - `reference-impl/pyproject.toml` → `version = "X.Y.Z"`
-   - `reference-impl/ail/__init__.py` → `__version__ = "X.Y.Z"`
+   - `reference-impl/pyproject.toml` → `version = "$VERSION"`
+   - `reference-impl/ail/__init__.py` → `__version__ = "$VERSION"`
 
 2. **Update `CHANGELOG.md`** with a new section for the version.
 
@@ -76,12 +86,12 @@ with a different version number.
    rm -rf dist build *.egg-info
    python -m build
    ```
-   This produces `dist/ailang-X.Y.Z.tar.gz` and
-   `dist/ailang-X.Y.Z-py3-none-any.whl`. Verify the wheel contains
+   This produces `dist/ailang-$VERSION.tar.gz` and
+   `dist/ailang-$VERSION-py3-none-any.whl`. Verify the wheel contains
    `ail/reference_card.md` and does NOT contain a stray `ail_mvp/`
    directory (a leftover from the v1.8 package rename):
    ```bash
-   python -m zipfile -l dist/ailang-X.Y.Z-py3-none-any.whl \
+   python -m zipfile -l dist/ailang-$VERSION-py3-none-any.whl \
        | grep -E 'reference_card|ail_mvp'
    # expected: one line with ail/reference_card.md, and no ail_mvp.
    ```
@@ -89,7 +99,7 @@ with a different version number.
 6. **Smoke-test the wheel in a clean venv**:
    ```bash
    python -m venv /tmp/ail_verify
-   /tmp/ail_verify/bin/pip install dist/ailang-X.Y.Z-py3-none-any.whl
+   /tmp/ail_verify/bin/pip install dist/ailang-$VERSION-py3-none-any.whl
    /tmp/ail_verify/bin/ail version
    echo 'entry main(x: Text) { return "ok" }' > /tmp/test.ail
    /tmp/ail_verify/bin/ail run /tmp/test.ail --mock
@@ -103,10 +113,14 @@ with a different version number.
    silently absent from the wheel.
 
 7. **(Recommended) Upload to TestPyPI first** — but note TestPyPI
-   does not allow re-uploading the same version number, so if you've
-   used TestPyPI for this X.Y.Z before, either bump to X.Y.Z+1 or
-   skip this step. Check with
-   `curl -s https://test.pypi.org/pypi/ailang/json | python -c "import sys,json;print(json.load(sys.stdin)['releases'].keys())"`.
+   does not allow re-uploading a version number that already exists
+   (same rule as real PyPI). If you burned this version on TestPyPI
+   during an earlier dry run, bump the patch number before trying
+   again, or skip this step. Check what's already uploaded with:
+   ```bash
+   curl -s https://test.pypi.org/pypi/ailang/json \
+       | python -c "import sys,json; print(list(json.load(sys.stdin)['releases'].keys()))"
+   ```
    ```bash
    python -m twine upload --repository testpypi dist/*
    ```
@@ -131,8 +145,8 @@ with a different version number.
 
 9. **Tag the release in git**:
    ```bash
-   git tag -a vX.Y.Z -m "AIL vX.Y.Z"
-   git push origin vX.Y.Z
+   git tag -a v$VERSION -m "AIL v$VERSION"
+   git push origin v$VERSION
    ```
 
 10. **Verify from PyPI**:
