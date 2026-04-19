@@ -177,7 +177,7 @@ The root cause is likely that `ail ask`'s code-generation prompt does not includ
 
 #### 3. ZERO ADOPTION
 
-v1.8 with 211 tests, 14 examples, two runtimes, PyPI distribution — and 0 stars. This means nobody outside hyun06000 has tried it. More features will not fix this. The project needs ONE person to run `pip install ailang && ail ask "hello"` and find it useful.
+v1.8 with 211 tests, 14 examples, two runtimes, PyPI distribution — and 0 stars. This means nobody outside hyun06000 has tried it. More features will not fix this. The project needs ONE person to run `pip install ail-interpreter && ail ask "hello"` and find it useful.
 
 #### 4. Go RUNTIME DIVERGENCE
 

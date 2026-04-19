@@ -2,7 +2,7 @@
 
 > A programming language designed for AI as the primary author of code.
 
-**Status:** v1.8 · PyPI: `ailang` · Python interpreter (211 tests) · Second runtime in Go · `ail ask` natural-language interface
+**Status:** v1.8 · PyPI: `ail-interpreter` · Python interpreter (218 tests) · Second runtime in Go · `ail ask` natural-language interface
 
 🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md)
 🤖 **AI/LLM:** [`README.ai.md`](README.ai.md) — structured reference, no prose. Start with [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md).
@@ -77,14 +77,18 @@ error back to the model and retries up to three times.
 ### Install
 
 ```bash
-pip install ailang                # core + Ollama/Mock adapters
-pip install 'ailang[anthropic]'   # also include Anthropic adapter
+pip install ail-interpreter                # core + Ollama/Mock adapters
+pip install 'ail-interpreter[anthropic]'   # also include Anthropic adapter
 ```
 
-The PyPI package is named `ailang` because `ail` was taken by an
-unrelated package abandoned in 2014. The **Python import name is
-still `ail`** (`from ail import run, ask`) and the CLI is still `ail`.
-Only the `pip install` target differs.
+The PyPI distribution is named `ail-interpreter` — honest about
+what it is: this wheel is the Python interpreter of AIL, not the
+language itself. The canonical spec lives in [`spec/`](spec/) and a
+second interpreter lives in [`go-impl/`](go-impl/). (The short name
+`ail` is held by an unrelated 2014 package, and `ailang` failed
+PyPI's typosquat similarity check.) The **Python import name is
+still `ail`** (`from ail import run, ask`) and the CLI is still
+`ail` — only the `pip install` target differs.
 
 ### Use
 
@@ -117,7 +121,7 @@ pytest tests/
 ```
 
 > **Heads up:** make sure the install is editable. If you previously
-> did `pip install ailang` (non-editable) in this environment, local
+> did `pip install ail-interpreter` (non-editable) in this environment, local
 > edits to `ail/` will silently NOT flow into scripts you run from
 > subdirectories (`python tools/bench_authoring.py`, etc.) — those
 > invocations put the script's own dir on `sys.path[0]` and Python
@@ -194,7 +198,7 @@ ail-project/
 │   ├── 00-overview.md ... 07-computation.md
 │   └── 08-reference-card.ai.md  ← complete machine-readable reference
 ├── reference-impl/          # Python interpreter (full feature set)
-│   ├── ail/                 # The `ail` package — published as `ailang`
+│   ├── ail/                 # The `ail` package — published as `ail-interpreter`
 │   │   ├── parser/          # Lexer, parser, purity checker
 │   │   ├── runtime/         # Executor, provenance, calibration, parallelism
 │   │   └── stdlib/          # Standard library — written in AIL

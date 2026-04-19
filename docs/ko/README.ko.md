@@ -2,7 +2,7 @@
 
 > AI가 코드의 주 저자라는 전제 아래 처음부터 다시 설계한 프로그래밍 언어입니다.
 
-**현재 버전:** v1.8 · PyPI에 `ailang`으로 배포 · 참조 구현 2개 (Python 전체 / Go 서브셋)
+**현재 버전:** v1.8 · PyPI에 `ail-interpreter`로 배포 · 참조 구현 2개 (Python 전체 / Go 서브셋)
 
 이 문서는 [루트 README](../../README.md)의 한국어 판본입니다. 영어 독해가 불편하시다면 이 문서부터, 그리고 `docs/ko/` 하위 문서로 따라오실 수 있습니다.
 
@@ -25,11 +25,11 @@ AIL은 그 질문에 대한 답을 구체적인 언어 기능으로 쌓아올립
 ## 바로 써보기
 
 ```bash
-pip install ailang
-# 또는: pip install 'ailang[anthropic]'
+pip install ail-interpreter
+# 또는: pip install 'ail-interpreter[anthropic]'
 ```
 
-PyPI 배포 이름은 `ailang`입니다 (`ail`은 2014년에 다른 패키지가 선점했어요). **Python import는 `ail`**이고, **CLI도 `ail`**입니다.
+PyPI 배포 이름은 `ail-interpreter`입니다. 이 휠은 AIL **언어 자체**가 아니라 **AIL의 Python 인터프리터** 구현체니까 그대로 이름에 반영한 것이에요 — 언어 명세는 `spec/`, 두 번째 구현은 `go-impl/`에 따로 있습니다. (`ail`은 2014년 다른 패키지가 점유 중이고, `ailang`은 PyPI의 유사 이름 방지 규칙에 걸립니다.) **Python import는 `ail`**이고, **CLI도 `ail`** 입니다.
 
 ### 자연어로 쓰기 (권장 인터페이스)
 
@@ -100,7 +100,7 @@ ail-project/
 │   ├── 00-overview.md ~ 07-computation.md
 │   └── 08-reference-card.ai.md  ← 완전한 기계 가독 레퍼런스 (영어)
 ├── reference-impl/          # Python 참조 구현 (전체 기능, 211 tests)
-│   ├── ail/                 # 패키지 (PyPI: ailang, import: ail)
+│   ├── ail/                 # 패키지 (PyPI: ail-interpreter, import: ail)
 │   │   ├── parser/          # 렉서, 파서, purity checker
 │   │   ├── runtime/         # executor, provenance, calibration 등
 │   │   └── stdlib/          # 표준 라이브러리 — AIL로 작성됨

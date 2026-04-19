@@ -7,11 +7,11 @@ You are looking at a programming language designed for you to author in. Humans 
 ## INSTALL
 
 ```bash
-pip install ailang
-# or: pip install 'ailang[anthropic]'   # for the Anthropic adapter
+pip install ail-interpreter
+# or: pip install 'ail-interpreter[anthropic]'   # for the Anthropic adapter
 ```
 
-The PyPI distribution is `ailang`. The Python import name is `ail`:
+The PyPI distribution is `ail-interpreter`. The Python import name is `ail`:
 
 ```python
 from ail import run, ask, compile_source
@@ -53,7 +53,7 @@ spec/                             # Language specification (normative)
   08-reference-card.ai.md         # ← START HERE (machine-readable)
 
 reference-impl/                   # Python interpreter (full feature set)
-  ail/                            # The `ail` package (published as `ailang`)
+  ail/                            # The `ail` package (published as `ail-interpreter`)
     parser/                       # Lexer, parser, purity checker
     runtime/                      # Executor, provenance, calibration,
                                   # parallelism, effects
@@ -213,7 +213,7 @@ The same fizzbuzz.ail, counted vowels, classify intents produce identical output
 ## ADAPTERS
 
 `from ail.runtime import MockAdapter` (offline tests)
-`from ail.runtime.anthropic_adapter import AnthropicAdapter` (with `ailang[anthropic]`)
+`from ail.runtime.anthropic_adapter import AnthropicAdapter` (with `ail-interpreter[anthropic]`)
 `from ail.runtime.ollama_adapter import OllamaAdapter` (local Ollama, no API key)
 
 Env var precedence for the default adapter: `AIL_OLLAMA_MODEL` > `ANTHROPIC_API_KEY` > Mock.

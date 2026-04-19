@@ -5,12 +5,15 @@
 **Install**
 
 ```bash
-pip install ailang
-# or: pip install 'ailang[anthropic]'   # for the Anthropic adapter
+pip install ail-interpreter
+# or: pip install 'ail-interpreter[anthropic]'   # for the Anthropic adapter
 ```
 
-The PyPI distribution is `ailang` (the name `ail` was taken by an
-unrelated abandoned package). The **Python import name is `ail`**:
+The PyPI distribution is `ail-interpreter` — this wheel is the
+Python interpreter of AIL, not the language itself. The canonical
+spec lives in `spec/` and a second interpreter lives in `go-impl/`.
+(`ail` and `ailang` are both unavailable on PyPI for naming-policy
+reasons.) The **Python import name is `ail`**:
 
 ```python
 from ail import run, ask

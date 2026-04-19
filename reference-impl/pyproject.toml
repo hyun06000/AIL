@@ -3,9 +3,15 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ailang"
+# Distribution name on PyPI. The name `ailang` was rejected by PyPI's
+# typosquat-prevention similarity check (too close to `ai-lang`), and
+# `ail` is held by an unrelated 2014 package. `ail-interpreter` is
+# honest — this wheel is the Python interpreter of AIL, not the
+# language itself; the canonical spec lives in spec/ and the Go
+# runtime lives in go-impl/. Import name and CLI both remain `ail`.
+name = "ail-interpreter"
 version = "1.8.0"
-description = "AIL — an AI-authored programming language with provenance, purity contracts, confidence-aware match, and calibration"
+description = "AIL — Python interpreter for the AI-Intent Language. fn (pure) + intent (LLM) declarations, provenance, purity contracts, confidence-aware match, calibration"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -13,7 +19,7 @@ authors = [
     { name = "AIL Project Contributors" }
 ]
 keywords = [
-    "ail", "ailang", "ai-language", "intent", "llm",
+    "ail", "ai-intent-language", "ai-language", "intent", "llm",
     "language", "interpreter", "programming-language",
     "confidence", "provenance", "calibration",
 ]

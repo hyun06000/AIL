@@ -1,6 +1,6 @@
 # Releasing AIL to PyPI
 
-This document walks through publishing `ailang` to PyPI. After the
+This document walks through publishing `ail-interpreter` to PyPI. After the
 first publish, the same steps are used for every subsequent release
 with a different version number.
 
@@ -13,7 +13,7 @@ with a different version number.
    https://pypi.org/manage/account/
 
 3. **Create an API token** scoped to "entire account" for the first
-   upload. Later you can restrict it to the `ailang` project:
+   upload. Later you can restrict it to the `ail-interpreter` project:
    https://pypi.org/manage/account/token/
 
    The token starts with `pypi-AgEIc...`. Save it somewhere safe.
@@ -86,12 +86,12 @@ with a different version number.
    rm -rf dist build *.egg-info
    python -m build
    ```
-   This produces `dist/ailang-$VERSION.tar.gz` and
-   `dist/ailang-$VERSION-py3-none-any.whl`. Verify the wheel contains
+   This produces `dist/ail-interpreter-$VERSION.tar.gz` and
+   `dist/ail-interpreter-$VERSION-py3-none-any.whl`. Verify the wheel contains
    `ail/reference_card.md` and does NOT contain a stray `ail_mvp/`
    directory (a leftover from the v1.8 package rename):
    ```bash
-   python -m zipfile -l dist/ailang-$VERSION-py3-none-any.whl \
+   python -m zipfile -l dist/ail-interpreter-$VERSION-py3-none-any.whl \
        | grep -E 'reference_card|ail_mvp'
    # expected: one line with ail/reference_card.md, and no ail_mvp.
    ```
@@ -99,7 +99,7 @@ with a different version number.
 6. **Smoke-test the wheel in a clean venv**:
    ```bash
    python -m venv /tmp/ail_verify
-   /tmp/ail_verify/bin/pip install dist/ailang-$VERSION-py3-none-any.whl
+   /tmp/ail_verify/bin/pip install dist/ail-interpreter-$VERSION-py3-none-any.whl
    /tmp/ail_verify/bin/ail version
    echo 'entry main(x: Text) { return "ok" }' > /tmp/test.ail
    /tmp/ail_verify/bin/ail run /tmp/test.ail --mock
@@ -118,7 +118,7 @@ with a different version number.
    during an earlier dry run, bump the patch number before trying
    again, or skip this step. Check what's already uploaded with:
    ```bash
-   curl -s https://test.pypi.org/pypi/ailang/json \
+   curl -s https://test.pypi.org/pypi/ail-interpreter/json \
        | python -c "import sys,json; print(list(json.load(sys.stdin)['releases'].keys()))"
    ```
    ```bash
@@ -130,7 +130,7 @@ with a different version number.
    /tmp/ail_test_pypi/bin/pip install \
        --index-url https://test.pypi.org/simple/ \
        --extra-index-url https://pypi.org/simple/ \
-       ailang
+       ail-interpreter
    /tmp/ail_test_pypi/bin/ail version
    rm -rf /tmp/ail_test_pypi
    ```
@@ -151,7 +151,7 @@ with a different version number.
 
 10. **Verify from PyPI**:
    ```bash
-   pip install --upgrade ailang
+   pip install --upgrade ail-interpreter
    ail version
    ```
 
@@ -162,7 +162,7 @@ Runtime dependencies: **none**. AIL runs on the Python stdlib alone
 concurrent.futures for parallelism, threading for trace locking).
 
 Optional dependencies, installed only when the user asks for them:
-- `anthropic>=0.34` (via `pip install 'ailang[anthropic]'`) —
+- `anthropic>=0.34` (via `pip install 'ail-interpreter[anthropic]'`) —
   needed for the Anthropic adapter. Ollama and Mock adapters have no
   extra requirements.
 
