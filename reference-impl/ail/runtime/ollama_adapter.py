@@ -41,7 +41,16 @@ from .json_parsing import parse_value_confidence
 
 DEFAULT_HOST = "http://localhost:11434"
 DEFAULT_MODEL = "llama3.1:latest"
-DEFAULT_TIMEOUT_S = 120.0
+# Default HTTP timeout for one Ollama /api/chat call. 300s because:
+# - llama3.1:8B on CPU+small GPU finishes in well under 60s,
+# - gemma2:27b on the same hardware can take 90–180s per call when
+#   the context is full (the reference card is ~22k chars by itself),
+# - a complex prompt + retries on gemma2:27b blew past 120s in live
+#   testing (hyun06000, 2026-04-20). 300s covers the large-model
+#   case without penalising the small-model case. Callers that need
+#   a tighter bound can pass `timeout=` explicitly or set
+#   AIL_OLLAMA_TIMEOUT_S in the environment.
+DEFAULT_TIMEOUT_S = 300.0
 
 
 class OllamaAdapter:
@@ -49,11 +58,14 @@ class OllamaAdapter:
 
     def __init__(self, model: Optional[str] = None,
                  host: Optional[str] = None,
-                 timeout: float = DEFAULT_TIMEOUT_S,
+                 timeout: Optional[float] = None,
                  temperature: float = 0.0):
         self.model = model or os.environ.get("AIL_OLLAMA_MODEL", DEFAULT_MODEL)
         self.host = (host or os.environ.get("AIL_OLLAMA_HOST",
                                             DEFAULT_HOST)).rstrip("/")
+        if timeout is None:
+            env_timeout = os.environ.get("AIL_OLLAMA_TIMEOUT_S")
+            timeout = float(env_timeout) if env_timeout else DEFAULT_TIMEOUT_S
         self.timeout = timeout
         self.temperature = temperature
 

@@ -499,6 +499,27 @@ def _remediation_hints(error_text: str) -> list[str]:
         hints.append(
             "output_must_be_raw_AIL_source_not_wrapped_in_a_JSON_object"
         )
+    # "Unexpected '!' at column 17" pattern — the model wrote prose
+    # like "What a mouthful!" and abandoned code entirely. The retry
+    # gets a strong reset: nothing but AIL source, starts with a
+    # keyword, period. Observed on llama3.1:8B for complex Korean
+    # bill-splitting prompts (hyun06000, 2026-04-20).
+    if "unexpected character '!'" in error_text:
+        hints.append(
+            "output_must_start_with_fn_or_pure_or_intent_or_import_or_entry_"
+            "NO_prose_NO_explanation_NO_markdown_just_AIL_source"
+        )
+    # Generic catch-all for "unexpected top-level token" errors where
+    # the first token is clearly English (What, Let, Here, The, etc.)
+    # — the model wrote an explanation instead of code.
+    if "top-level token IDENT" in error_text and any(
+        w in error_text for w in (
+            "'What'", "'Let'", "'Here'", "'The'", "'This'", "'A'", "'I'",
+        )
+    ):
+        hints.append(
+            "previous_output_was_prose_not_code_emit_pure_AIL_only"
+        )
     return hints
 
 
@@ -569,6 +590,16 @@ def _strip_source_fence(text: str) -> str:
     # programs containing apostrophe data should use the input channel,
     # not embed the literal in source.
     s = _normalize_single_quotes(s)
+    # Case 5b: trailing markdown fence + prose after the AIL.
+    # Observed on gemma2:9B for complex prompts: the model emits raw
+    # AIL, closes it with ``` on its own line, and appends a prose
+    # "Explanation:" block. Our leading-fence stripper didn't match
+    # (no opening fence), so the stray ``` survived and the lexer
+    # choked at the backtick on the closing line.
+    # Truncate at the first ``` that appears on its own line AFTER
+    # any substantive AIL content (keyword `entry` or `fn` has
+    # already been seen above it).
+    s = _truncate_at_trailing_fence(s)
     # Case 6: source has literal `\n` (backslash + n) but no real
     # newlines — the model emitted its AIL as a JSON string body
     # (escaping newlines) and wrote it to an output channel that
@@ -581,6 +612,33 @@ def _strip_source_fence(text: str) -> str:
     # string literals of a multi-line program.
     s = _normalize_literal_escapes(s)
     return s
+
+
+def _truncate_at_trailing_fence(s: str) -> str:
+    """Cut off a stray markdown code-fence (and the prose that
+    follows it) sitting after the AIL program.
+
+    Triggered when the source already contains real AIL content
+    (an `entry`, `fn`, or `intent` keyword above the cut) and
+    then a standalone ``` line appears. The closing fence is
+    what gemma2:9B — and chatty models in general — add when
+    they want to explain the program after writing it.
+
+    Conservative: does nothing if no substantive AIL keyword is
+    seen before the fence, or if there are multiple ``` lines
+    (those should be handled by the fenced-block extractor
+    earlier, not here).
+    """
+    import re
+    fence_match = re.search(r"(^|\n)\s*```\s*(\n|$)", s)
+    if fence_match is None:
+        return s
+    head = s[: fence_match.start()]
+    # Only truncate if there's substantive AIL content above.
+    if not any(kw in head for kw in ("entry ", "pure fn ", "fn ",
+                                     "intent ", "import ")):
+        return s
+    return head.rstrip()
 
 
 def _normalize_literal_escapes(s: str) -> str:

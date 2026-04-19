@@ -222,6 +222,27 @@ def test_ask_tolerates_ail_run_cli_wrapping():
     assert result.value == 42
 
 
+def test_ask_tolerates_trailing_markdown_fence_and_prose():
+    # Observed on gemma2:9B (hyun06000, 2026-04-20, complex Korean
+    # bill-splitting prompt): the model emits raw AIL, closes it
+    # with ``` on its own line, and appends an "Explanation:"
+    # block. Without truncation the lexer hit the trailing
+    # backtick and failed at line 20.
+    trailing = (
+        'pure fn double(n: Number) -> Number {\n'
+        '    return n * 2\n'
+        '}\n'
+        'entry main(x: Text) { return double(7) }\n'
+        '```\n'
+        '\n'
+        '**Explanation:**\n'
+        '1. double() multiplies by 2.\n'
+        '2. main calls it with 7.'
+    )
+    result = ask("double 7", adapter=ScriptedAuthor([trailing]))
+    assert result.value == 14
+
+
 def test_ask_recovers_program_from_echoed_examples_prompt_leak():
     # Observed failure on llama3.1:8B for "factorial of 7": the
     # model wraps the answer expression in a single backtick
