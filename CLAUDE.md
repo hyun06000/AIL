@@ -292,3 +292,71 @@ When the answer to this is "yes, >80% of the time," AIL has succeeded. Until the
 Written by Claude Opus 4, who designed AIL v1.0 through the claude.ai chat interface in April 2026, reviewing the project's state at v1.8 after being shown it by hyun06000.
 
 The commit log remembers. Keep building.
+
+## DIRECTIVE FOR THE 3070-BOX CLAUDE — APRIL 2026 HANDOFF
+
+You are Claude Code running on hyun06000's 3070 GPU box. A previous Claude Code instance (Mac-side, through commit `cf78d79`) prepared everything up to "just before training" and handed the GPU work to you. This section tells you the strategic picture; the operational runbook is at `reference-impl/training/HANDOFF.md`.
+
+### Where the project is
+
+v1.8.2 shipped on PyPI as `ail-interpreter`. `docs/why-ail.md` articulates the differentiators. The canonical example is `reference-impl/examples/expense_analyzer.ail`. Cross-runtime conformance (Python ↔ Go) is now CI-gated. Three feature-interaction integration tests pass. Opus 4's priorities P0-P3 are done; P4 (external user) is conditional.
+
+### Why we're fine-tuning
+
+Empirical run at commit `cf78d79`: qwen2.5-coder:14b authored 64% parse / 60% route / 32% answer on the 50-case vs-Python bench. Python authored 100% / 72% / 38% on the same tasks — but `Python 72% route` means Python programs called the LLM only 72% of the time on tasks that needed it. The remaining 28% silently hardcoded the judgment subtask (e.g. `if "love" in words: return "positive"`). On hybrid-only cases Python's route was 33% — two out of three programs were broken "in the wild" even though they passed the test input.
+
+AIL's structural claim ("the author can't skip the LLM call because `intent` is a declaration, not a comment") is validated on the programs AIL parses. The ceiling is parse rate, and parse rate is a training-distribution problem: the model has seen megabytes of Python and kilobytes of AIL. Fine-tune on AIL → parse goes up → the structural win shows through end-to-end.
+
+### What counts as success
+
+Three conditions, ALL required, measured on the same bench against the same baseline JSON (`docs/benchmarks/2026-04-20_qwen25-coder-14b_all.json`):
+
+- **G1** — AIL overall parse rate ≥ 80% (baseline 64%)
+- **G2** — AIL hybrid route rate > Python hybrid route rate (baseline 33% vs 33%)
+- **G3** — AIL pure_fn answer rate ≥ Python pure_fn answer rate (baseline 80% vs 95%)
+
+If all three pass, hyun06000 posts to LinkedIn. Posts are drafted (English + Korean) from a prior session; hyun06000 has them.
+
+Do not lower the gates to make the numbers pass. If the training run misses, write an honest post-mortem and stop.
+
+### What's in place for you
+
+`reference-impl/training/`:
+
+- `dataset/*.jsonl` — 80 gold samples (14 from existing examples, 50 canonical AIL for the bench tasks, 16 hand-written for feature coverage). All 80 pass the 4-gate validator (parse / purity / execute / answer-match).
+- `train.chatml.jsonl` — the 80 samples in ChatML for qwen-family tokenizers, ready to feed to trainer.
+- `train.py` — unsloth QLoRA on qwen2.5-coder-7b-instruct. Defaults chosen for a 3070 (batch 2 × grad-accum 4, r=16, 3 epochs).
+- `export_to_ollama.py` — merge + quant + Modelfile + `ollama create`. Produces `ail-coder:7b`.
+- `HANDOFF.md` — the runbook you actually follow.
+
+### What this directive does NOT authorize
+
+1. Posting to LinkedIn, HackerNews, X, or anywhere public. That's hyun06000's call.
+2. Uploading the trained model to HuggingFace. Separate explicit approval.
+3. Lowering the gate to make the run pass.
+4. Retrying training multiple times "until it works." One run, honest post-mortem, stop.
+5. Modifying the dataset without running `validate.py`. Every sample must pass 4 gates before it enters training.
+6. Pushing a broken or partial adapter under the `ail-coder:7b` name. Test it (sample prompt "Compute the factorial of 7") before exporting.
+
+### What this directive DOES authorize
+
+1. Installing the training stack (unsloth, transformers, peft, trl) on the 3070 box.
+2. Running `train.py` end-to-end once.
+3. Running `export_to_ollama.py` once.
+4. Re-running `bench_vs_python.py` as many times as needed for statistical confidence. Note variance in the commit.
+5. Committing and pushing:
+   - the analysis markdown,
+   - the benchmark JSON snapshot,
+   - any bug fixes you had to make to run the pipeline
+   to `main`. hyun06000 trusts you to do this; keep commit messages honest.
+6. Writing follow-up hypotheses in the post-mortem if the gate closes. Next experiments can be designed from them.
+
+### How to communicate
+
+hyun06000 is Korean. Korean preferred for narrative, English fine for code/commits. Be concise — runbook-style. Don't narrate what you're about to do; do it and report the result. If something blocks you, say so clearly and stop.
+
+### If nothing else — one paragraph summary
+
+Run `reference-impl/training/HANDOFF.md` top to bottom. When `bench_vs_python` finishes with the fine-tuned model, compute G1/G2/G3. If all three pass, commit the analysis + benchmark JSON and tell hyun06000. If not, commit the post-mortem with numbers and stop. Don't post, don't upload, don't retry.
+
+The commit log remembers. Keep it clean.
