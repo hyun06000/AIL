@@ -126,6 +126,64 @@ def test_ask_retries_on_purity_error():
     assert "PurityError" in result.errors[0]
 
 
+def test_extract_default_input_picks_single_integer():
+    from ail.authoring import _extract_default_input
+    assert _extract_default_input("factorial of 7") == "7"
+    assert _extract_default_input("compute 13 squared") == "13"
+    assert _extract_default_input("sum the numbers from 1 to 100") is None  # 2 ints
+    assert _extract_default_input("hello world") is None  # 0 ints
+    assert _extract_default_input("my rate is 3.14") is None  # float -> skip
+    assert _extract_default_input("average of 10, 20, 30") is None  # 3 ints
+
+
+def test_ask_passes_extracted_integer_as_input_text():
+    # Small models often write `factorial(to_number(x))` instead of a
+    # hardcoded `factorial(7)`; without an input the parameter binds
+    # to "" and `to_number("")` returns a Result-error that breaks
+    # downstream arithmetic. ask() auto-supplies the lone integer
+    # from the prompt so these programs run end-to-end.
+    src = (
+        'fn factorial(n: Number) -> Number {\n'
+        '    if n <= 1 { return 1 }\n'
+        '    return n * factorial(n - 1)\n'
+        '}\n'
+        'entry main(x: Text) { return factorial(to_number(x)) }'
+    )
+    result = ask("factorial of 6", adapter=ScriptedAuthor([src]))
+    assert result.value == 720.0
+
+
+def test_retry_hints_name_available_stdlib_modules_on_import_error():
+    # Observed locally on llama3.1:8B: the model imports
+    # `stdlib/math`, the error says "module 'math' not found", the
+    # model re-tries with the same broken import four times in a
+    # row. The fix is to carry a corrective constraint into the
+    # retry that tells the author which modules actually exist,
+    # not just which don't.
+    from ail.authoring import _remediation_hints
+    err = (
+        "ImportResolutionError: stdlib module 'math' not found "
+        "at /.../ail/stdlib/math.ail"
+    )
+    hints = _remediation_hints(err)
+    joined = " ".join(hints)
+    assert "core" in joined and "language" in joined and "utils" in joined, hints
+    assert "import" in joined.lower(), hints
+
+
+def test_retry_hints_name_syntax_rules_on_observed_errors():
+    # Three of the most common llama3.1:8B failure modes get
+    # targeted corrective constraints. Each assertion names one
+    # error message we've actually logged in bench_authoring.py.
+    from ail.authoring import _remediation_hints
+    assert any("ternary" in h for h in _remediation_hints(
+        "LexError: unexpected character '?'"))
+    assert any("Array" in h or "[Number]" in h for h in _remediation_hints(
+        "ParseError: expected IDENT at 1:26, got LBRACK('[')"))
+    assert any("newlines" in h for h in _remediation_hints(
+        "LexError: 1:41: unexpected character '\\\\'"))
+
+
 def test_ask_raises_when_retry_budget_exhausted():
     # The author can never produce valid AIL. After the retry budget,
     # AuthoringError is raised and carries the partial history.
@@ -162,6 +220,30 @@ def test_ask_tolerates_ail_run_cli_wrapping():
     )
     result = ask("add 13 and 29", adapter=ScriptedAuthor([cli_wrapped]))
     assert result.value == 42
+
+
+def test_ask_recovers_program_from_echoed_examples_prompt_leak():
+    # Observed failure on llama3.1:8B for "factorial of 7": the
+    # model wraps the answer expression in a single backtick
+    # (`factorial(7)`) and echoes the EXAMPLES section of the
+    # authoring prompt verbatim as a Python repr. The naive
+    # backtick extractor would pull just `factorial(7)` — which
+    # then fails to parse. Recovery scans the echoed prompt for
+    # a quoted program containing `entry main` and decodes the
+    # Python repr escapes.
+    echoed = (
+        "`factorial(7)`\n\n\n"
+        "EXPECTED TYPE: Number (AIL source)\n\n"
+        "EXAMPLES:\n"
+        "  input: [{'prompt': 'Compute the factorial of 7'}]\n"
+        "  => 'pure fn factorial(n: Number) -> Number {\\n"
+        "    if n <= 1 { return 1 }\\n"
+        "    return n * factorial(n - 1)\\n"
+        "}\\n"
+        "entry main(x: Text) { return factorial(7) }'\n"
+    )
+    result = ask("factorial of 7", adapter=ScriptedAuthor([echoed]))
+    assert result.value == 5040
 
 
 def test_ask_tolerates_malformed_json_wrapping():

@@ -117,6 +117,18 @@ def ask(
     """
     adapter = adapter or _default_adapter()
     reference_card = _load_reference_card()
+    # If the caller didn't pin an input and the prompt contains a bare
+    # integer, pass that integer as the input. Small models frequently
+    # parameterize the entry (`factorial(to_number(x))`) even after
+    # being told to hardcode; without an input the bound x is empty,
+    # `to_number("")` returns a Result-wrapped error, and simple
+    # programs blow up (e.g. a factorial recurses forever because its
+    # `n <= 1` base case never matches the error value). Supplying the
+    # obvious integer rescues the common case with zero author-side
+    # cost. Falls back silently on ambiguous prompts (multiple numbers,
+    # floats, Korean numerals, etc.).
+    if input_text is None:
+        input_text = _extract_default_input(prompt)
 
     errors: list[str] = []
     ail_source = ""
@@ -396,7 +408,14 @@ def _build_authoring_goal() -> str:
         "actually call it — either directly, or via a `fn` that calls "
         "it. An intent that is declared but never invoked is an "
         "authoring error. Trace every entry return value back to the "
-        "subtasks that produce it."
+        "subtasks that produce it.\n\n"
+        "Simple arithmetic (factorial, sum, count, fibonacci, etc.) — "
+        "write a short `pure fn` inline and call it from the entry. "
+        "DO NOT import anything for these. The only stdlib modules "
+        "that exist are `stdlib/core`, `stdlib/language`, and "
+        "`stdlib/utils`; any other import (`stdlib/math`, `stdlib/io`, "
+        "etc.) is an error — those modules exist in Python but NOT in "
+        "AIL."
     )
 
 
@@ -410,10 +429,77 @@ def _build_authoring_constraints(prior_errors: list[str]) -> list[str]:
         "every_declared_intent_must_be_invoked_in_entry",
         "no_markdown_fence_in_output",
     ]
-    # If we've retried, include the prior error text as a correction hint.
+    # If we've retried, include the prior error text as a correction
+    # hint AND any error-specific remediation. Small models otherwise
+    # repeat the same mistake: an `ImportResolutionError` for a
+    # non-existent module kept recurring because the error said what
+    # was missing but not what is available.
     if prior_errors:
-        base.append("previous_attempt_failed_with: " + prior_errors[-1])
+        last = prior_errors[-1]
+        base.append("previous_attempt_failed_with: " + last)
+        for hint in _remediation_hints(last):
+            base.append(hint)
     return base
+
+
+def _extract_default_input(prompt: str) -> Any:
+    """Pick a plausible default `input_text` from the NL prompt.
+
+    Conservative on purpose — we only want to populate `input_text`
+    when the signal is unambiguous, otherwise we leave it None and
+    let the model hardcode. Two cases fire:
+
+    1. Exactly one integer literal in the prompt → pass it as the
+       input string (e.g. "factorial of 7" → "7"). Covers the most
+       common shape of single-value arithmetic prompts.
+    2. Otherwise → None, preserving prior behavior.
+
+    Multiple numbers ("average of 10, 20, 30"), floats, negative
+    numbers, and hex are all deliberately NOT handled here — they
+    belong in the program the author writes, not in the input channel.
+    """
+    import re
+    ints = re.findall(r"(?<![.\d])\b(-?\d+)\b(?![.\d])", prompt)
+    if len(ints) == 1:
+        return ints[0]
+    return None
+
+
+def _remediation_hints(error_text: str) -> list[str]:
+    """Map a parse/import error to concrete corrective constraints.
+
+    Small models can self-correct when told what the RIGHT move is,
+    not just what went wrong. This is error-class pattern matching —
+    crude on purpose; each branch addresses an observed failure mode
+    from local runs and bench_authoring.py.
+    """
+    hints: list[str] = []
+    if "ImportResolutionError" in error_text:
+        hints.append(
+            "stdlib_has_only_three_modules: core, language, utils — "
+            "DO_NOT_import_math_io_string_or_other_names"
+        )
+        hints.append(
+            "for_arithmetic_factorial_fibonacci_etc_write_a_pure_fn_inline_no_import"
+        )
+    if "unexpected character '?'" in error_text:
+        hints.append(
+            "no_ternary_operator_in_AIL_use_if_else_instead"
+        )
+    if "LBRACK" in error_text and "IDENT" in error_text:
+        hints.append(
+            "no_generic_or_list_type_annotations_like_Array_or_[Number]_"
+            "use_plain_Number_or_Text"
+        )
+    if "unexpected character '\\\\'" in error_text or "unexpected character '\\'" in error_text:
+        hints.append(
+            "do_not_escape_newlines_as_backslash_n_emit_real_newlines"
+        )
+    if "LBRACE" in error_text and "top-level" in error_text:
+        hints.append(
+            "output_must_be_raw_AIL_source_not_wrapped_in_a_JSON_object"
+        )
+    return hints
 
 
 def _strip_source_fence(text: str) -> str:
@@ -448,7 +534,21 @@ def _strip_source_fence(text: str) -> str:
     # backtick-delimited region.
     elif s.startswith("`") and "`" in s[1:]:
         end = s.index("`", 1)
-        s = s[1:end].strip()
+        candidate = s[1:end].strip()
+        # Sanity check: if the backtick-wrapped content is obviously
+        # incomplete (no `entry` declaration), look for a full program
+        # echoed later in the response instead. Observed on
+        # llama3.1:8B for "factorial of 7": the model wraps
+        # `factorial(7)` in a single backtick and then echoes the
+        # prompt's examples section verbatim, which contains a full
+        # AIL program as a quoted Python string. The fallback tries to
+        # recover it; otherwise we keep the short candidate and let
+        # the parser reject it so the retry loop engages.
+        if "entry" in candidate:
+            s = candidate
+        else:
+            recovered = _recover_echoed_program(s)
+            s = recovered if recovered is not None else candidate
     # Case 3: prose with embedded fence(s). Find them all and take the
     # longest content block. Handles ```ail, ```, ```python (model
     # mislabeling), etc.
@@ -543,6 +643,36 @@ def _strip_ail_run_wrapper(s: str) -> str:
     return body.strip()
 
 
+def _recover_echoed_program(text: str) -> Optional[str]:
+    """When the model echoes the prompt's examples as quoted strings
+    and gives no real output, try to lift a complete AIL program out
+    of the echo.
+
+    Looks for `'...entry main...'` (single-quoted, as Python repr
+    would render it) or `"...entry main..."` (double-quoted) with
+    JSON-style `\\n` escapes, and returns the decoded body. Returns
+    None if no plausible program is found — the caller then keeps
+    whatever short candidate it had and the retry loop engages on
+    the parse failure.
+    """
+    import re
+    # Look for a quoted string that contains `entry main`. Greedy to
+    # the closing quote matching the opening one.
+    for open_q, close_q in (("'", "'"), ('"', '"')):
+        pattern = re.escape(open_q) + r"[^" + re.escape(close_q) + r"]*entry main[^" + re.escape(close_q) + r"]*" + re.escape(close_q)
+        match = re.search(pattern, text)
+        if match:
+            body = match.group(0)[1:-1]   # strip the quotes
+            # Decode `\n`, `\"`, `\\` the way Python repr would.
+            body = (body.replace("\\n", "\n")
+                        .replace("\\t", "\t")
+                        .replace('\\"', '"')
+                        .replace("\\'", "'")
+                        .replace("\\\\", "\\"))
+            return body.strip()
+    return None
+
+
 def _extract_fenced_blocks(text: str) -> list[str]:
     """Return the contents of every ``` ... ``` block in `text`."""
     blocks: list[str] = []
@@ -579,9 +709,23 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
     signatures). Fewer, simpler examples win.
     """
     return [
+        # Simple arithmetic — pins the shape small models need for
+        # "factorial of N", "sum 1 to N", "N squared" prompts. Replaces
+        # a trivial `return 42` example that taught very little and let
+        # the model anchor too strongly on the later hybrid template
+        # (observed failure: `ail ask "factorial of 7"` on llama3.1:8B
+        # kept inventing `import factorial from "stdlib/math"` + an
+        # unused sentiment intent because the hybrid example was its
+        # only concrete `fn`-centric anchor).
         (
-            [{"prompt": "Return the number 42"}],
-            'entry main(x: Text) { return 42 }',
+            [{"prompt": "Compute the factorial of 7"}],
+            (
+                'pure fn factorial(n: Number) -> Number {\n'
+                '    if n <= 1 { return 1 }\n'
+                '    return n * factorial(n - 1)\n'
+                '}\n'
+                'entry main(x: Text) { return factorial(7) }'
+            ),
         ),
         (
             [{"prompt": "Count the vowels in 'Hello World'"}],
