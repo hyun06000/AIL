@@ -4,6 +4,32 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.8.2 — 2026-04-20
+
+Real-world-prompt hardening. Each change fixes a failure mode
+surfaced by live `ail ask` calls after 1.8.1 shipped.
+
+- **Ollama HTTP timeout 120s → 300s**, with new env override
+  `AIL_OLLAMA_TIMEOUT_S`. Larger models (gemma2:27b etc.) couldn't
+  finish one author call with the full reference card in context
+  within the old limit, so every retry was silently hitting
+  socket.timeout.
+- **Trailing markdown fence tolerance.** gemma2:9B emits valid AIL,
+  then closes it with a standalone ``` line and appends an
+  "Explanation:" prose block. The lexer used to choke on the stray
+  backtick at the closing line. A new `_truncate_at_trailing_fence`
+  step cuts source at the first lone ``` that has real AIL content
+  above it.
+- **Retry hints for prose-only responses.** llama3.1:8B sometimes
+  abandons code entirely and writes a natural-language
+  explanation. The lexer error (`unexpected character '!'` or
+  top-level IDENT like `What` / `Let`) now triggers a targeted
+  constraint telling the author to emit only AIL, no prose.
+
+224 tests pass.
+
+---
+
 ## v1.8.1 — 2026-04-20
 
 **First PyPI release under the new name `ail-interpreter`.**
