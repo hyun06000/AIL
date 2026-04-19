@@ -4,6 +4,71 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.8.1 — 2026-04-20
+
+**First PyPI release under the new name `ail-interpreter`.**
+
+Distribution name on PyPI: `ail-interpreter` (was `ailang`, rejected
+by PyPI's similarity check against `ai-lang`). Import name and CLI
+both remain `ail`.
+
+**Packaging fixes**
+- `pyproject.toml` no longer packages a stray `ail_mvp/` directory
+  (left over on contributor disks from the v1.8 rename).
+- The language reference card is now bundled inside the wheel at
+  `ail/reference_card.md`. Previously `ail ask` on pip installs
+  silently fell back to a ~400-char stub instead of the real 22k
+  spec, degrading author prompt quality.
+- `tests/test_spec_bundled.py` guards against the bundled copy and
+  `spec/08-reference-card.ai.md` drifting.
+
+**Lexer**
+- `#` is now accepted as an alias for `//` line comments in both
+  the Python and Go runtimes. AI authors trained heavily on Python
+  reach for it reflexively; the cost of rejecting was a lost-
+  confidence moment per prompt. Spec keeps `//` canonical.
+
+**`ail ask` — first real-world prompt (`factorial of 7`) on llama3.1:8B**
+- Author prompt names the three real stdlib modules (core, language,
+  utils) so the model stops inventing `stdlib/math`.
+- `_remediation_hints` surface targeted corrections for five common
+  failure classes (bad imports, ternary `?:`, generic type
+  annotations like `[Number]`, literal `\n` escape leaks, top-level
+  JSON-wrapper leaks) — each carried into the retry prompt as a
+  constraint.
+- Few-shot example #1 (trivial `return 42`) replaced with a factorial
+  recursion example — small models anchor strongly to the first
+  example, and the old one taught nothing.
+- `ask()` auto-extracts a bare integer from the prompt as
+  `input_text` when the caller didn't pin one. Covers programs like
+  `factorial(to_number(x))` that would otherwise blow up recursion on
+  empty input.
+- Tolerance: when the model wraps its answer in a single backtick and
+  echoes the prompt's examples section verbatim (observed on
+  llama3.1:8B), `_recover_echoed_program` recovers the full AIL
+  program from the echo rather than extracting just the bare
+  expression.
+
+**Benchmark**
+- `tools/bench_authoring.py` rewritten to measure three axes — parse
+  rate, fn/intent routing accuracy, final-answer correctness — across
+  a 50-case corpus tagged `pure_fn` / `pure_intent` / `hybrid`.
+  Baseline on llama3.1:8B: 54% parse, 52% routing, 30% final-answer.
+  Hybrid routing jumped from 0/15 on the old prompt to 10/15 after
+  the decision rules landed.
+
+**Tolerance (unrelated to ask)**
+- Malformed JSON wrapper recovery — when the model returns
+  `{"value": "...", "confidence": 1.0}` with unescaped inner quotes,
+  a regex-based lenient extractor pulls out the AIL source instead
+  of falling through to the parser.
+- Literal-`\n`-escape unescape — source with backslash-n and no real
+  newlines gets decoded.
+
+**Tests:** 223 passing (was 211 in v1.8.0).
+
+---
+
 ## v1.5 — 2026-04-17
 
 **Implicit parallelism.** Independent intent calls run concurrently.
