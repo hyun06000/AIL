@@ -48,6 +48,17 @@ from ail import ask, AuthoringError, compile_source
 from ail.parser.ast import FnDecl, IntentDecl, ImportDecl
 
 
+def _trim_dot_zero(s: str) -> str:
+    """Return `s` without a single trailing `.0` suffix. Idempotent.
+
+    Used to reconcile Python's `str(42.0) == "42.0"` against
+    `str(42) == "42"` without clobbering legitimate digit characters.
+    """
+    if s.endswith(".0"):
+        return s[:-2]
+    return s
+
+
 @dataclass
 class Case:
     """One benchmark entry.
@@ -68,15 +79,22 @@ class Case:
     notes: str = ""
 
     def answer_ok(self, actual: Any) -> bool:
-        """Lenient numeric/string match — trims whitespace, trailing
-        zeros after a decimal point, and case. Only meaningful when
-        `expected` is set (pure_fn cases)."""
+        """Lenient numeric/string match — drop only a single trailing
+        ".0" suffix on each side, then compare. Only meaningful when
+        `expected` is set (pure_fn cases).
+
+        The previous version used `.rstrip("0").rstrip(".")` which
+        greedily ate any trailing `0`, so `str(30)` became `"3"` and
+        the check mis-reported mismatches on anything ending in zero
+        (30, 110, 120, 5050 — the bug hid itself by silently failing
+        tasks whose expected values happened to end in a zero digit).
+        """
         if self.expected is None:
             return True   # non-deterministic cases: no answer check
         if self.check is not None:
             return self.check(actual)
-        a = str(actual).strip().lower().rstrip("0").rstrip(".")
-        b = str(self.expected).strip().lower().rstrip("0").rstrip(".")
+        a = _trim_dot_zero(str(actual).strip().lower())
+        b = _trim_dot_zero(str(self.expected).strip().lower())
         return a == b
 
 

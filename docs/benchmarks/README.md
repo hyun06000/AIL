@@ -51,7 +51,8 @@ Wall clock on a 3070 with `qwen2.5-coder:14b-q4_K_M`: ~60s per case.
 
 | File | Model | Category | Cases | AIL parse | AIL route | Python parse | Python route | Note |
 |---|---|---|---|---|---|---|---|---|
-| `2026-04-20_qwen25-coder-14b_hybrid.json` | qwen2.5-coder:14b-instruct-q4_K_M | hybrid | 5 | 40% | 20% | 100% | 40% | **Baseline.** Python runs every time but 3 of 5 programs hardcoded the judgment subtask — that's what a 40% route rate means in practice. |
+| `2026-04-20_qwen25-coder-14b_hybrid.json` | qwen2.5-coder:14b-instruct-q4_K_M | hybrid | 5 | 40% | 20% | 100% | 40% | **Initial baseline.** Python runs every time but 3 of 5 programs hardcoded the judgment subtask. |
+| `2026-04-20_qwen25-coder-14b_all.json` | qwen2.5-coder:14b-instruct-q4_K_M | all 50 | 50 | **64%** | 60% | 100% | 72% | **Full baseline to beat.** By category: hybrid parse 46% / route 33%, pure_fn parse 85% / answer 80%, pure_intent parse 53%. Python on hybrid routes through the LLM only 33% of the time — the other 67% are silent LLM-skips. |
 
 ---
 
