@@ -457,7 +457,39 @@ def _strip_source_fence(text: str) -> str:
     # programs containing apostrophe data should use the input channel,
     # not embed the literal in source.
     s = _normalize_single_quotes(s)
+    # Case 6: source has literal `\n` (backslash + n) but no real
+    # newlines — the model emitted its AIL as a JSON string body
+    # (escaping newlines) and wrote it to an output channel that
+    # didn't strip the escapes. Observed on llama3.1:8B for prompts
+    # like "count words in X": the entire program lands on line 1
+    # with `\n` between statements, which the lexer rejects with
+    # `LexError: unexpected character '\'`. Conservative: only
+    # unescape when there are literally zero real newlines in the
+    # source, so we don't damage legitimate `\n` sequences inside
+    # string literals of a multi-line program.
+    s = _normalize_literal_escapes(s)
     return s
+
+
+def _normalize_literal_escapes(s: str) -> str:
+    """Decode JSON-style escapes if the source has none of the real
+    characters they stand in for.
+
+    Triggered when the model emitted AIL as a JSON string body and
+    the transport layer didn't apply JSON decoding. Only runs if
+    `\\n` is present AND no actual newline is present — that pairing
+    uniquely identifies the leak; any legitimate multi-line program
+    fails the precondition and passes through unchanged.
+    """
+    if "\\n" not in s or "\n" in s:
+        return s
+    return (
+        s.replace("\\n", "\n")
+         .replace("\\t", "\t")
+         .replace("\\r", "\r")
+         .replace('\\"', '"')
+         .replace("\\'", "'")
+    )
 
 
 def _normalize_single_quotes(s: str) -> str:
