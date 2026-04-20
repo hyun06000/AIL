@@ -1,6 +1,6 @@
 # AIL Specification — 00: Overview
 
-**Version:** 0.1 draft · **Status:** Design, not frozen
+**Version:** 1.8 · **Status:** Grammar frozen for one release cycle (see [09-stability.md](09-stability.md))
 
 ---
 
@@ -36,6 +36,9 @@ The spec is numbered:
 - **[04-evolution.md](04-evolution.md)** — self-modification
 - **[05-effects.md](05-effects.md)** — effects, authorization, safety
 - **[06-stdlib.md](06-stdlib.md)** — built-in intents
+- **[07-computation.md](07-computation.md)** — general-purpose computation semantics
+- **[08-reference-card.ai.md](08-reference-card.ai.md)** — machine-readable grammar surface (canonical for the freeze)
+- **[09-stability.md](09-stability.md)** — freeze policy: what is and isn't contractually stable
 
 Each document is self-contained at the conceptual level but may reference others for detail.
 

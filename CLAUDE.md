@@ -367,7 +367,7 @@ Fine-tuning becomes the right move when ALL of these are true:
 - [ ] The benchmark has been run on at least 2 base models
 - [ ] Prompt engineering has been exhausted (diminishing returns)
 - [ ] The primary failure mode is identified as "model doesn't know AIL syntax" (not prompt or logic issues)
-- [ ] The AIL spec has been frozen for at least one version cycle (no grammar changes planned)
+- [x] The AIL spec has been frozen for at least one version cycle (no grammar changes planned) — v1.8 frozen 2026-04-20 per spec/09-stability.md
 - [ ] You have at least 200 validated (prompt, correct_AIL_output) pairs from the benchmark to use as training data
 
 Until all boxes are checked, the 3070 server is better used for running benchmark automation with Ollama.

@@ -144,8 +144,8 @@ After this run:
   ✅ Prompt engineering exhausted  (v1/v2/v3 null on qwen14b)
   ✅ Primary failure mode identified  (Python-distribution contamination)
   ✅ ≥ 200 validated pairs  (205 today)
-  ❌ AIL spec frozen for one version cycle
+  ✅ AIL spec frozen for one version cycle  (v1.8, 2026-04-20, spec/09-stability.md)
 
-**4/5 met.** Only the spec freeze remains. Sonnet's 36% AIL parse
+**5/5 met** (freeze landed same day as this summary). Sonnet's 36% AIL parse
 (vs 42% on qwen14b) is in the same low range — prompt engineering
 hitting a training-distribution ceiling, as predicted.

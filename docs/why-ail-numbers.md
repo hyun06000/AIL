@@ -196,11 +196,10 @@ Current status against the 5 fine-tuning prerequisites:
 - ✅ Benchmark results from ≥ 2 base models (now **3**: llama8b, qwen14b, Sonnet 4.6)
 - ✅ Prompt engineering exhausted (v1 / v2 / v3 all plateau on qwen14b)
 - ✅ Primary failure mode identified (Python-distribution contamination)
-- ❌ AIL spec frozen for one version cycle
+- ✅ AIL spec frozen for one version cycle — **v1.8 frozen 2026-04-20** ([`spec/09-stability.md`](../spec/09-stability.md))
 - ✅ ≥ 200 validated (prompt, correct AIL) pairs — **205 today** ([`reference-impl/training/dataset/`](../reference-impl/training/dataset/))
 
-**4/5 met.** Waiting on a conscious freeze of the grammar for
-one release cycle. After that, the training pipeline at
+**5/5 met.** The training pipeline at
 [`reference-impl/training/`](../reference-impl/training/) is
 ready to run on a consumer GPU.
 
