@@ -10,6 +10,40 @@
 
 ---
 
+## 측정된 결과 — 모델 3종, 프롬프트 50개, 4개 차원
+
+같은 벤치마크, 같은 코퍼스, 저자 모델만 3종으로 바꾼 결과입니다. 각 모델에게 동일 과제를 **AIL 로 한 번**, **Python (stdlib 만, LLM 호출이 필요하면 `urllib` 로 직접 POST) 으로 한 번** 작성하게 하고, 두 프로그램을 실제로 실행해서 파싱 성공률 / 라우팅 정확도(판단이 필요한 과제에서 실제로 LLM 을 호출했는가) / 정답성 / 안전성(에러 핸들링, 부작용, 루프) 을 각각 매깁니다.
+
+도구: [`reference-impl/tools/benchmark.py`](../../reference-impl/tools/benchmark.py) · 코퍼스: [`benchmarks/prompts.json`](../../benchmarks/prompts.json) · 원본 JSON: [`docs/benchmarks/`](../benchmarks/)
+
+| 모델 | AIL parse | Python parse | Python routing | **Python 가 에러 핸들링 건너뜀** | **AIL 이 에러 핸들링 건너뜀** |
+|---|---|---|---|---|---|
+| `llama3.1:8b` | 8% | 14% | 80%* | **86% (43/50)** | 0% |
+| `qwen2.5-coder:14b` | 42% | 100% | 64% | **42% (21/50)** | 0% |
+| `claude-sonnet-4-6` | 36% | 100% | 100% | **70% (35/50)** | 0% |
+
+\* llama8b 의 라우팅 수치는 Python 을 86% 비율로 아예 못 써서 부풀려진 값입니다 — `fn_only` 프롬프트에서 "LLM 을 안 부름" 이 기본 크레딧으로 잡힙니다.
+
+**핵심 발견 하나.** Claude Sonnet 4.6 — 세 모델 중 가장 강한, 프론티어급 모델 — 은 LLM 라우팅을 **100%** 정확하게 합니다 (작은 모델들이 보이는 "LLM 호출을 조용히 생략" 문제는 이 모델 티어에서 해결됩니다). **그런데 실패 가능한 연산에서 에러 핸들링은 여전히 70% 비율로 건너뜁니다.** 이 비율은 모델이 강해진다고 떨어지지 않습니다 — qwen14b 의 42% 에서 Sonnet 의 70% 로 오히려 **올라갑니다**. 강한 모델일수록 실제 I/O 를 더 많이 써서 `try/except` 를 빠뜨릴 자리가 더 많기 때문입니다.
+
+AIL 의 에러 핸들링 누락률은 **모든 모델에서 0%** 입니다. `Result` 타입이 문법의 일부이기 때문입니다 — 저자는 실패 가능한 경계마다 `is_ok` 또는 `unwrap_or` 를 반드시 쳐야 합니다. "그냥 까먹기" 옵션이 없습니다. 이게 harness 주장을 한 줄로 요약한 것입니다: **어떤 안전성은 설정이 아니라 언어의 속성이다.**
+
+AIL 이 뒤처지는 지점: parse rate. Python 이 저작 게임에서 이기는 이유는 모델들이 AIL 보다 몇 자릿수 더 많은 Python 을 봤기 때문입니다. 해결책은 작은 모델을 AIL 로 fine-tune 하는 것 — AIL 문법이 한 릴리즈 사이클 동안 freeze 될 때까지 보류 중입니다. Opus 4 가 명시한 5개 전제조건 중 4개가 충족됐습니다 ([`docs/benchmarks/2026-04-20_claude_sonnet46_summary.md`](../benchmarks/2026-04-20_claude_sonnet46_summary.md) 에 전체 상태가 기록돼 있습니다).
+
+**표 재현:**
+
+```bash
+pip install 'ail-interpreter[anthropic]'        # 또는 Ollama 만 쓸 거면 ail-interpreter
+export ANTHROPIC_API_KEY=sk-ant-...              # 또는 AIL_OLLAMA_MODEL=llama3.1:latest
+export BENCHMARK_BACKEND=anthropic               # 또는 unset (기본값 ollama)
+git clone https://github.com/hyun06000/AIL && cd AIL/reference-impl
+python tools/benchmark.py --out ../docs/benchmarks/$(date +%F)_your-model.json
+```
+
+모델당 20–40분, Anthropic 런은 Sonnet 4.6 가격 기준 약 $2.
+
+---
+
 ## 왜 이 프로젝트가 존재하는가
 
 오늘날 쓰이는 모든 주요 프로그래밍 언어는 **사람이 코드를 쓴다**는 전제로 설계됐습니다. 문법은 사람의 인지 부담을 줄이기 위해 존재하고, 타입 시스템은 사람의 실수를 방지하기 위해 있으며, IDE는 사람의 기억을 보조합니다.

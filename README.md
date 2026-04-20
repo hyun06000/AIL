@@ -4,11 +4,45 @@
 
 **Status:** v1.8.2 · PyPI: `ail-interpreter` · Python interpreter (249 tests) · Second runtime in Go · `ail ask` natural-language interface
 
-📊 **Numeric case (start here if you're evaluating):** [`docs/why-ail-numbers.md`](docs/why-ail-numbers.md) — on the same task, the **same model's Python code skips required error handling 40–86% of the time; AIL makes that skip impossible.** Benchmarked across two models, four dimensions, 50 prompts. Raw JSONs under [`docs/benchmarks/`](docs/benchmarks/).
+📊 **Numeric case (start here if you're evaluating):** [`docs/why-ail-numbers.md`](docs/why-ail-numbers.md) — headline results summarised below.
 
 🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md)
 🤖 **AI/LLM:** [`README.ai.md`](README.ai.md) — structured reference, no prose. Start with [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md).
 ❓ **"Why not just Python?"** — [`docs/why-ail.md`](docs/why-ail.md) walks through the six concrete things AIL gives you that a Python+LLM SDK stack doesn't, with runnable proof for each.
+
+---
+
+## Measured results — three models, 50 prompts, four dimensions
+
+Same benchmark, same corpus, three different authoring models. Each model was asked to write the solution **once in AIL** and **once in Python (stdlib only, urllib for any LLM call)**. The two programs are executed and scored on parse success, routing correctness (did it call the LLM when the task actually required judgment?), answer correctness, and safety (error handling, side effects, loops).
+
+Tool: [`reference-impl/tools/benchmark.py`](reference-impl/tools/benchmark.py) · Corpus: [`benchmarks/prompts.json`](benchmarks/prompts.json) · Raw JSONs: [`docs/benchmarks/`](docs/benchmarks/)
+
+| Model | AIL parse | Python parse | Python routing | **Python skips error handling** | **AIL skips error handling** |
+|---|---|---|---|---|---|
+| `llama3.1:8b` | 8% | 14% | 80%* | **86% (43/50)** | 0% |
+| `qwen2.5-coder:14b` | 42% | 100% | 64% | **42% (21/50)** | 0% |
+| `claude-sonnet-4-6` | 36% | 100% | 100% | **70% (35/50)** | 0% |
+
+\* llama8b's routing is inflated by the model failing to author valid Python 86% of the time — "no LLM call" gets credit on `fn_only` prompts by default.
+
+**The one finding worth keeping.** Claude Sonnet 4.6 — a frontier model, strongest of the three — routes LLM calls correctly on **100%** of prompts (the "silent LLM skip" problem weaker models have is solved at this model tier). **It still skips required error handling on 70% of failable operations.** The rate does NOT drop as models get stronger; it rises from qwen14b's 42% to Sonnet's 70% because stronger models write more real I/O that has more places to miss a `try/except`.
+
+AIL's error-handling rate is 0% on every model, because `Result` is part of the grammar — the author has to type `is_ok` or `unwrap_or` at every failable boundary. There's no "just forget" option. This is the harness claim in one number: **some safety properties are language properties, not configuration properties.**
+
+Where AIL is behind: parse rate. Python wins at authoring because the models have seen orders of magnitude more Python than AIL. The fix is a fine-tuned small model — currently paused until the AIL grammar is frozen for one release cycle. Four of the five prerequisites Opus 4 specified are met ([`docs/benchmarks/2026-04-20_claude_sonnet46_summary.md`](docs/benchmarks/2026-04-20_claude_sonnet46_summary.md) tracks the full status).
+
+**Reproduce the table:**
+
+```bash
+pip install 'ail-interpreter[anthropic]'        # or plain ail-interpreter for Ollama only
+export ANTHROPIC_API_KEY=sk-ant-...              # or AIL_OLLAMA_MODEL=llama3.1:latest
+export BENCHMARK_BACKEND=anthropic               # or unset for default ollama
+git clone https://github.com/hyun06000/AIL && cd AIL/reference-impl
+python tools/benchmark.py --out ../docs/benchmarks/$(date +%F)_your-model.json
+```
+
+20–40 minutes per model; Anthropic run costs ~$2 at Sonnet 4.6 pricing.
 
 ---
 
