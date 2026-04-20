@@ -369,7 +369,8 @@ def _build_authoring_goal() -> str:
     # either avoid `intent` entirely or declare one and never call it.
     # The explicit rules and the hybrid example in `_authoring_examples`
     # work together to pin the correct pattern.
-    return (
+    import os
+    base = (
         "You are an AIL source-code author. Your output is source code, "
         "not an answer. The 'value' field of your response MUST be a "
         "string containing a complete AIL program. When the user says "
@@ -417,6 +418,47 @@ def _build_authoring_goal() -> str:
         "etc.) is an error — those modules exist in Python but NOT in "
         "AIL."
     )
+    # ────────────────────────────────────────────────────────────────
+    # Optional v2 FORBIDDEN-SYNTAX extension.
+    # Enabled by AIL_AUTHOR_PROMPT_VARIANT=v2 at inference time. The
+    # block enumerates concrete syntax patterns observed (in the Opus
+    # 50-prompt benchmark on qwen2.5-coder:14b) to leak from the
+    # model's Python training into AIL output. Keeping it behind a
+    # flag makes the A/B measurable: same model, same corpus, only
+    # the prompt differs.
+    # ────────────────────────────────────────────────────────────────
+    if os.environ.get("AIL_AUTHOR_PROMPT_VARIANT") == "v2":
+        base += (
+            "\n\n"
+            "FORBIDDEN SYNTAX — the AIL parser will reject every item "
+            "below. Do NOT emit any of them. The model's Python training "
+            "makes these tempting; suppress them explicitly.\n"
+            "  * Generic / parameterized type annotations: `List[Text]`, "
+            "`Tuple[Number, Text]`, `Array<Text>`, `Dict[K,V]`. AIL "
+            "types are bare identifiers only: `Text`, `Number`, "
+            "`Boolean`. Write `nums: Number` not `nums: List[Number]`.\n"
+            "  * Ternary operator: `a ? b : c`. Use an explicit `if a { "
+            "return b } else { return c }` or `if a { ... }` followed "
+            "by a return.\n"
+            "  * stdlib imports that do not exist: `stdlib/math`, "
+            "`stdlib/io`, `stdlib/string(s)`, `stdlib/json`, "
+            "`stdlib/datetime`, `stdlib/re`. Only `stdlib/core`, "
+            "`stdlib/language`, and `stdlib/utils` exist.\n"
+            "  * Method-call syntax on non-objects: `\"hello\".upper()`. "
+            "Write `upper(\"hello\")`. Same for `.split()`, `.length`, "
+            "`.append(x)`.\n"
+            "  * List comprehensions: `[x * 2 for x in xs]`. Write a "
+            "`for` loop that appends to a list.\n"
+            "  * Python-only keywords: `def`, `lambda`, `None`, `elif`, "
+            "`pass`. AIL uses `fn` / `pure fn` / `intent`, full `if / "
+            "else if / else`, and has no null sentinel.\n"
+            "  * Capitalised booleans: `True`, `False`. AIL uses "
+            "lowercase `true`, `false`.\n"
+            "If the task seems to need any of the forbidden patterns, "
+            "re-express the computation using only the forms the "
+            "reference card shows."
+        )
+    return base
 
 
 def _build_authoring_constraints(prior_errors: list[str]) -> list[str]:
