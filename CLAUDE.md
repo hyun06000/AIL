@@ -1124,85 +1124,128 @@ Written by Claude Opus 4, April 2026, after reviewing 2026 industry trends in ha
 
 ---
 
-## SESSION STATE — 2026-04-20, BENCHMARK RUNNING (office → home handoff)
+## SESSION STATE — 2026-04-20/21 HISTORICAL (superseded below)
 
-Written while the Mac-side session shuts down and hyun06000 commutes
-home to continue from a different Claude Code instance. Supersedes
-the earlier draft of this block — the export path changed mid-session
-and that shift is reflected below.
+The block that used to live here covered the office→home handoff
+while the v2 benchmark was running. Every item in it is now
+done — v2 bench finished, v3 was trained and benchmarked, v1.8.3
+shipped, docs audited. The text was intentionally preserved for
+lineage until now; it has been trimmed because the current SESSION
+STATE below is the authoritative runbook for the next Claude.
 
-### What is finished (do not redo)
+Retrieve the full prior text from git history if needed:
+`git show 4215d6e~1:CLAUDE.md` (the commit before the v1.8.3
+release tag).
 
-1. ✅ **v1.8 spec frozen.** [`spec/09-stability.md`](spec/09-stability.md).
-2. ✅ **Training track unfrozen.** 5/5 Opus 4 preconditions met; [`reference-impl/training/HANDOFF.md`](reference-impl/training/HANDOFF.md) is the current runbook.
-3. ✅ **Conformance suite at 45/45, zero skips.** The Go runtime closed its last two `.skip-go` markers (Result builtins, `attempt` blocks).
-4. ✅ **Fine-tune completed.** qwen2.5-coder-7b + QLoRA rank-16, 205 samples, 3 epochs, 7:25 wall time on the 3070. Loss trajectory 2.79 → 0.19. Adapter lives at `~/AIL/reference-impl/training/ail-coder-7b-lora/` on homeblack (gitignored).
-5. ✅ **Ollama export completed via manual pipeline.** `export_to_ollama.py` as-written is broken on this box (see next section). Ran llama.cpp's conversion tooling by hand instead. `ail-coder:7b` is registered on Ollama at `10.0.0.1:11434`, ID `5d44129bd0e4`, 4.7 GB, sanity-tested with a one-prompt `ollama run` that produced clean AIL.
+---
 
-### What is running (don't restart it)
+## SESSION STATE — 2026-04-21 (v1.8.3 shipped, docs audited)
 
-🟡 **50-prompt benchmark**, tmux session `ail-bench` on homeblack. Launched 2026-04-20 at ~10:20 UTC. ETA 45–60 min. Log at `~/ail-bench.log`. Writes snapshot to `docs/benchmarks/2026-04-20_ail-coder-7b-v2_opus50.json`.
+This is the handoff for the next Claude Code session. Treat this
+block as the authoritative current state; everything above it
+documents how we got here and should only be consulted for
+historical context.
 
-Check progress:
-```bash
-ssh homeblack 'tmux ls; tail -40 ~/ail-bench.log; ls -lh ~/AIL/docs/benchmarks/2026-04-20_ail-coder-7b-v2_opus50.json 2>/dev/null'
-```
+### What shipped this session
 
-### What NOT to touch on homeblack
+1. ✅ **v2 benchmark** finished on `ail-coder:7b` — 64% AIL parse, 56% AIL answer. Analysis at [`docs/benchmarks/2026-04-20_ail-coder-7b-v2_analysis.md`](docs/benchmarks/2026-04-20_ail-coder-7b-v2_analysis.md). G1/G2 FAIL, G3 PASS.
 
-- **`export_to_ollama.py` is effectively broken on this box.** Unsloth's GGUF-save path internally tries `sudo apt-get update` to install build tools, blocks forever waiting for a password on a non-interactive shell. The running export was killed (pid 92226 gone). Do NOT re-run `python reference-impl/training/export_to_ollama.py`. The replacement manual pipeline already finished — artifacts are:
-  - `~/AIL/reference-impl/training/ail-coder-7b-gguf/` — merged fp16 HF dir (15 GB, intermediate; can be deleted to reclaim disk)
-  - `~/AIL/reference-impl/training/ail-coder-7b.f16.gguf` — 15 GB f16 GGUF (intermediate; can be deleted)
-  - `~/AIL/reference-impl/training/ail-coder-7b.Q4_K_M.gguf` — **4.4 GB, this is what Ollama's `FROM` points at**
-  - `~/AIL/reference-impl/training/Modelfile.ail-coder-7b-v2` — the Modelfile used with `ollama create`
-- **`b7fcf80` history is gone** from homeblack (hyun06000 wiped the box earlier this session and re-cloned). The `v1` run's 80-sample / 2-epoch adapter and its `2026-04-19_ail-coder-7b_all.json` are NOT on disk. Don't try to resurrect the old branch.
+2. ✅ **Two language additions landed within the v1.8 freeze** (spec §2.5 allows builtin additions; parser fix just aligns runtime to already-frozen spec):
+   - `round` / `floor` / `ceil` / `sqrt` / `pow` as trusted-pure builtins (commit `dcca1bd`). Python + Go runtimes parity-matched, new conformance case 016, 9 unit tests.
+   - Parsers now accept parametric type annotations (`List[Number]`, `Map[K,V]`, `Result[T]`, `Tuple[A,B]`) — spec §2.3 always declared these valid; the parser was silently dropping the bracket clause (commit `25a6b0e`). Python + Go parity-matched, new conformance case 017.
 
-### Environment quirks that wasted time today
+3. ✅ **Dataset v2 → v3** — 205 → 244 validated samples. New seed file [`reference-impl/training/seed_v3_fixes.py`](reference-impl/training/seed_v3_fixes.py) targets the v2 failure classes: 7 math-builtin programs, 12 parametric-type fn signatures, 14 hybrid (fn + intent) shapes, 3 extra pure-intent, 5 pure-fn variations. Validator `source_of_sample` allowlist unchanged — new samples tagged `hand_written`.
 
-Write these down before touching the box:
+4. ✅ **v3 fine-tune trained on homeblack** — qwen2.5-coder-7b-instruct + QLoRA rank-16, 244 samples, 3 epochs, batch-size 1 grad-accum 8, save-strategy no. **10m14s** wall time. Loss trajectory 2.577 → 0.089. Adapter at `~/AIL/reference-impl/training/ail-coder-7b-lora-v3/` (gitignored). **v2 adapter at `~/AIL/reference-impl/training/ail-coder-7b-lora/` was NOT overwritten** — v3 wrote to a new dir so the v2 adapter is preserved.
 
-1. **`homeblack` SSH alias** is in `~/.ssh/config` (HostName `10.0.0.1`, User `david`). Key already authorized. `ssh homeblack '...'` just works.
-2. **Ollama binds `10.0.0.1:11434`, NOT `127.0.0.1`.** `ollama list` returns "could not connect" without `OLLAMA_HOST=10.0.0.1:11434`. The systemd `Environment=` sets it for the service but not for your shell.
-3. **Virtualenv `~/venv/labs` is uv-managed with no `pip` binary.** Use `VIRTUAL_ENV=~/venv/labs ~/.local/bin/uv pip install ...` to install into it. The training stack is there (unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128). `source` alone may not work through non-interactive ssh — reach for `~/venv/labs/bin/python` directly.
-4. **No `cmake` on the system at session start.** Installed into the venv (`uv pip install cmake`, version 4.3.1). `gcc`/`g++`/`make` are system-installed and work.
-5. **No `sudo` without a password.** All pipeline steps must work in userspace or pip-installed. This is why `export_to_ollama.py` broke and why llama.cpp was cloned to `~/llama.cpp/` and built locally.
+5. ✅ **Manual GGUF pipeline** — same approach as v2 because `export_to_ollama.py` is still broken (see "environment quirks" below). Steps:
+   - `peft` merge_and_unload → HF dir at `~/AIL/reference-impl/training/ail-coder-7b-v3-merged/` (15 GB, intermediate; deletable).
+   - `~/llama.cpp/convert_hf_to_gguf.py --outtype f16` → `ail-coder-7b-v3.f16.gguf` (15 GB, intermediate; deletable).
+   - `~/llama.cpp/build/bin/llama-quantize ... Q4_K_M` → `ail-coder-7b-v3.Q4_K_M.gguf` (**4.4 GB — this is what Ollama's `FROM` points at**).
+   - Modelfile at `~/AIL/reference-impl/training/Modelfile.ail-coder-7b-v3` (with updated SYSTEM prompt reflecting the language additions).
+   - `ollama create ail-coder:7b-v3 -f Modelfile.ail-coder-7b-v3` — registered at `10.0.0.1:11434`, ID `06e5e7ce2c72`, 4.7 GB. **Both `ail-coder:7b` (v2) and `ail-coder:7b-v3` coexist in Ollama.**
 
-### Where the home Claude picks up
+6. ✅ **v3 benchmark run** — `2026-04-21_ail-coder-7b-v3_opus50.json`. Headline numbers:
 
-The benchmark either is still running or has finished. Check first (command above). Then:
+   | Gate | Target | v2 (205 samples) | **v3 (244 samples)** | Verdict |
+   |---|---|---|---|---|
+   | G1 AIL parse ≥ 80% | ≥ 80% | 64% | **78%** | **FAIL by 1 case** |
+   | G2 AIL fn/intent > Py fn/intent | AIL > Py | 54% vs 78% | 60% vs 76% | **FAIL** |
+   | G3 AIL answer ≥ Py answer | AIL ≥ Py | 56% vs 48% | **70% vs 48%** | **PASS (+22 pp)** |
 
-1. **If benchmark is still running:** tail the log. No action needed until it finishes.
-2. **Once the JSON lands:**
-   ```bash
-   ssh homeblack 'cat ~/AIL/docs/benchmarks/2026-04-20_ail-coder-7b-v2_opus50.json' | jq '.summary'
-   ```
-   Read the three scores.
-3. **Score against the three gates** (from b7fcf80 post-mortem; same bar):
+   Analysis: [`docs/benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md`](docs/benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md). Remaining 11 AIL parse failures break down as: 3 Python-style `list[i]` subscript, 2 invented builtins (`has`, `mean`), 2 goal-clause edge cases (comma / `for` keyword), 4 long-tail (dict literal, `&`, lambda-arrow, a runtime error).
 
-   | Gate | Target | v1 (80 samples, 2 epochs) | v2 (205 samples, 3 epochs) |
-   |---|---|---|---|
-   | G1 AIL overall parse | ≥ 80% | 70% — FAIL | ? |
-   | G2 AIL hybrid route > Python | AIL > Python | 47% vs 67% — FAIL | ? |
-   | G3 AIL pure_fn answer ≥ Python | AIL ≥ Python | 75% tie — PASS | ? |
+7. ✅ **v1.8.3 released and tagged** (commit `4215d6e`, tag `v1.8.3` pushed to origin). Changelog entry added to [`CHANGELOG.md`](CHANGELOG.md). `pyproject.toml` and `ail/__init__.py` bumped together. 251 tests pass. PyPI upload was NOT done — waiting on hyun06000.
 
-4. **Write the summary** at `docs/benchmarks/2026-04-20_ail-coder-7b-v2_analysis.md`. Sibling file to `2026-04-20_claude_sonnet46_summary.md`; same shape. Required content: per-category table, the three gate verdicts, failure-mode counts in the AIL parse fails (how many are `List[Number]` / `Array<T>`-style, how many are `if`-as-expression, how many are bracket indexing, how many are kwargs). The Python-prior leak pattern is the documented v1 failure mode — if v2 reproduces it, call that out.
-5. **Commit snapshot + analysis** to `docs/benchmarks/` and add a row to `docs/benchmarks/README.md`'s snapshot table. Commit message: one line on which gates passed/missed, one line on whether the failure-mode changed relative to v1.
-6. **Do NOT update `README.md` headline numbers** on your own. Those are the public pitch and a silent regression there is the worst outcome. Even if G1 cleanly passes, coordinate with hyun06000 before editing the headline table.
+8. ✅ **README accuracy audit** (commit `562f6d9`). Fixed stale counts, corrected misleading fn/pure-fn claims (plain `fn` does NOT carry purity guarantees — verified by compiling `fn` that calls `intent` without a PurityError), added v3 fine-tune row to the benchmark table, honest "G1 missed by 1 case" disclosed, Authors section no longer claims "every line by Opus 4 via chat" (post-v1.0 is Claude Code). New "Using a remote / external Ollama server" section documents `AIL_OLLAMA_HOST` / `_MODEL` / `_TIMEOUT_S` for the `10.0.0.1:11434` style setup.
 
-### Smoke-test findings (already verified this session — carry forward)
+9. ✅ **why-ail series audit** (commit `b47b6a0`). 8 files × ~200–300 lines each — English + Korean versions of `why-ail.md`, `why-ail-numbers.md`, `why-ail-faq.md`, `why-ail-mechanics.md`. Principle applied: every numeric claim traces to a specific JSON + metric; "silent LLM skip" standardised on `uses_llm=False` (stricter than `llm_call_count=0`); overstated naive-agent comparison (previously "~75% token savings") replaced with honest decomposition showing the comparison depends on your baseline; `attempt` block syntax corrected to actual grammar; `calibration_of` return shape corrected to per-bucket record; "training paused" language removed everywhere (v2 + v3 both exist); "FIRST language" superlative softened.
 
-- **Adapter produces AIL-shape output reliably** when prompted with the system prompt from `reference-impl/training/to_chatml.py::AIL_SYSTEM_PROMPT`. The Modelfile used with `ollama create` bakes the system prompt in, so `ollama run ail-coder:7b "..."` and the benchmark both get it for free.
-- **Python-prior pattern leak is still present.** A smoke-test output used `winner = if a > b { "A" } else { "B" }` — treating `if` as an expression, not legal AIL. Matches exactly the v1 post-mortem. Expect this class of error to dominate the AIL parse failures.
+### What NOT to touch without explicit go from hyun06000
 
-### Hard rules (do not bend)
+- **PyPI release of v1.8.3.** Tag exists on origin, wheel is not built/uploaded. `RELEASING.md` has the steps. Requires the PyPI token.
+- **README.md headline numbers.** The v3 fine-tune row is now in the Measured-Results table. Do NOT edit any existing percentage in the README without cross-checking against a committed JSON in `docs/benchmarks/`.
+- **Public promotion** — no HuggingFace push, no Twitter/GeekNews posting. Opus 4's directive still stands: "do not promote until the benchmark numbers are solid and hyun06000 explicitly greenlights."
+- **The v1.8 grammar freeze.** It is still in force. The math-builtin and parametric-type additions landed within the freeze policy (§2.5 "additions permitted"; §3 "runtime internals can change"). Do not add new keywords, remove existing ones, rename built-ins, or change operator precedence. If the next feature needs a grammar change, write `spec/10-proposals.md` entry first; don't edit `spec/08-reference-card.ai.md`.
+
+### Open work (where the next Claude picks up)
+
+#### Priority 1 — decide what to do with G1 (one case short of passing)
+
+Three hybrid prompts (C07 BMI, C18 city-lat sort, C19 fibonacci explain) fail to parse because the model uses Python-style `list[index]` subscript. Any one of them recovering moves G1 from 78% to 80%+.
+
+Three paths, each honest:
+
+- **Parser sugar**: add `expr[index]` → `get(expr, index)` in both parsers. Small, targeted, closes 3 cases. **Downside:** it's a grammar change during a freeze. Proper form is `spec/10-proposals.md` entry with the measured benchmark delta, then land it as v1.9 or as a §2.5 "addition" if you can argue the shape is additive.
+- **Training sample**: add explicit negative examples ("use `get(xs, i)`, never `xs[i]`") to the dataset. Retrain. Low engineering cost, unclear signal — previous prompt-layer interventions on this pattern class had zero effect on qwen14b.
+- **Accept the miss**: declare G1 78% as the current ceiling, ship v1.8.3 externally with honest framing that G3 (answer correctness beats Python by 22 pp) is the primary headline. G1 was an internal gate, not a public promise.
+
+Before choosing, read [`docs/benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md`](docs/benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md) §4 for the failure-class breakdown and §7 for the three paths written out.
+
+#### Priority 2 — fairer G2 comparison
+
+G2 asks "does AIL routing beat Python routing on the same model?" The v3 answer is 60% vs 76%, Python wins. This is misleading because Python's 76% is on the AIL-fine-tuned 7B, which writes bad Python in general. A fairer G2 comparison would be:
+
+- AIL side: `ail-coder:7b-v3` authoring AIL (60% routing — measured)
+- Python side: `qwen2.5-coder:14b` (base, not fine-tuned) authoring Python (64% routing on the opus50 corpus — already in JSON)
+
+Under that matching, AIL routing is within 4 pp of Python's on a cleaner baseline. Still not a clear win, but not a clear loss either. Worth running the benchmark with this configuration explicitly and adding the row to `docs/benchmarks/README.md`.
+
+#### Priority 3 — external user (still 0)
+
+Opus 4's directive: "Get ONE external user." This is the project's true blocker for v1.9+ planning. The v1.8.3 artefacts that would support a demo:
+
+- FAQ doc `docs/why-ail-faq.md` with token-economics answers
+- Mechanics doc `docs/why-ail-mechanics.md` explaining each benchmark number
+- v3 fine-tune serving via Ollama (reproducible via `pip install ail-interpreter` + `AIL_OLLAMA_HOST`)
+
+Channels hyun06000 has raised in earlier sessions: X/Twitter, GeekNews (Korean dev community), targeted outreach to AI researchers. No action taken yet — this is a hyun06000 decision.
+
+#### Priority 4 — v1.9 proposals parking lot
+
+Candidates for the next major version if/when the freeze lifts (§9 of `spec/09-stability.md` lists the three conditions):
+
+- `expr[index]` subscript (from Priority 1 above). Biggest benchmark-driven single feature.
+- Attempt blocks with confidence thresholds (`attempt { ... } with minimum_confidence = 0.8`) — currently the syntax is reserved for a future extension per the parser comment.
+- Per-symbol imports (`import classify from "stdlib/language"` currently brings the whole module; should bring only the named symbol).
+
+None of these are committed work. All three require a proposal doc first.
+
+### Environment on homeblack (current, unchanged)
+
+1. `homeblack` SSH alias in `~/.ssh/config` (HostName `10.0.0.1`, User `david`). SSH key at `~/.ssh/id_ed25519` is **passphrase-protected** — run `ssh-add ~/.ssh/id_ed25519` at session start, then `ssh homeblack '...'` works for the rest of the shell.
+2. Ollama binds `10.0.0.1:11434` (not localhost). `ollama list` from your shell needs `OLLAMA_HOST=10.0.0.1:11434 ollama list`.
+3. Virtualenv `~/venv/labs` is uv-managed, no `pip`. Use `~/venv/labs/bin/python` directly through non-interactive ssh. Training stack installed: unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128.
+4. No `sudo` without password. This is why `export_to_ollama.py` breaks (unsloth tries `apt-get install` internally). Manual llama.cpp pipeline is the workaround; llama.cpp is pre-built at `~/llama.cpp/build/bin/llama-quantize`, conversion script at `~/llama.cpp/convert_hf_to_gguf.py`.
+5. Training dataset on homeblack matches origin after the v1.8.3 push (244 samples, [`reference-impl/training/dataset/`](reference-impl/training/dataset/)).
+
+### Hard rules (still in force, unchanged)
 
 - No HuggingFace push, no public promotion without explicit go from hyun06000.
-- Don't edit gate targets or prereq list to make a missed gate read as success. Honest numbers only.
-- Training artifacts (adapter, gguf, checkpoints) are gitignored. Don't commit them.
-- Don't modify the AIL grammar while a fine-tune generation is being evaluated. Grammar churn invalidates the fine-tune.
+- Don't edit gate targets or prereq lists to make a missed gate read as success. Honest numbers only.
+- Training artifacts (adapter dirs, .gguf files, checkpoints) are gitignored. Don't commit them.
+- Don't modify the AIL grammar while a fine-tune is the current serving model. Grammar churn invalidates the adapter. The v1.8 freeze exists for exactly this reason.
+- Don't replace existing benchmark JSONs in place. Add a new row; preserve the archival record.
+- Any numeric claim in `README.md` / `why-ail-*.md` must trace to a specific JSON snapshot + specific metric. This discipline was established in the 2026-04-21 docs audit — don't drift from it.
 
-### Local Mac session at handoff
-
-The Mac-side session (this one, pre-handoff) had a `ScheduleWakeup` set for ~60 min post-benchmark-launch to auto-analyze results. That wakeup will fire on the Mac, not at home — home Claude is a separate instance. If hyun06000 works from home while the Mac is also on, both instances can safely poll homeblack (the bench is file-output-based, no race). First-to-arrive does the analysis.
-
-*Update written 2026-04-20 ~10:25 UTC after launching the benchmark and before commute.*
+*Written 2026-04-21 after the docs audit, in the same session that shipped v1.8.3.*
