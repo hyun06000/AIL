@@ -4,6 +4,67 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.8.3 — 2026-04-21
+
+Additive release within the v1.8 grammar freeze (spec §2.5 permits
+builtin additions; parser fixes bring runtime in line with the
+already-frozen spec surface). Closes the two dominant AIL-parse
+failure classes surfaced by the ail-coder:7b-v2 benchmark.
+
+### Language (both runtimes)
+
+- **Math builtins added as trusted-pure:** `round`, `floor`, `ceil`,
+  `sqrt`, `pow`. Usable directly inside `pure fn` bodies without
+  imports. Closes PurityError on benchmark tasks C07 (BMI) and C12
+  (standard deviation). Python and Go implementations are byte-
+  equivalent (banker's rounding via `math.RoundToEven`;
+  Result-error on `sqrt` of a negative).
+- **Parametric types parse cleanly.** Spec §2.3 always listed
+  `List[T]`, `Map[K,V]`, `Result[T]`, `Tuple[A,B]` as valid; the
+  parsers were silently discarding the bracket clause. They now
+  consume and ignore it (AIL stays dynamically typed, the bracket
+  content is annotation-only). Closes ~3 AIL parse failures per
+  benchmark run. Python and Go parser changes are parallel.
+
+### Training
+
+- **Dataset expansion v2 → v3:** 205 → 244 validated samples.
+  +41 new entries cover: 7 math-builtin programs, 12 parametric-
+  type fn signatures, 14 hybrid (fn + intent) shapes modelled on
+  the benchmark C-category, 3 additional pure-intent examples,
+  5 pure-fn variations.
+- **`to_chatml.py` system prompt updated** to document the
+  parametric types and math builtins so the fine-tune sees the
+  same surface both during training and at inference.
+
+### Benchmark results (ail-coder:7b v3 on the Opus 50-prompt corpus)
+
+- AIL parse: 64% (v2) → **78%** (+14 pp; v3 misses G1 by one case)
+- AIL answer: 56% → **70%**
+- Category C (hybrid) parse: 45% → **70%** (+25 pp — headline)
+- Error handling miss: **AIL 0% / Python 44%** — structural gap
+  stable across every model tier tested (llama8b 86%, qwen14b 42%,
+  Sonnet 4.6 70%).
+- G3 verdict: **PASS** — AIL answer rate exceeds Python answer rate
+  by 22 percentage points on the same fine-tuned model.
+
+### Documentation
+
+- New practical FAQ covering token economics and the adoption
+  decision checklist: [`docs/why-ail-faq.md`](docs/why-ail-faq.md)
+  (+Korean).
+- New mechanics explainer with the mechanism behind each benchmark
+  number, including reproduction one-liners:
+  [`docs/why-ail-mechanics.md`](docs/why-ail-mechanics.md)
+  (+Korean).
+- Benchmark index [`docs/benchmarks/README.md`](docs/benchmarks/README.md)
+  extended with the v3 run row.
+
+251 tests pass (+27 since 1.8.2: math builtin unit tests, 2 new
+conformance cases for math and parametric types).
+
+---
+
 ## v1.8.2 — 2026-04-20
 
 Real-world-prompt hardening. Each change fixes a failure mode
