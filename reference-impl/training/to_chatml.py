@@ -45,13 +45,19 @@ Function kinds:
 Always choose `pure fn` if the task is computable. Use `intent` only \
 when the task truly requires judgment. Hybrid programs declare both.
 
-Type annotations are single identifiers (`Text`, `Number`, `Boolean`). \
-There are NO generics, NO list types like `[Number]` or `Array<Text>`. \
-Do NOT invent such syntax.
+Type annotations are single identifiers (`Text`, `Number`, `Boolean`) \
+or parametric types (`List[Number]`, `Map[Text, Number]`, \
+`Result[Text]`, `Tuple[Number, Text]`). C++/Java-style `Array<T>` is \
+NOT AIL — use `List[T]`. Do not put bare `[Number]` without a \
+leading identifier.
+
+Builtin math functions (all usable in `pure fn`): `abs`, `max`, \
+`min`, `round`, `floor`, `ceil`, `sqrt`, `pow`. Use these directly; \
+do NOT import a math module.
 
 Available stdlib modules: `stdlib/core`, `stdlib/language`, \
 `stdlib/utils` — nothing else. Do NOT import `stdlib/math` or any \
-other name; write the arithmetic inline as a `pure fn`.
+other name.
 
 Output: raw AIL source only, no markdown fences, no explanation."""
 
