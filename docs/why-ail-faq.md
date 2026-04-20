@@ -21,60 +21,51 @@ Everything below is "under what conditions, by how much."
 
 ## Q1. How many tokens does AIL save?
 
-**Short answer:** Against a naive "LLM-for-everything" agent (the default
-LangChain pattern), AIL uses **~75% fewer LLM calls** at comparable or
-better quality.
+**Measured:** AIL made **37 LLM calls across the 50-prompt benchmark** on `ail-coder:7b-v3`. Every call landed where the prompt actually required model judgment; none on pure-computation tasks.
 
-**Long answer — measured:**
+**Per-category averages:**
 
-50 prompts, three categories:
+| Category | Shape | AIL calls/task (measured) |
+|---|---|---|
+| A (15 prompts) | Pure computation | **0.07** (≈0 — one misrouting case) |
+| B (15 prompts) | Pure judgment | 0.93 (14/15 correctly invoked the LLM) |
+| C (20 prompts) | Hybrid (compute + judge) | 1.10 |
 
-| Category | Shape | AIL LLM calls/task | Naive agent (est.) |
-|---|---|---|---|
-| A (15) | Pure computation | **0.07** (≈0) | ≥1 |
-| B (15) | Pure judgment | 0.93 | ~1 |
-| C (20) | Hybrid (compute + judge) | 1.10 | ≥3 |
+**Why the "0.07" matters:** on the 15 pure-computation prompts, AIL made essentially no LLM calls. A naive agentic setup that pipes every subtask through an LLM ("the LangChain default") would have made at least one call per task on these same prompts — so for any workload where pure-computation tasks dominate, the token delta is just the count of pure-computation tasks × the per-call cost.
 
-**Across 50 tasks:** AIL uses 37 LLM calls total; a naive agent that
-LLM-calls every subtask would use ~150.
+**Where the exact savings number depends on your baseline:**
 
-**Cost (Claude Sonnet 4.6, ~500 tokens/call avg):**
+AIL is explicit about the split — `pure fn` runs locally, `intent` dispatches. So AIL's call count reflects the shape of the task, not the author's discipline. How many calls you *save* depends on what you're replacing:
 
-- AIL: ~$0.14 per 50 tasks
-- Naive agent: ~$0.59 per 50 tasks
-- **Savings: ~76%**
+- **vs AIL itself:** no comparison to make.
+- **vs a hand-tuned Python pipeline where the author correctly routes LLM only where needed:** zero savings — Python authors who route well use the same call budget AIL does.
+- **vs the same 7B model authoring Python on this benchmark:** AIL uses *more* calls than Python baseline (37 vs ~18). Python made fewer calls by silently skipping LLM where required — answering 26% fewer tasks correctly as a result (see Q2).
+- **vs a naive "LLM-for-every-subtask" agent (no routing):** Hybrid tasks that need 1 LLM subtask would take ≥ 2 calls in that setup (plan + execute) and often more, so AIL saves a noticeable fraction. The exact percentage depends entirely on the naive agent's implementation and task shape.
 
-**Why:** AIL separates `pure fn` (runs locally, 0 LLM calls) from
-`intent` (delegates to LLM). The runtime executes the computation
-directly; the LLM is called only where judgment is needed. Python has
-no such distinction, so agents either hand-code the split (brittle) or
-default to LLM-calling everything (expensive).
+**What to take away:** if you're choosing between AIL and a well-tuned Python pipeline authored by a careful human, token savings are not the argument — Q2 (answer correctness) and Q3 (safety) are. If you're choosing between AIL and an agentic framework that LLM-calls for every subtask, AIL will use meaningfully fewer calls because the routing is structural, not up to the agent.
 
-**Caveats:**
-- AIL uses **more** LLM calls than the Python baseline in this
-  benchmark (37 vs ~18). That's because Python silently skips LLM
-  calls on judgment tasks — see Q3.
-- Code-authoring cost (the fine-tuned 7B model running locally on a
-  3070) is not counted here; it's effectively free.
+Code-authoring cost (running the fine-tuned 7B locally on a 3070) is not counted — it's effectively free at inference time.
 
 ---
 
 ## Q2. Is the output actually better?
 
-**Yes. On the same model, by a 22 percentage-point margin.**
+**Yes — on the same model, by 22 percentage points on overall correctness.**
 
 | Metric | AIL | Python |
 |---|---|---|
 | Final answer correctness (50 tasks) | **70%** | 48% |
-| pure_intent answer rate (15 tasks) | **80%** | 13% |
+| `pure_intent` category answer (15 tasks) | **80%** | 13% |
 | Parse success rate | **78%** | 54% |
 
-The same fine-tuned 7B model, given a Python prompt, silently skips the
-required LLM call on 14/50 (30%) of cases and hardcodes fake logic
-(e.g. `if "love" in text: "positive"`). AIL won't let that happen —
-you can't declare a judgment task as a `pure fn`, and you can't omit a
-declared `intent` from the dispatch. The grammar refuses to let the
-agent cut corners.
+All three numbers come from one run of `ail-coder:7b-v3` on the same 50 prompts, one side authored in AIL and the other in Python.
+
+**The gap comes mostly from silent LLM-skip on Python.** On the 35 prompts whose ground truth required an LLM call (B + C categories), Python-authored programs that *parsed* went one of two ways:
+
+- 18/35 Python programs parsed. Of those, 12 (B:3 + C:9) had **no LLM-call attempt at all** in their source — the author declared the task solvable with string operations or keyword matching, and the runtime ran those and returned wrong answers. The famous case in this benchmark is the passive-voice prompt where Python hardcoded `{object} was {verb} by {subject}` and produced "chased was cat by The".
+- The remaining 6 of 18 did attempt an LLM call and mostly got the right answer.
+
+AIL cannot silently skip: `intent classify_sentiment(...)` is a dispatch declaration, and the runtime routes it through the model adapter. The author has no syntax for "declare the intent but skip the call".
 
 ---
 
@@ -127,12 +118,9 @@ Two reasons:
 
 **Choose it when:**
 - ✅ You have a pipeline where AI writes and executes code
-- ✅ Your tasks mix computation with judgment (Category C: AIL's
-  parse rate went 45% → 70% with fine-tune, while Python stays stuck
-  on structural skip behaviour)
-- ✅ You don't want to maintain external linters / pre-commit hooks to
-  catch what the grammar could
-- ✅ LLM call cost is a line item you care about (Q1)
+- ✅ Your tasks mix computation with judgment (hybrid category C: AIL's parse rate improved from 45% on the v2 training cycle to 70% on v3, and hybrid is where Python most often silently skips the LLM call on the same model)
+- ✅ You don't want to maintain external linters / pre-commit hooks to catch what the grammar could
+- ✅ LLM call cost is a line item you care about, and your current setup is a naive agent that LLM-calls for every subtask (see Q1 for what "depends on your baseline" means)
 
 **Don't choose it when:**
 - ❌ The code is read and debugged by humans (AIL's design premise is
@@ -172,36 +160,25 @@ a small model beats a frontier base model at authoring AIL.
 
 ## Q7. One concrete example
 
-**Prompt:** "Calculate BMI for height 175cm, weight 70kg, and assess
-health."
+**Prompt:** "Calculate BMI for height 175cm, weight 70kg" (paired with a health-assessment request).
 
-**AIL output** (`ail-coder:7b-v3`, literal benchmark capture):
+**AIL output** — captured from a smoke-test call of `ollama run ail-coder:7b-v3 "calculate BMI from 175cm 70kg"` on the v3 fine-tuned model, cleaned of terminal control codes:
 
 ```ail
 pure fn bmi(height_cm: Number, weight_kg: Number) -> Number {
     return round(weight_kg / pow(height_cm / 100, 2), 2)
 }
-intent assess_health(bmi: Number) -> Text {
-    goal: health_assessment
-}
-entry main(x: Text) {
-    b = bmi(175, 70)
-    return join([to_text(b), " ", assess_health(b)], "")
-}
+entry main(x: Text) { return bmi(175, 70) }
 ```
 
-What happens:
-1. `bmi` runs locally — **zero LLM calls** → 22.86
-2. `assess_health` calls LLM **exactly once** → "normal range"
-3. Result: "22.86 normal range"
+What happens when this runs:
 
-**Same prompt in Python**, same model: either asks the LLM for the
-BMI computation (wastes tokens) or hardcodes the assessment with
-`if bmi < 25: "normal"` (wrong logic, silent fail). Both failure
-modes are in the benchmark record.
+1. `bmi` is a `pure fn`. The runtime evaluates `round(70 / pow(1.75, 2), 2)` locally. **Zero LLM calls.** Result: 22.86.
+2. If you'd asked the model to also assess the BMI (one of the benchmark's actual hybrid prompts, C07), it would add an `intent assess_health(bmi)` declaration and the runtime would dispatch that — **exactly one LLM call** for the judgment part.
 
-**Token usage:** AIL = 1 LLM call. Computation runs locally.
-Naive agent = 3 LLM calls (parse + compute + judge, each).
+**What Python typically does on the same prompt with the same model** (this is the measured failure mode from the benchmark corpus — not every run hits it, but it's the dominant error class): either the author hardcodes a BMI-to-health mapping in deterministic Python (`if bmi < 25: "normal"`), which makes the "assessment" a fixed lookup rather than a model judgment, or the author writes a correct LLM call but omits error handling on the `urllib`/`json.loads` chain used to reach the model. AIL's grammar structurally prevents both: `intent` cannot be hardcoded, and `Result` cannot be silently discarded.
+
+**Caveat:** the smoke-test snippet above is cleaner than some of v3's actual benchmark captures on this prompt class. C07 specifically didn't parse in the canonical v3 run because the generated code used Python-style `split("175cm", "cm")[0]` subscript — one of the three remaining parse-failure patterns documented in [`2026-04-21_ail-coder-7b-v3_analysis.md`](benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md).
 
 ---
 

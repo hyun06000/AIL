@@ -1,14 +1,14 @@
 # Why AIL?
 
-> **AIL is the first language designed assuming AI is the code's author. Python was not.**
+> **AIL is a programming language designed around the premise that AI, not a human at a keyboard, is the primary author. Python was not.**
 
-That sentence decides almost everything below.
+That sentence shapes almost everything below.
 
-Python, JavaScript, Rust — every mainstream language — was designed for a human at a keyboard. Their syntax optimizes for human eyes; their type systems catch human mistakes; their libraries fit human workflows. If the author changes, some of those design choices become wrong and some become noise.
+Python, JavaScript, Rust, and the other mainstream languages were designed for a human at a keyboard. Their syntax optimises for human eyes; their type systems catch human mistakes; their libraries fit human workflows. If the author is instead a language model, some of those design choices become inapplicable and some actively work against the new author.
 
-AIL starts from a different premise: the programmer is a language model; the human's job is to say what they want, not to read code. Features like `pure fn`, runtime provenance, and `attempt` cascades aren't nicer versions of Python idioms — they're what falls out when you rewrite the language contract around this new author.
+AIL starts from a different premise: the programmer is a language model; the human's job is to express intent, not to read code. Features like `pure fn`, runtime provenance, and `attempt` cascades aren't nicer versions of Python idioms — they're what falls out when you rewrite the language contract around this new author.
 
-Below is what that actually buys you today, with code that runs.
+Below is what that actually buys you today, with code that runs. Every claim links to a file or test you can run to verify it.
 
 ---
 
@@ -60,7 +60,7 @@ has_intent_origin(words)            // false
 
 See [`examples/audit_provenance.ail`](../reference-impl/examples/audit_provenance.ail) for a program that generates a report, then self-audits each field and labels it `[LLM]` or `[pure]` in the output. Not a wrapper; the language did it.
 
-The cost in Python: a few hundred lines of middleware and a hope. The cost in AIL: free.
+The cost in Python: separate tracing middleware (LangSmith, OpenTelemetry, or a hand-rolled flag threaded through every helper) that the author still has to remember to instrument. The cost in AIL: zero lines of user code. The runtime pays a small per-value allocation cost for the origin node, which is not free at the machine level but is free at the programmer level — you get the audit trail without having written it.
 
 ---
 
@@ -71,16 +71,18 @@ The cost in Python: a few hundred lines of middleware and a hope. The cost in AI
 **AIL:** the top-level keyword tells you before you read a line of the body.
 
 ```ail
-fn parse_csv(raw: Text) -> Text { ... }        // computation
-pure fn word_count(s: Text) -> Number { ... }  // computation, statically pure
-intent classify(text: Text) -> Text {          // judgment — will call a model
+fn parse_csv(raw: Text) -> Text { ... }         // body not checked — plain fn may call intents
+pure fn word_count(s: Text) -> Number { ... }   // body statically checked pure (no LLM, no effects)
+intent classify(text: Text) -> Text {           // judgment — runtime dispatches to a model
     goal: positive_or_negative
 }
 ```
 
-`intent` declarations don't contain executable code. They contain a `goal` and optional `constraints`. The runtime takes the goal, hands it to a model adapter, receives `(value, confidence)` back. The author doesn't write the API call; the language contract does.
+`intent` declarations don't contain executable code. They contain a `goal` and optional `constraints`. The runtime takes the goal, hands it to a model adapter, and receives `(value, confidence)` back. The author doesn't write the API call; the language contract does.
 
-See [`examples/review_analyzer.ail`](../reference-impl/examples/review_analyzer.ail) — 23 `fn` calls and 6 `intent` calls in one program. A reader can tell which is which at a glance.
+`pure fn` adds the static guarantee that the body contains no `intent` call, no `perform` effect, and no call to a non-pure `fn`. Plain `fn` does not carry that guarantee — use `pure fn` when you want the compiler to prove absence of LLM involvement.
+
+See [`examples/review_analyzer.ail`](../reference-impl/examples/review_analyzer.ail) — one `intent` (`classify`, invoked inside a loop to handle each review) plus multiple `fn` helpers that do all the deterministic parsing, filtering, counting, and report building. The reader can tell what routes to the model at a glance from the top-level keywords alone.
 
 ---
 
@@ -97,17 +99,21 @@ if confidence < 0.7:
     result = big_model(key)
 ```
 
-**AIL:** `attempt` is a block. Strategies are listed in priority order. The runtime tries each, returns the first whose confidence meets the declared threshold.
+**AIL:** `attempt` is a block. Strategies are listed with `try`, tried in order, and the first one whose result is ok (not a `Result` error) wins. The actual syntax is the minimal form — no labels, no suffix clause:
 
 ```ail
-attempt {
-    try_pure: lookup_table(key)            // confidence 1.0, almost free
-    try_small: cheap_model(key)             // returns (value, confidence)
-    try_big: expensive_model(key)           // fallback
-} with minimum_confidence = 0.8
+entry main(text: Text) {
+    return attempt {
+        try direct_parse(text)    // pure fn, ok(n) or error(...)
+        try scan_tokens(text)      // pure fn, ok(n) or error(...)
+        try infer_number(text)     // intent — only runs if the two pure fns errored
+    }
+}
 ```
 
-See [`examples/cascade_extract.ail`](../reference-impl/examples/cascade_extract.ail). The cascade is structural — not a pattern you have to remember to apply.
+The first `try` whose result is ok wins; subsequent tries are not evaluated. Threshold-based variants (e.g. "skip tries below confidence 0.8") are a future extension — the current parser accepts only the shape above.
+
+See [`examples/cascade_extract.ail`](../reference-impl/examples/cascade_extract.ail) for a runnable version. The cascade is structural — not a pattern you have to remember to apply.
 
 ---
 
@@ -127,7 +133,7 @@ entry main(text: Text) {
 }
 ```
 
-See [`examples/parallel_analysis.ail`](../reference-impl/examples/parallel_analysis.ail). Wall-clock latency for N independent intents: roughly t, not N·t. The AI writing this code never has to think about colored functions.
+See [`examples/parallel_analysis.ail`](../reference-impl/examples/parallel_analysis.ail). When N intent calls are detected as independent and the model adapter supports concurrent requests, wall-clock latency approaches the time of one call rather than N times one call. The exact speedup depends on the adapter (HTTP/network overhead, provider rate limits) and the planner's dependency inference, but the author never has to colour functions or manage await-chains to get it.
 
 ---
 
@@ -135,14 +141,19 @@ See [`examples/parallel_analysis.ail`](../reference-impl/examples/parallel_analy
 
 **Python + LLM SDK:** the model returns a confidence score. You trust it or you don't. If you want to know whether the model's "0.9 confident" actually corresponds to 90% accuracy, you build a separate logging + ML pipeline.
 
-**AIL:** the runtime records outcomes per-intent. Once enough samples accumulate, calibrated confidence replaces the model's self-reported confidence. Querying the calibration state from AIL is built in:
+**AIL:** the runtime records outcomes per-intent, bucketed by the reported confidence band (0.0–0.1, 0.1–0.2, …, 0.9–1.0). Once a bucket has enough samples (default 5), subsequent calls falling in that bucket substitute the observed mean for the model's self-reported number. Querying the state from AIL is built in:
 
 ```ail
 calibration_of("classify_sentiment")
-// returns { samples: 47, observed_mean: 0.73, using_calibrated: true }
+// returns a per-bucket record like:
+// {
+//   "0.8-0.9": { "count": 12, "mean_observed": 0.71, "calibrated": true  },
+//   "0.9-1.0": { "count":  3, "mean_observed": 0.88, "calibrated": false }
+//   ...
+// }
 ```
 
-The practical payoff: `attempt` thresholds, `match` confidence guards, and any `if confidence > ...` check use observed reality instead of model self-belief. See [`tools/calibration_demo.py`](../reference-impl/tools/calibration_demo.py) for a run that watches confidence drift toward ground truth.
+The practical payoff: `match` confidence guards and any `if confidence > …` check use observed reality instead of model self-belief once enough data accumulates. See [`tools/calibration_demo.py`](../reference-impl/tools/calibration_demo.py) for a run that watches confidence drift toward ground truth over ~20 calls.
 
 ---
 
@@ -153,7 +164,7 @@ Being honest about this matters more than the above list.
 - **Tooling is thin.** No IDE plugin, no LSP, no debugger, no formatter. You edit `.ail` files in whatever editor and run the CLI.
 - **Ecosystem is tiny.** Three stdlib modules (`core`, `language`, `utils`). Anything the stdlib doesn't cover you write inline.
 - **Performance is modest.** A tree-walking interpreter in Python. The second runtime is in Go but is still Phase-0 subset. Hot loops will be slow.
-- **One kind of user so far.** The project has ~0 external contributors and ~0 external users as of this writing (v1.8.2, April 2026). "Works for me" is not validated at scale.
+- **One kind of user so far.** The project has ~0 external contributors and ~0 external users as of this writing (v1.8.3, April 2026). "Works for me" is not validated at scale.
 - **The design is opinionated.** No `while`, no classes, no OOP, no inheritance. Effects are authorization-gated. If your mental model insists on these, AIL will feel wrong — that's by design, not a missing feature.
 
 ---

@@ -62,15 +62,12 @@ AIL의 타입 시스템은 이 옵션성을 문법에서 제거합니다. 모델
 
 **메커니즘: "조용한 LLM 스킵"**
 
-Python이 작성한 프로그램 중 15/50 (30%) 개가 판단 작업을 해결하는
-코드라고 *선언*하고선 **LLM을 한 번도 안 부르고** 하드코딩된
-키워드 매칭으로 대답을 찍습니다. AIL은 이게 불가능합니다 —
-`intent`는 디스패치 선언이고, 런타임이 저자의 의도와 무관하게
-모델 어댑터로 라우팅합니다.
+여기서 "silent skip" 의 정의: Python 프로그램이 *파싱 성공* 하고 실행 완료되어 답을 반환했지만, 소스에 LLM 호출 시도 자체가 없음 (`uses_llm=False`), ground truth 가 모델 판단을 요구하는 과제에서. AIL 은 silent skip 할 수 없습니다 — `intent` 는 디스패치 선언이고, 런타임은 선언된 모든 intent 를 모델 어댑터로 라우팅하며, "선언하고 호출 안 하기" 를 위한 AIL 문법은 존재하지 않습니다.
 
 **실제 사례 — B09 "수동태로 바꾸기":**
 
-Python (같은 모델, LLM 호출 0회):
+Python (같은 모델, LLM 호출 0 회):
+
 ```python
 def passive_voice(text):
     parts = text.split()
@@ -78,10 +75,10 @@ def passive_voice(text):
     return f"{object_} was {verb} by {subject}"
 ```
 
-입력 "The cat chased the mouse" → 출력 "chased was cat by The".
-틀림 — 하드코딩된 룰이 "the"가 관사인 걸 모름.
+입력 "The cat chased the mouse" → 출력 "chased was cat by The". 틀림 — 하드코딩된 룰이 "the" 가 관사인 걸 모름. LLM 은 한 번도 안 불렸습니다.
 
-AIL (같은 모델, LLM 호출 1회):
+AIL (같은 모델, LLM 호출 1 회):
+
 ```ail
 intent to_passive_voice(text: Text) -> Text {
     goal: sentence rewritten in passive voice
@@ -89,40 +86,36 @@ intent to_passive_voice(text: Text) -> Text {
 entry main(text: Text) { return to_passive_voice(text) }
 ```
 
-출력 "The mouse was chased by the cat". 맞음 — `intent`가 실제
-LLM 디스패치를 강제. 이 작업을 문자열 연산으로 속여 답하는 AIL
-문법은 존재하지 않음.
+출력: "The mouse was chased by the cat". 맞음 — `intent` 선언이 실제 LLM 디스패치를 강제.
 
-**카테고리별 "조용한 LLM 스킵" 빈도:**
+**카테고리별 silent skip 빈도** (`ail-coder:7b-v3`, 파싱 성공한 프로그램 중):
 
-| 카테고리 | Python 스킵 | AIL 스킵 |
+| 카테고리 | Python silent skip | AIL silent skip |
 |---|---|---|
-| A — 순수 계산 (n=15) | 해당 없음 | 해당 없음 |
-| B — 순수 판단 (n=15) | 3/15 (20%) | 0/15 |
-| C — 하이브리드 (n=20) | **12/20 (60%)** | 1/20 |
+| A — 순수 계산 (n=15) | 해당 없음 (LLM 불필요) | 해당 없음 |
+| B — 순수 판단 (15 중 4 파싱) | 3 | 0 |
+| C — 하이브리드 (20 중 14 파싱) | **9** | 1 |
 
-**하이브리드에서 Python이 무너집니다.** C 카테고리 작업의 60%에서
-Python 저자는 계산처럼 보이고, 정상 실행되고, 쓰레기로 대답하는
-코드를 씁니다. AIL의 `intent`/`pure fn` 구분은 문법적이라 요구되는
-LLM 호출을 생략할 수 없습니다.
+즉 파싱된 18 개 Python 판단-과제 프로그램 중 12 개 (67%) 가 LLM 을 부르는 대신 판단 단계를 하드코딩했습니다. LLM 호출을 실제로 시도한 나머지는 대체로 정답을 얻었습니다 — silent-skip 패턴이 이 벤치마크에서 Python 오답의 대부분을 설명하지만 전부는 아닙니다 (parse 실패와 exec 오류가 나머지를 설명).
+
+명시해둘 것: Python 의 이 행동은 **모델 의존적** 입니다. 같은 코퍼스에 대해 Claude Sonnet 4.6 에서는 하이브리드 20 개 중 1 개만 silent skip. silent-skip 패턴은 중간 티어 모델에서 심각하고 프론티어에선 거의 사라지지만, 에러 핸들링 누락 (§1) 은 Sonnet 에서도 70% 로 유지됩니다.
 
 ---
 
-## 3. 왜 naive agent 대비 토큰 ~75% 절감인가
+## 3. AIL 의 LLM 호출 수는 실제로 어디에 있나
 
-**관찰.** 50 task 전체:
-- AIL: 총 37회 LLM 호출
-- Python (같은 모델): 18회 (해야 할 15회를 조용히 스킵)
-- Naive "뭐든 LLM" 에이전트: ~150회 (task당 평균 3회 추정)
+**관찰.** `ail-coder:7b-v3` 에서 50 프롬프트 벤치마크 전체:
 
-**메커니즘.** `pure fn` / `intent` 분리가 비용 라우팅을 대신 해줌
-— 계산은 로컬 실리콘, 판단은 LLM:
+- AIL: 총 37 회 LLM 호출
+- Python, 같은 모델: 총 18 회 (하지만 파싱된 판단 과제에서 12 건을 silent-skip)
+
+**메커니즘.** `pure fn` / `intent` 분리가 비용 라우팅을 대신해줌 — 계산은 로컬 실리콘, 판단은 LLM:
 
 ```ail
-pure fn bmi(h_cm: Number, w_kg: Number) -> Number {      // LLM 0회
+pure fn bmi(h_cm: Number, w_kg: Number) -> Number {      // LLM 0 회 — 로컬 실행
     return round(w_kg / pow(h_cm / 100, 2), 2)
 }
-intent assess_health(bmi: Number) -> Text {              // LLM 1회
+intent assess_health(bmi: Number) -> Text {              // entry 가 부를 때 LLM 1 회
     goal: health assessment
 }
 entry main(x: Text) {
@@ -131,18 +124,9 @@ entry main(x: Text) {
 }
 ```
 
-"모든 걸 프롬프트에 넣는" naive 에이전트는 이 형태에서 최소 3번
-LLM을 호출합니다 — 스펙 파싱, 계산, 평가. AIL 런타임은 앞의 둘을
-통째로 건너뜁니다.
+**비교를 어떻게 생각할 것인가.** 이 벤치마크에서 AIL 은 Python baseline 보다 LLM 을 *더* 씁니다 (37 vs 18) — 하지만 Python 이 필요한 호출을 silent-skip 했고 그 결과 정답률이 26% 낮기 때문. 적절한 질문은 "Python 과 AIL 중 누가 토큰을 덜 쓰나?" 가 아니라 **"정답 하나당 비용은 얼마냐?"** 입니다.
 
-**Python이 이걸 자동으로 못 매칭하는 이유.** Python은 언어 수준에서
-"결정론적" vs "판단" 코드의 구분이 없어서, 둘 중 하나입니다:
-- 저자가 매번 수동으로 판단하고, 벤치마크가 보여주듯 자주 틀림 —
-  필요할 때 LLM 스킵, 또는 로컬 산술이면 되는데 LLM 호출.
-- 에이전트 프레임워크(LangChain, AutoGPT)가 기본값으로 모든 걸
-  LLM 경유 — 저자 버그를 피하려고 4배 비용을 지불.
-
-AIL은 이 선택을 제거합니다. 문법이 라우팅합니다.
+사람이 라우팅을 신중히 하는 수작업 Python 파이프라인 대비: AIL 은 대략 비슷한 호출 수를 씁니다 — 절감 없음. 모든 서브태스크에 LLM 을 거는 에이전트 프레임워크 (흔한 naive 패턴) 대비: AIL 이 의미 있게 적게 씁니다 — 라우팅이 모델의 런타임 선택이 아니라 구조적이기 때문. 정확한 비율은 에이전트 프레임워크와 과제 모양에 의존하며 벤치마크는 이를 직접 측정하지 않으므로, 특정 "N× 절감" 수치는 데이터가 아닌 추정일 것입니다.
 
 ---
 
@@ -233,9 +217,9 @@ comma 문제). 학습 효과 아님.
 
 ---
 
-## 6. 왜 AIL이 Python보다 task당 2.5배 느린가
+## 6. 왜 AIL 이 task 당 더 느린가
 
-**관찰.** task당 wall clock (v3 run):
+**관찰.** task 당 wall clock (v3 run):
 
 | 카테고리 | AIL | Python |
 |---|---|---|
@@ -243,64 +227,52 @@ comma 문제). 학습 효과 아님.
 | B (intent) | 3.1 s | 2.2 s |
 | C (하이브리드) | 6.8 s | 2.4 s |
 
-**메커니즘.** 두 가지 누적 원인:
+**메커니즘 — 두 가지 누적 원인:**
 
-1. **Python이 LLM 호출을 스킵해서 런타임을 속입니다** (C에서
-   12/20). 스킵되는 호출당 ~2초 절약. 이 스킵을 보정하면 C의
-   Python 시간은 AIL과 비슷해집니다.
+1. **Python 이 빠른 건 일을 덜 하기 때문이기도 합니다.** C 카테고리 과제에서, 파싱된 Python 프로그램 14 개 중 9 개는 LLM 호출이 아예 없었습니다 — 그래서 LLM latency (이 벤치마크의 로컬 Ollama 서버에서 보통 호출당 1–3 초) 를 완전히 피했습니다. 이걸 보정하면 Python 의 C wall-clock 은 AIL 쪽으로 올라옵니다.
+2. **AIL 런타임 오버헤드.** Reference Python 구현은 값마다 provenance, 호출마다 trace 엔트리, intent 마다 calibration 상태를 추적합니다. 단순 executor 위에 얹힌 실제 비용입니다. 측정 가능하지만 보통 task 당 수십 ms 단위 — 초 단위 아님. LLM 호출 latency 가 지배적입니다.
 
-2. **AIL 런타임 오버헤드.** Reference Python 구현은 모든 값의
-   provenance, 모든 호출의 trace, intent의 calibration 상태를
-   추적합니다. Go 런타임은 이걸 추적 안 함. ~200ms/task 기준선
-   위에서는 실제 비용이지만 지배적 요인은 아닙니다.
-
-**언제 중요한가.** 배치 파이프라인, 야간 배치, 에이전트 워크로드
-— 3초 추가는 노이즈. <1초 지연 요구의 인터랙티브 챗봇 — 튜닝
-필요 (또는 Go 런타임으로 전환).
+**언제 중요한가.** 배치 파이프라인, 야간 배치, 에이전트 워크로드 — 몇 초 추가는 노이즈. 서브초 응답이 필요한 인터랙티브 앱 — Go 런타임 (provenance/calibration 을 추적하지 않는) + 더 빠른 모델이 필요.
 
 ---
 
-## 7. 왜 이 효과들이 복합적으로 쌓이는가 — 3개의 독립 메커니즘
+## 7. 왜 이 효과들이 복합적으로 쌓이는가 — 3 개의 독립 메커니즘
 
-헤드라인 숫자(정답률 70%, 에러 누락 0%, 토큰 75% 절감)는 단일
-트릭에서 나오지 않습니다. 각각 다른 실패 모드를 해결하는 3개
-층에서 나옵니다:
+헤드라인 숫자 — **같은 모델에서 AIL 정답률 70% vs Python 48%**, **모든 모델 티어에서 AIL 에러 핸들링 누락 0% vs Python 42–86%**, **AIL 작성에서 프론티어 base 모델을 이기는 작은 fine-tuned 모델의 parse 78%** — 는 단일 트릭에서 나오지 않습니다. 각각 다른 실패 모드를 해결하는 3 개의 독립 레이어에서 나옵니다:
 
-| 레이어 | 메커니즘 | 해결하는 갭 |
+| 레이어 | 메커니즘 | 해결하는 갭 (`ail-coder:7b-v3` 실측) |
 |---|---|---|
-| **문법** | `Result` 타입, `pure fn`, `while` 부재 | 에러 핸들링 (44% → 0%), 무한 루프, 사이드이펙트 숨김 |
-| **학습** | 검증된 244 샘플 QLoRA | Parse rate (42% base → 78%), fn/intent 라우팅 |
-| **런타임** | `intent`가 어댑터 경유 디스패치 | 조용한 LLM 스킵 (60% → 5% on C) |
+| **문법** | `Result` 타입, `pure fn`, `while` 부재 | 에러 핸들링 누락 0% (같은 모델 Python 44%, llama8b 에선 86% 까지) |
+| **학습** | 검증된 244 샘플 QLoRA | Parse rate 가 qwen14b base 42% → fine-tuned 7B 78% |
+| **런타임** | `intent` 선언이 모델 어댑터로 반드시 디스패치 | 하이브리드에서 silent LLM skip: AIL 1/20, Python 9/20 |
 
-셋 중 어느 하나 빼면 주장이 무너집니다. 셋 다 유지해야 모든 모델
-티어에서 숫자가 재현됩니다.
+한 레이어를 빼면 나머지 둘만으로는 주장을 지탱하지 못합니다:
 
-**디자인 명제에 대해 이게 말하는 것.** "Python 주변에 하네스를
-쌓는" 방식(AGENTS.md, pre-commit, 커스텀 린터)은 셋 중 하나를
-해결합니다. "안전한 패턴으로 Python 작성 모델을 fine-tune"하는
-방식은 다른 하나를 해결합니다. AIL의 베팅은 이 셋을 **언어 자체에
-통합하는 게** 외부에서 조립하는 것보다 싸고 견고하다는 것 — 정확히
-벤치마크 숫자가 보여주는 바입니다.
+- 문법만 (fine-tune 없이) 쓰면 base 모델에서 AIL parse 36–42% — harness 는 살지만 authoring 신뢰도는 죽습니다.
+- 학습만 (`Result` 없는 언어에) 있다면 에러 핸들링 0% 숫자는 나오지 않았을 겁니다; fine-tune 은 에러 핸들링을 가르치지 않고, 문법이 강제합니다.
+- 런타임만 (함수 호출을 가로채는 라이브러리) 으로는 저자가 **intent 자체를 선언하지 않는 것** 을 막을 수 없습니다 — "선언하고 건너뛰기" 를 표현 불가능하게 만들려면 문법이 필요합니다.
+
+3 레이어 스택이 주장입니다. 숫자가 증거입니다.
 
 ---
 
 ## 임의의 주장 재현하기
 
-이 문서의 모든 숫자는 [`../benchmarks/`](../benchmarks/) JSON
-스냅샷 중 하나에서 나옵니다. 숫자를 찾았으면 추적할 수 있습니다:
+이 문서의 모든 숫자는 [`../benchmarks/`](../benchmarks/) JSON 스냅샷 중 하나에서 나옵니다. 숫자를 찾았으면 추적할 수 있습니다:
 
 ```bash
-# 예: "하이브리드의 60%에서 Python이 LLM 스킵" 검증
+# 예: "하이브리드의 9/14 에서 Python 이 LLM 조용한 스킵" 검증
 python3 -c "
 import json
 d = json.load(open('docs/benchmarks/2026-04-21_ail-coder-7b-v3_opus50.json'))
 cases = [c for c in d['cases'] if c['category']=='C' and c['python'].get('parsed')]
-skips = [c for c in cases if (c['python'].get('llm_call_count') or 0)==0]
-print(f'Python hybrid parsed={len(cases)}, silent-skipped={len(skips)}')
+# Silent skip: 소스에 LLM 호출 시도가 없음 (uses_llm=False)
+silent = [c for c in cases if not c['python'].get('uses_llm')]
+print(f'Python hybrid parsed={len(cases)}, silent-skipped={len(silent)}')
 "
-# Python hybrid parsed=14, silent-skipped=12
+# Python hybrid parsed=14, silent-skipped=9
 ```
 
-JSON들은 각 케이스별 `source` 필드로 저자가 생성한 실제 코드도
-담고 있어서, 어떤 프롬프트에 대해서도 어떤 코드가 나왔는지
-읽을 수 있습니다.
+참고: 대안으로 `uses_llm == False` 대신 `llm_call_count == 0` 을 써서 세는 방법이 있습니다. 둘은 갈릴 수 있는데 — 프로그램이 실제 LLM 호출 시도를 포함하지만 런타임에 발사되지 않는 경우 (잘못된 엔드포인트, timeout, 도달 안 되는 코드 경로) 때문. `uses_llm=False` 가 더 엄격한 지표 ("코드에 LLM 호출 자체가 없다") 이고 이 문서에서 쓰는 것입니다.
+
+JSON 들은 각 케이스별 `source` 필드로 저자가 생성한 실제 코드도 담고 있어서, 어떤 프롬프트에 대해서도 어떤 코드가 나왔는지 읽을 수 있습니다.

@@ -5,86 +5,75 @@
 If you came here expecting a pitch, read [`why-ail.md`](why-ail.md)
 instead. This file is the **numbers**. Every claim below is backed
 by a JSON snapshot committed in [`docs/benchmarks/`](benchmarks/)
-that you can download and diff yourself.
+that you can download and diff yourself. Companion docs:
 
-The one sentence:
+- [`why-ail-faq.md`](why-ail-faq.md) — practical FAQ, token economics, adoption checklist.
+- [`why-ail-mechanics.md`](why-ail-mechanics.md) — why each number below comes out the way it does.
 
-> Across three models — an 8B open model, a 14B coder, and
-> Anthropic's frontier Claude Sonnet 4.6 — **Python code written
-> by an AI skips required error handling 42–86% of the time.
-> AIL's rate is 0%, on every model, because Result is part of
-> the grammar.**
+---
 
-That's the harness claim, measured. The number worth staring at:
-Sonnet 4.6 — a frontier model that routes LLM calls correctly
-**100% of the time** — still skips error handling on 70% of
-failable operations. Better models don't solve this. Only a
-grammatical guarantee does.
+## The one sentence
+
+> Across every model tested — an 8B open model, a 14B coder, a fine-tuned 7B adapter, and Anthropic's frontier Claude Sonnet 4.6 — **Python code written by an AI skips error handling on 42–86% of failable operations. AIL's rate is 0%, on every tier, because `Result` is part of the grammar.**
+
+That's the harness claim, measured. A second data point to keep in mind: Sonnet 4.6 routes LLM calls correctly on 100% of prompts (so the "silent LLM skip" problem weaker models exhibit is gone at this tier), yet it still writes Python that omits error handling 70% of the time. **Better models do not close the error-handling gap. Only a grammatical guarantee does.**
 
 ---
 
 ## What was measured
 
-50 natural-language prompts, split into three categories Opus 4 defined:
+50 natural-language prompts, split into three categories:
 
-- **A** — pure computation (15 prompts, ground truth = no LLM call)
-- **B** — pure judgment (15 prompts, ground truth = LLM call)
-- **C** — hybrid (20 prompts, ground truth = both)
+- **A** — pure computation (15 prompts, ground truth = no LLM call needed)
+- **B** — pure judgment (15 prompts, ground truth = LLM call needed)
+- **C** — hybrid (20 prompts, ground truth = both fn work and an LLM call needed)
 
 Each prompt is sent to the **same model** twice:
+
 1. Asked to author AIL via `ail ask`
 2. Asked to author Python (stdlib only, urllib for any LLM call)
 
-Both programs run in a subprocess. Four dimensions are scored:
+Both programs run in a subprocess. Four dimensions are scored per Opus 4's April 2026 spec:
 
 - **A. Generation quality** — parse success, answer correctness, fn/intent routing
 - **B. Safety** — side-effect in pure fn, unbounded loops, error-handling omissions
 - **C. Efficiency** — LLM calls per task, wall clock
-- **D. Harness effectiveness** — cases where Python emitted a structural bug AIL's grammar prevents by construction
+- **D. Harness effectiveness** — cases where Python emitted a structural bug that AIL's grammar prevents by construction
 
 Tool: [`reference-impl/tools/benchmark.py`](../reference-impl/tools/benchmark.py).
 Corpus: [`benchmarks/prompts.json`](../benchmarks/prompts.json).
 
 ---
 
-## The harness claim, in one table
+## The harness claim, measured across four models
 
-**Error handling on failable operations** (int parsing, json.loads,
-urllib requests, file opens — things that can raise):
+**Error handling on failable operations** — `int()`, `json.loads`, `urllib.request.urlopen`, `open(...)`, and similar calls that can raise:
 
-| Model | Python programs that skip error handling | AIL programs that skip it |
+| Model | Python omits error handling | AIL omits error handling |
 |---|---|---|
-| llama3.1:8b (small open model) | **86% (43/50)** | 0% by grammar |
-| qwen2.5-coder:14b (mid coder) | **42% (21/50)** | 0% by grammar |
-| **claude-sonnet-4-6 (frontier)** | **70% (35/50)** | 0% by grammar |
+| llama3.1:8b (small open) | **86% (43/50)** | 0% (grammar) |
+| qwen2.5-coder:14b (mid coder) | **42% (21/50)** | 0% (grammar) |
+| ail-coder:7b-v3 (fine-tuned 7B) | **44% (22/50)** | 0% (grammar) |
+| **claude-sonnet-4-6 (frontier)** | **70% (35/50)** | 0% (grammar) |
 
-Sonnet 4.6 is the strongest model in the industry when this was
-written. It routes LLM calls correctly 100% of the time — the
-"silent LLM skip" mistake weaker models make (`if "love" in words:
-return "positive"`) is solved at this model tier. You no longer
-need AIL to prevent THAT mistake.
+The Python rate is not monotone in model quality — llama8b at the low end has the worst rate (86%) because it barely emits real Python at all (14% parse), and Sonnet 4.6 at the frontier has the worst of the three strong models (70%) because it actually uses real failable I/O (`urllib.request`, `json.loads`) where a try/except is needed and often skipped. qwen14b and the fine-tuned 7B sit in between around 42–44%.
 
-But error-handling miss goes UP at the frontier tier compared to
-qwen14b (70% vs 42%). Why? Because Sonnet writes MORE real
-Python — it actually uses `urllib.request`, `json.loads`,
-`int()` for their intended purposes, instead of hardcoding. More
-failable operations in the code means more places where `try` /
-`except` is needed and skipped. AIL's rate stays 0% because
-`Result` is part of the grammar — the author has to type
-`is_ok` or `unwrap_or` at every failable boundary. There's no
-"just forget" option.
+**AIL's rate is 0% on every tier.** That is the structural property: `to_number(raw)` returns `Result[Number]`, not `Number`. Code that tries to use the returned value as a number without `is_ok` / `unwrap_or` / pattern-matching does not parse. The author doesn't have an option to forget.
 
 Raw data:
+
 - [`2026-04-20_llama3.1-8b_opus50.json`](benchmarks/2026-04-20_llama3.1-8b_opus50.json)
 - [`2026-04-20_qwen25-coder-14b_opus50.json`](benchmarks/2026-04-20_qwen25-coder-14b_opus50.json)
 - [`2026-04-20_claude-sonnet-4-6_opus50.json`](benchmarks/2026-04-20_claude-sonnet-4-6_opus50.json)
-- Full analysis: [`2026-04-20_claude_sonnet46_summary.md`](benchmarks/2026-04-20_claude_sonnet46_summary.md)
+- [`2026-04-21_ail-coder-7b-v3_opus50.json`](benchmarks/2026-04-21_ail-coder-7b-v3_opus50.json)
+- Full Sonnet analysis: [`2026-04-20_claude_sonnet46_summary.md`](benchmarks/2026-04-20_claude_sonnet46_summary.md)
+- Full v3 analysis: [`2026-04-21_ail-coder-7b-v3_analysis.md`](benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md)
 
 ---
 
 ## What the structural guarantee looks like side by side
 
-### Python (qwen14b wrote this for a sentiment-classification prompt):
+### Python (qwen14b wrote this for a sentiment-classification prompt)
 
 ```python
 text = "I absolutely love this product"
@@ -102,11 +91,9 @@ else:
 print(f"{word_count},{sentiment}")
 ```
 
-13 lines, runs, prints `5,positive`. Bug: every input without the
-literal word "love" or "hate" will return "neutral" regardless of
-actual sentiment. The LLM was never called. The task REQUIRED it.
+The program runs. It prints `5,positive`. But the model silently replaced the required LLM-based classification with a keyword lookup — any input without the literal word "love" or "hate" gets labelled "neutral" regardless of actual sentiment.
 
-### AIL (qwen14b wrote this for the same prompt):
+### AIL (the same model, same prompt)
 
 ```ail
 intent classify_sentiment(text: Text) -> Text {
@@ -122,110 +109,94 @@ entry main(x: Text) {
 }
 ```
 
-The author **declared** `intent classify_sentiment`. The runtime
-sees an intent declaration and routes the call to a language
-model. The author cannot choose to not call the model — the
-`intent` is part of the program's public surface, not a comment.
+The author **declared** `intent classify_sentiment`. At runtime the executor sees an `intent` and dispatches through the model adapter. The author cannot declare the task and then silently skip the model call — the `intent` is part of the program's public surface, not a comment.
 
-On a hybrid-task run with qwen14b, the Python side called an LLM
-on 25% of hybrid prompts; the AIL side's `intent` routing was
-correct on 100% of programs that parsed. The structural property
-is the point: it's true when AIL parses, and it's never true of
-Python.
+### How often does this matter?
+
+"Silent skip" measured as: Python program parsed successfully, but its source contains no LLM-call attempt at all (`uses_llm=False`), on tasks whose ground truth requires LLM judgment (B or C categories).
+
+| Model | Silent-skip on B (of 15) | Silent-skip on C (of 20) |
+|---|---|---|
+| qwen2.5-coder:14b | 3 | 16 |
+| ail-coder:7b-v3 | 3 | 9 |
+| claude-sonnet-4-6 | 0 | 1 |
+
+Sonnet 4.6 correctly writes LLM-calling Python virtually every time. Mid-tier models silently skip at a meaningful rate, especially on hybrid tasks. AIL cannot silently skip because `intent` is a dispatch declaration: the runtime routes it, the author does not.
 
 ---
 
-## The harness thesis is model-invariant
+## The harness thesis survives prompt engineering
 
-We tried three different authoring prompts on qwen14b:
+We tried three authoring-prompt variants on qwen2.5-coder:14b over the 20 hybrid prompts:
 
-| Prompt variant | AIL parse (hybrid, 20 prompts) | AIL routing | Python err-handling miss |
+| Prompt variant | AIL parse (hybrid) | AIL fn/intent | Python err-handling miss |
 |---|---|---|---|
-| v1 (baseline) | 15% | 10% | 40% |
-| v2 (+ explicit "do NOT emit List[T]" etc.) | 15% | 10% | 40% |
-| v3 (+ 3 more hybrid few-shot examples) | 15% | 10% | 40% |
+| v1 (baseline) | 15% (3/20) | 10% (2/20) | 40% |
+| v2 (+ explicit "do NOT emit `List[T]`") | 15% (3/20) | 10% (2/20) | 40% |
+| v3 (+ 3 extra hybrid few-shot examples) | 15% (3/20) | 10% (2/20) | 40% |
 
-The AIL side's parse rate doesn't move with better prompts —
-that's a training-distribution issue (discussed below). But the
-**Python error-handling miss stays at 40% across ALL three
-variants.** That number is structural, not prompt-sensitive.
-Change the prompt all you want; AI-written Python keeps dropping
-try/except at the same rate. AIL's Result type keeps forcing it.
+AIL parse rate was stuck on this model regardless of prompt — neither explicit negative instructions nor additional demonstrations moved a single case. That failure is the training-distribution problem, addressed below under "Where AIL was behind".
 
-This is the harness claim in pure form: *certain safety
-properties are language properties, not configuration properties.*
-The number that proves it is the one that doesn't change when
-the prompt changes.
+The number to watch is the right column: **Python error-handling miss stays at 40% across all three variants**. The prompt changes don't affect it because the missing safety net isn't a prompt concern — it's a property of the language the model is writing in. AIL's Result type kept the rate at 0% through the same three runs, by the same mechanism.
 
 Raw data:
+
 - [`2026-04-20_prompt_ab_analysis.md`](benchmarks/2026-04-20_prompt_ab_analysis.md) — v1 vs v2
 - [`2026-04-20_prompt_ab_v3_analysis.md`](benchmarks/2026-04-20_prompt_ab_v3_analysis.md) — v1 vs v2 vs v3
 
 ---
 
-## Where AIL is BEHIND (honest section)
+## Where AIL was behind — and how the fine-tune closes it
 
-AIL's parse rate is below Python's on every model tested:
+On the three base models tested, AIL parse rate was below Python parse rate:
 
-| Model | AIL parse (50 prompts) | Python parse |
+| Model | AIL parse | Python parse |
 |---|---|---|
 | llama3.1:8b | 8% | 14% |
 | qwen2.5-coder:14b | 42% | 100% |
-| **claude-sonnet-4-6** | **36%** | **100%** |
+| claude-sonnet-4-6 | 36% | 100% |
 
-This is a real gap, not a benchmark artefact. It's also not a
-language-design problem — it's a **training-distribution**
-problem. The model has seen megabytes of Python and kilobytes of
-AIL. When the model has to synthesize AIL, it reaches for Python
-patterns (`List[T]` type hints, method-call syntax, `stdlib/math`
-imports that don't exist in AIL) and the AIL parser correctly
-rejects them.
+This is a real gap, not a benchmark artefact. It is also not a language-design problem — it is a **training-distribution** problem. Every base model has seen orders of magnitude more Python than AIL. When asked to synthesize AIL, it reaches for Python patterns (`List[T]` type hints, `x[0]` subscript, method-call chains, `stdlib/math` imports that don't exist in AIL) and the AIL parser correctly rejects those programs.
 
-We confirmed this is a training-distribution problem, not a
-prompt problem, by running two orthogonal prompt interventions
-(v2 negative instructions, v3 positive demonstrations) on the
-same 20 hybrid tasks. Both produced **zero improvement in parse
-rate.** Pattern is stable: on this model, prompt-layer
-corrections cannot overcome the model's Python prior.
+We confirmed that prompt engineering cannot fix this on qwen14b (see the prompt-variant table above — three orthogonal interventions, zero improvement). The fix is fine-tuning.
 
-The fix for this gap is fine-tuning a small base model on AIL —
-but per the criteria Opus 4 set, that comes **after** the spec
-has stabilised for a version cycle AND the 205+ validated
-training samples we now have are actually used.
+### The fine-tune closed most of the gap
 
-Current status against the 5 fine-tuning prerequisites:
+`ail-coder:7b-v3` is qwen2.5-coder-7b-instruct fine-tuned with QLoRA on 244 validated AIL samples, shipped as part of v1.8.3 under [`reference-impl/training/`](../reference-impl/training/). On the same 50-prompt corpus:
 
-- ✅ Benchmark results from ≥ 2 base models (now **3**: llama8b, qwen14b, Sonnet 4.6)
-- ✅ Prompt engineering exhausted (v1 / v2 / v3 all plateau on qwen14b)
-- ✅ Primary failure mode identified (Python-distribution contamination)
-- ✅ AIL spec frozen for one version cycle — **v1.8 frozen 2026-04-20** ([`spec/09-stability.md`](../spec/09-stability.md))
-- ✅ ≥ 200 validated (prompt, correct AIL) pairs — **205 today** ([`reference-impl/training/dataset/`](../reference-impl/training/dataset/))
+| Model | AIL parse | AIL answer | Python parse | Python answer |
+|---|---|---|---|---|
+| ail-coder:7b-v3 | **78%** | **70%** | 54% | 48% |
 
-**5/5 met.** The training pipeline at
-[`reference-impl/training/`](../reference-impl/training/) is
-ready to run on a consumer GPU.
+- **AIL parse 78%** compared to the same 7B base's Python parse rate of 54%. The G1 gate target of 80% was missed by one case out of fifty; three remaining failures use Python-style `list[index]` subscript.
+- **AIL answer correctness 70% vs Python 48%** on the same model. The gap is 22 percentage points in AIL's favour, driven mostly by Python's silent-skip behaviour on the hybrid (C) category — see
+  [`why-ail-mechanics.md`](why-ail-mechanics.md) §2.
+- Python parse 54% on this model is lower than the 100% we saw on the base qwen14b. Two confounders combine here: the fine-tune shifts the 7B toward AIL at the cost of Python fluency, *and* qwen2.5-coder:7b is a smaller base than qwen2.5-coder:14b to start with. Without a run of the base qwen2.5-coder:7b on the same corpus we can't separate those factors cleanly. In any case, this does not imply "AIL beats Python at authoring in general" — it is a fact about this specific fine-tuned 7B on this specific corpus.
+
+The five fine-tuning prerequisites Opus 4 specified in April 2026 were all met on 2026-04-20:
+
+- ✅ Benchmark results from ≥ 2 base models — three now (llama8b, qwen14b, Sonnet 4.6)
+- ✅ Prompt engineering exhausted — v1/v2/v3 on qwen14b all plateaued at 15% hybrid parse
+- ✅ Primary failure mode identified — Python-distribution contamination
+- ✅ AIL spec frozen for one version cycle — v1.8 frozen 2026-04-20 ([`spec/09-stability.md`](../spec/09-stability.md))
+- ✅ ≥ 200 validated (prompt, AIL) pairs — 244 as of v1.8.3
+
+Training takes 10 minutes on a 3070 (8 GB VRAM). Full run details:
+[`reference-impl/training/HANDOFF.md`](../reference-impl/training/HANDOFF.md).
 
 ---
 
-## What else AIL does by grammar
+## What else AIL enforces by grammar
 
-Metrics where AIL is 0% by language design and Python's rate is
-what you want to compare against:
+Metrics where AIL's rate is zero by language design, with the matching Python rate for reference:
 
-| Metric | AIL rate | Python rate (qwen14b / llama8b) | Why AIL is 0% |
+| Metric | AIL rate | Python rate (measured) | Why AIL is 0% |
 |---|---|---|---|
-| Side-effect in "pure" function | **0%** | 0% / 0% | `pure fn` is a parser-enforced contract — no intent call, no `perform`, no non-pure call allowed in the body |
-| Unbounded loops | **0%** | 0% / 0% | AIL has no `while`. The only loop construct is `for x in bounded_collection`. Infinite loops are not expressible |
-| Error handling skipped on failable ops | **0%** | 42% / 86% | `Result` type forces `is_ok` / `unwrap_or` / explicit `error(...)` branches — you can't silently drop |
-| LLM call "forgotten" on judgment task | **0% when parsed** | 25% on hybrid (qwen14b) | `intent` declarations aren't optional annotations — they route through a model adapter at runtime |
+| Side-effect in `pure fn` | **0%** | 0% on this corpus | `pure fn` is a parser-enforced contract — no `intent`, no `perform`, no non-pure call in the body |
+| Unbounded loops | **0%** | 0% on this corpus | AIL has no `while`; the only loop is `for VAR in COLLECTION`. Infinite loops are not expressible |
+| Error handling skipped | **0%** | 42–86% depending on model | `Result` type forces `is_ok` / `unwrap_or` / explicit `error(...)` branches at failable boundaries |
 
-Python's 0% on "side-effect in pure" and "unbounded loops" in
-THIS benchmark is because qwen14b is well-behaved; the model
-isn't emitting `os.remove()` or `while True` on these prompts.
-On more adversarial inputs (the Veracode 2025 "45% of AI code
-has vulnerabilities" result), those numbers move. AIL's
-guarantee is **robustness across inputs**: even if you hand the
-model an adversarial prompt, a `pure fn` still can't `os.remove`.
+Python's 0% on the first two metrics is **specific to the 50 prompts in this corpus**. The models being tested are well-behaved on these inputs; they're not emitting `os.remove()` or `while True`. On more adversarial inputs (the Veracode 2025 "45% of AI-generated code has security vulnerabilities" result points here), those numbers are higher in real-world code. AIL's guarantee is robustness across inputs: even with an adversarial prompt, a `pure fn` still cannot `perform file.delete`.
 
 ---
 
@@ -244,71 +215,48 @@ export AIL_OLLAMA_TIMEOUT_S=600
 git clone https://github.com/hyun06000/AIL
 cd AIL/reference-impl
 
-# 4. Run. 30–60 min per model.
+# 4. Run. 20–40 min per model locally.
 python tools/benchmark.py \
     --out ../docs/benchmarks/$(date +%F)_your-model.json
 ```
 
-The output JSON has per-case detail — the AIL source, the Python
-source, the exec result, the verdict on each axis. You can diff
-it against the snapshots in this directory to see if the numbers
-reproduce, or watch them change as the tool and prompts evolve.
+The output JSON has per-case detail — the AIL source, the Python source, the executed result, and the verdict on every axis. Diff it against the committed snapshots in this directory to verify reproduction, or watch the numbers shift as tooling and prompts evolve.
 
 ---
 
 ## Data provenance
 
-Every number in this document comes from a JSON file in
-[`docs/benchmarks/`](benchmarks/) committed at a specific git
-hash. Short pointers:
+Every number in this document traces to a JSON file in [`docs/benchmarks/`](benchmarks/) committed at a specific git hash.
 
-| Claim | File | Commit |
+| Claim source | File | Commit |
 |---|---|---|
-| qwen14b baseline (all 50) | [`2026-04-20_qwen25-coder-14b_opus50.json`](benchmarks/2026-04-20_qwen25-coder-14b_opus50.json) | f31e41c (rescored) |
-| llama8b baseline | [`2026-04-20_llama3.1-8b_opus50.json`](benchmarks/2026-04-20_llama3.1-8b_opus50.json) | f31e41c (rescored) |
-| claude-sonnet-4-6 frontier baseline | [`2026-04-20_claude-sonnet-4-6_opus50.json`](benchmarks/2026-04-20_claude-sonnet-4-6_opus50.json) | this commit |
-| Prompt v1 vs v2 (hybrid) | [`2026-04-20_qwen25-coder-14b_v2-forbidden_C.json`](benchmarks/2026-04-20_qwen25-coder-14b_v2-forbidden_C.json) | 654b0c0 |
-| Prompt v1 vs v3 (hybrid) | [`2026-04-20_qwen25-coder-14b_v3-more-fewshot_C.json`](benchmarks/2026-04-20_qwen25-coder-14b_v3-more-fewshot_C.json) | 5104b04 |
+| qwen14b baseline (50 prompts) | [`2026-04-20_qwen25-coder-14b_opus50.json`](benchmarks/2026-04-20_qwen25-coder-14b_opus50.json) | f31e41c |
+| llama8b baseline | [`2026-04-20_llama3.1-8b_opus50.json`](benchmarks/2026-04-20_llama3.1-8b_opus50.json) | f31e41c |
+| Claude Sonnet 4.6 baseline | [`2026-04-20_claude-sonnet-4-6_opus50.json`](benchmarks/2026-04-20_claude-sonnet-4-6_opus50.json) | f31e41c |
+| Prompt v1 vs v2 (hybrid, qwen14b) | [`2026-04-20_qwen25-coder-14b_v2-forbidden_C.json`](benchmarks/2026-04-20_qwen25-coder-14b_v2-forbidden_C.json) | 654b0c0 |
+| Prompt v1 vs v3 (hybrid, qwen14b) | [`2026-04-20_qwen25-coder-14b_v3-more-fewshot_C.json`](benchmarks/2026-04-20_qwen25-coder-14b_v3-more-fewshot_C.json) | 5104b04 |
+| Fine-tuned v3 model | [`2026-04-21_ail-coder-7b-v3_opus50.json`](benchmarks/2026-04-21_ail-coder-7b-v3_opus50.json) | 461096d |
 
-When these numbers move (as fine-tuning happens, or the spec
-stabilises, or newer models are tested), the table in
-[`docs/benchmarks/README.md`](benchmarks/README.md) gets a new
-row, never an edit.
+When these numbers move (as further fine-tuning, newer models, or grammar evolution land), the table in [`benchmarks/README.md`](benchmarks/README.md) gains a new row — never an in-place edit. The JSON is the archival record.
 
 ---
 
-## What this doesn't prove (yet)
+## What this does NOT prove
 
-- **AIL is better at every task.** It isn't. Pure computation
-  that fits in a one-liner is fine in either language; the
-  harness advantage only appears when LLM routing, error handling,
-  or safety matters.
-- **Fine-tuned AIL beats Python across the board.** We haven't
-  fine-tuned yet. That's the next experiment, and it has a gate
-  (see the 5 prerequisites above).
-- **These numbers hold for every model.** Three models is still
-  a small sample — we've shown the pattern on llama3.1:8b,
-  qwen2.5-coder:14b, and Claude Sonnet 4.6. GPT-5 / Gemini 2.5 /
-  Claude Opus 4.7 class runs would tighten the claim further.
-  The Sonnet 4.6 data point does show the expected shape: stronger
-  models route LLM calls correctly but still skip error handling
-  at a high rate, so the harness win survives moving to a
-  frontier model.
+Being honest about the limits of the current data:
 
-The current evidence is strong enough to justify the investment
-but not strong enough to declare victory. This document will be
-updated as the gap closes or new data arrives.
+- **AIL is better at every task.** It isn't. A pure one-line computation like `len(x.split())` is fine in either language; the harness advantage only appears when LLM routing, error handling, or structural safety matters.
+- **The fine-tune generalises.** `ail-coder:7b-v3` was fine-tuned against v1.8 grammar on 244 samples. The 78% parse rate is on this benchmark's 50 prompts. Different prompt distributions will likely yield different rates. The G1 gate is also still open (missed by 1 case).
+- **These numbers hold for every model.** Four models on this corpus is a small sample. The general pattern — structural properties don't move with model size, parse rate does — is consistent with Opus 4's thesis, but GPT-5 / Gemini 2.5 / Claude Opus 4.7-class measurements would sharpen the claim.
+
+The current evidence is strong enough to justify continuing the project, not strong enough to declare the language mature. This document is updated as new data arrives.
 
 ---
 
 ## Related
 
-- [`why-ail.md`](why-ail.md) — the qualitative version of this
-  argument, with one worked example per differentiator
-- [`../spec/08-reference-card.ai.md`](../spec/08-reference-card.ai.md)
-  — the language itself, in the form any AI model can read
-- [`benchmarks/README.md`](benchmarks/README.md) — per-run snapshot
-  table and methodology
-- [`../reference-impl/training/README.md`](../reference-impl/training/README.md)
-  — the dataset, validator, and training pipeline that will be
-  unfrozen when the fine-tuning prerequisites are met
+- [`why-ail.md`](why-ail.md) — the qualitative version of this argument, with one worked example per differentiator.
+- [`why-ail-faq.md`](why-ail-faq.md) — practical adoption questions (tokens saved, when to choose AIL).
+- [`why-ail-mechanics.md`](why-ail-mechanics.md) — the mechanism behind each number in this document.
+- [`benchmarks/README.md`](benchmarks/README.md) — per-run snapshot table and methodology.
+- [`reference-impl/training/README.md`](../reference-impl/training/README.md) — the dataset, validator, and training pipeline.

@@ -1,14 +1,14 @@
 # 왜 AIL 인가
 
-> **AIL 은 AI 가 코드의 저자라고 가정하고 만든 첫 언어다. Python 은 그게 아니다.**
+> **AIL 은 키보드 앞의 사람이 아니라 AI 가 코드의 주 저자라는 전제 위에 설계된 프로그래밍 언어다. Python 은 그게 아니다.**
 
 이 한 줄이 아래 모든 것을 결정합니다.
 
-Python, JavaScript, Rust — 주류 언어는 전부 키보드 앞의 사람을 가정하고 설계됐습니다. 문법은 사람 눈에 편하게, 타입 시스템은 사람 실수를 잡으려고, 라이브러리는 사람 워크플로우에 맞춰져 있죠. 저자가 바뀌면 이 결정들 중 일부는 **틀린 선택**이 되고, 일부는 그냥 **잡음**이 됩니다.
+Python, JavaScript, Rust — 주류 언어는 전부 키보드 앞의 사람을 가정하고 설계됐습니다. 문법은 사람 눈에 편하게, 타입 시스템은 사람 실수를 잡으려고, 라이브러리는 사람 워크플로우에 맞춰져 있죠. 저자가 언어 모델로 바뀌면 이 결정들 중 일부는 적용되지 않게 되고, 일부는 오히려 새 저자의 작업을 방해합니다.
 
-AIL 은 다른 전제에서 출발합니다 — 프로그래머는 언어 모델이고, 사람의 일은 원하는 걸 말하는 것이지 코드를 읽는 게 아닙니다. `pure fn`, 런타임 provenance, `attempt` 캐스케이드 같은 기능들은 Python 관용구의 개선판이 아니에요. 저자가 바뀐다는 전제에서 다시 쓴 **언어 계약**의 자연스러운 결과입니다.
+AIL 은 다른 전제에서 출발합니다 — 프로그래머는 언어 모델이고, 사람의 일은 의도를 표현하는 것이지 코드를 읽는 게 아닙니다. `pure fn`, 런타임 provenance, `attempt` 캐스케이드 같은 기능들은 Python 관용구의 개선판이 아니에요. 저자가 바뀐다는 전제에서 다시 쓴 **언어 계약**의 자연스러운 결과입니다.
 
-아래가 오늘 실제로 돌아가는 것들입니다.
+아래가 오늘 실제로 돌아가는 것들입니다. 각 주장마다 직접 실행해 검증할 수 있는 파일이나 테스트가 연결되어 있습니다.
 
 ---
 
@@ -60,7 +60,7 @@ has_intent_origin(words)            // false
 
 [`examples/audit_provenance.ail`](../../reference-impl/examples/audit_provenance.ail) 을 보세요. 프로그램이 리포트를 만들고, 각 필드에 대해 **자기 자신을 감사** 해서 `[LLM]` 또는 `[pure]` 라벨을 붙입니다. 래퍼가 아니라 **언어가 직접** 합니다.
 
-Python 에서의 비용: 미들웨어 몇백 줄 + 기도. AIL 에서의 비용: 공짜.
+Python 에서의 비용: 별도 추적 미들웨어 (LangSmith, OpenTelemetry, 또는 모든 헬퍼에 플래그를 손으로 넘기는 방식) — 저자가 계측을 빼먹지 말아야 한다는 추가 의존이 생깁니다. AIL 에서의 비용: 사용자 코드 0 줄. 런타임은 origin 노드 할당 비용을 값마다 지불하므로 기계 수준에서 공짜는 아니지만, **프로그래머 수준에서는 공짜** — 감사 기록을 작성하지 않고도 얻습니다.
 
 ---
 
@@ -71,16 +71,20 @@ Python 에서의 비용: 미들웨어 몇백 줄 + 기도. AIL 에서의 비용:
 **AIL**: 최상위 키워드가 본문 한 줄 읽기 전에 말해줍니다.
 
 ```ail
-fn parse_csv(raw: Text) -> Text { ... }        // 계산
-pure fn word_count(s: Text) -> Number { ... }  // 계산, 정적으로 순수 보장
-intent classify(text: Text) -> Text {          // 판단 — 모델 호출할 거임
+fn parse_csv(raw: Text) -> Text { ... }         // 본문 미검사 — plain fn 은 intent 호출도 가능
+pure fn word_count(s: Text) -> Number {          // 본문 정적 검사 (LLM 없음, 이펙트 없음)
+    return length(split(s, " "))
+}
+intent classify(text: Text) -> Text {            // 판단 — 런타임이 모델로 디스패치
     goal: positive_or_negative
 }
 ```
 
-`intent` 선언에는 실행 가능 코드가 들어가지 않습니다. `goal` 과 선택적 `constraints` 만. 런타임이 goal 을 모델 어댑터에 넘기고 `(value, confidence)` 를 받아옵니다. 저자는 API 호출을 쓰지 않아요. **언어 계약이 씁니다.**
+`intent` 선언에는 실행 가능 코드가 들어가지 않습니다. `goal` 과 선택적 `constraints` 만. 런타임이 goal 을 모델 어댑터에 넘기고 `(value, confidence)` 를 받아옵니다. 저자는 API 호출을 쓰지 않아요 — **언어 계약이 씁니다.**
 
-[`examples/review_analyzer.ail`](../../reference-impl/examples/review_analyzer.ail) — 한 프로그램에 `fn` 호출 23 개, `intent` 호출 6 개. 어느 게 뭔지 **한눈에** 보입니다.
+`pure fn` 은 바디에 `intent` 호출도, `perform` 이펙트도, 순수하지 않은 `fn` 호출도 없다는 **정적 보증**을 추가합니다. plain `fn` 에는 이 보증이 없습니다 — 컴파일러가 LLM 부재를 증명해주길 원하면 `pure fn` 을 쓰세요.
+
+[`examples/review_analyzer.ail`](../../reference-impl/examples/review_analyzer.ail) — 한 프로그램 안에 `intent classify` 한 개가 루프 안에서 리뷰마다 호출되고, 나머지는 전부 `fn` 헬퍼로 파싱·필터링·카운트·리포트 생성을 결정론적으로 처리합니다. 최상위 키워드만 보면 어느 것이 모델로 가는지 **한눈에** 판단할 수 있습니다.
 
 ---
 
@@ -97,17 +101,21 @@ if confidence < 0.7:
     result = big_model(key)
 ```
 
-**AIL**: `attempt` 는 블록입니다. 전략을 우선순위 순으로 나열. 런타임이 각각 시도하고, 선언된 threshold 를 만족하는 첫 번째 것을 반환.
+**AIL**: `attempt` 는 블록입니다. 전략을 `try` 로 나열하고, 런타임이 순서대로 시도해서 `Result` 오류가 아닌 첫 번째 결과가 승리합니다. 실제 문법은 최소 형태 — 라벨도 접미 절도 없습니다:
 
 ```ail
-attempt {
-    try_pure: lookup_table(key)            // 신뢰도 1.0, 거의 공짜
-    try_small: cheap_model(key)             // (value, confidence) 반환
-    try_big: expensive_model(key)           // fallback
-} with minimum_confidence = 0.8
+entry main(text: Text) {
+    return attempt {
+        try direct_parse(text)    // pure fn, ok(n) 또는 error(...)
+        try scan_tokens(text)      // pure fn, ok(n) 또는 error(...)
+        try infer_number(text)     // intent — 위 두 개가 에러일 때만 실행
+    }
+}
 ```
 
-[`examples/cascade_extract.ail`](../../reference-impl/examples/cascade_extract.ail) 참고. 캐스케이드는 **구조적** 이에요 — 매번 떠올려서 적용해야 하는 패턴이 아니라.
+ok 인 첫 `try` 가 승리하면 이후 `try` 는 평가되지 않습니다. 신뢰도 임계 기반 변형 ("confidence 0.8 미만 건너뛰기") 은 미래 확장 — 현재 파서는 위 형태만 수용합니다.
+
+[`examples/cascade_extract.ail`](../../reference-impl/examples/cascade_extract.ail) 에서 실행 가능한 버전을 볼 수 있습니다. 캐스케이드는 **구조적** 이에요 — 매번 떠올려서 적용해야 하는 패턴이 아니라.
 
 ---
 
@@ -127,7 +135,7 @@ entry main(text: Text) {
 }
 ```
 
-[`examples/parallel_analysis.ail`](../../reference-impl/examples/parallel_analysis.ail) 참고. 독립된 intent N 개의 벽시계 지연 시간은 N·t 가 아니라 대략 t. 이 코드를 쓰는 AI 는 **colored function** 문제를 고민하지 않습니다.
+[`examples/parallel_analysis.ail`](../../reference-impl/examples/parallel_analysis.ail) 참고. 독립된 intent N 개가 감지되고 모델 어댑터가 동시 요청을 지원할 때, 벽시계 지연 시간은 N·t 가 아니라 대략 t 에 가까워집니다. 정확한 속도 향상은 어댑터 (HTTP/네트워크 오버헤드, 제공자 rate limit) 와 플래너의 의존성 추론에 따라 달라지지만, **저자는 이를 얻기 위해 함수를 color 하거나 await 체인을 관리할 필요가 없습니다.**
 
 ---
 
@@ -135,14 +143,19 @@ entry main(text: Text) {
 
 **Python + LLM SDK**: 모델이 신뢰도 점수를 돌려줍니다. 믿거나 말거나. 모델의 "0.9 확신" 이 실제로 90% 정확도에 대응하는지 알고 싶으면? 별도 로깅 + ML 파이프라인을 구축하세요.
 
-**AIL**: 런타임이 intent 별로 결과를 기록합니다. 샘플이 충분히 쌓이면 모델의 자기 신고 신뢰도 대신 **관측 기반 보정 신뢰도**가 사용됩니다. AIL 안에서 calibration 상태를 직접 조회 가능:
+**AIL**: 런타임이 intent 별로 결과를 기록합니다 — 보고된 신뢰도 구간 (0.0–0.1, 0.1–0.2, …, 0.9–1.0) 으로 버킷팅. 버킷에 샘플이 충분히 쌓이면 (기본 5 개), 해당 구간에 떨어지는 이후 호출은 모델의 자기 신고값 대신 **관측 평균** 으로 대체됩니다. AIL 에서 상태 직접 조회 가능:
 
 ```ail
 calibration_of("classify_sentiment")
-// returns { samples: 47, observed_mean: 0.73, using_calibrated: true }
+// 버킷별 레코드를 반환:
+// {
+//   "0.8-0.9": { "count": 12, "mean_observed": 0.71, "calibrated": true  },
+//   "0.9-1.0": { "count":  3, "mean_observed": 0.88, "calibrated": false }
+//   ...
+// }
 ```
 
-실용적 효과: `attempt` threshold, `match` confidence guard, 모든 `if confidence > ...` 체크가 모델 자기 신념 대신 **관측된 현실** 을 씁니다. [`tools/calibration_demo.py`](../../reference-impl/tools/calibration_demo.py) 로 신뢰도가 실제 진실 쪽으로 이동하는 걸 볼 수 있어요.
+실용적 효과: 충분한 데이터가 쌓이면 `match` confidence guard 와 모든 `if confidence > …` 체크가 모델 자기 신념 대신 **관측된 현실** 을 씁니다. [`tools/calibration_demo.py`](../../reference-impl/tools/calibration_demo.py) 로 ~20 번 호출에 걸쳐 신뢰도가 실제 진실 쪽으로 이동하는 걸 볼 수 있어요.
 
 ---
 
@@ -153,7 +166,7 @@ calibration_of("classify_sentiment")
 - **툴링이 얇음.** IDE 플러그인 없음, LSP 없음, 디버거 없음, 포매터 없음. `.ail` 파일은 아무 에디터로 편집하고 CLI 로 돌립니다.
 - **에코시스템이 작음.** stdlib 모듈 3 개 (`core`, `language`, `utils`). stdlib 이 안 커버하면 인라인으로 써야 합니다.
 - **성능은 소박함.** Python 으로 짠 트리-워킹 인터프리터. 두 번째 런타임은 Go 지만 아직 Phase-0 부분집합. 뜨거운 루프는 느립니다.
-- **사용자 유형이 한 가지.** 이 시점 (v1.8.2, 2026 년 4 월) 외부 기여자 ~0 명, 외부 사용자 ~0 명. "내 환경에서 잘 됨" 은 스케일에서 검증 안 됐습니다.
+- **사용자 유형이 한 가지.** 이 시점 (v1.8.3, 2026 년 4 월) 외부 기여자 ~0 명, 외부 사용자 ~0 명. "내 환경에서 잘 됨" 은 스케일에서 검증 안 됐습니다.
 - **디자인이 완고함.** `while` 없음, 클래스 없음, OOP 없음, 상속 없음. 이펙트는 권한 게이트. 이런 것들을 당연시하는 머릿속 모델이면 AIL 이 **이상하게** 느껴질 겁니다 — 빠진 기능이 아니라 **설계 결정** 이에요.
 
 ---

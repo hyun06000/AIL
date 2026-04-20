@@ -63,16 +63,12 @@ See full argument in
 
 **Mechanism: the "silent LLM skip"**
 
-On 15 of 50 tasks (30%), the Python author *declared* it was writing
-code to solve a judgment task but *never actually called the LLM* —
-instead it hardcoded a keyword-match heuristic. AIL cannot do this
-because `intent` is a dispatch declaration: at runtime the executor
-routes through the model adapter whether the author wanted it to or
-not.
+"Silent skip" here means: the Python program *parsed*, executed to completion, and returned an answer — but its source contains no LLM-call attempt at all (`uses_llm=False` in the benchmark record), even though the task's ground truth required model judgment. AIL cannot silently skip because `intent` is a dispatch declaration: the runtime routes every declared intent through the model adapter, and there is no AIL syntax for "declare the intent and then don't call it".
 
 **Exhibit A — task B09: "Rewrite in passive voice":**
 
 Python (same model, 0 LLM calls):
+
 ```python
 def passive_voice(text):
     parts = text.split()
@@ -80,10 +76,10 @@ def passive_voice(text):
     return f"{object_} was {verb} by {subject}"
 ```
 
-Input "The cat chased the mouse" → output "chased was cat by The".
-Wrong because the hardcoded rule doesn't know "the" is a determiner.
+Input "The cat chased the mouse" → output "chased was cat by The". Wrong because the hardcoded rule doesn't know "the" is a determiner. The LLM was never consulted.
 
 AIL (same model, 1 LLM call):
+
 ```ail
 intent to_passive_voice(text: Text) -> Text {
     goal: sentence rewritten in passive voice
@@ -91,40 +87,36 @@ intent to_passive_voice(text: Text) -> Text {
 entry main(text: Text) { return to_passive_voice(text) }
 ```
 
-Output: "The mouse was chased by the cat." Correct because `intent`
-forces actual LLM dispatch — there is no AIL grammar that lets the
-author pretend to answer this with string operations.
+Output: "The mouse was chased by the cat." Correct because the `intent` declaration forces actual LLM dispatch.
 
-**The frequency of this failure by category:**
+**Frequency of silent skip by category** (on `ail-coder:7b-v3`, among programs that parsed):
 
-| Category | Python silent-skips | AIL silent-skips |
+| Category | Python silent-skipped | AIL silent-skipped |
 |---|---|---|
-| A — pure computation (n=15) | n/a (LLM not needed) | n/a |
-| B — pure judgment (n=15) | 3/15 (20%) | 0/15 |
-| C — hybrid (n=20) | **12/20 (60%)** | 1/20 |
+| A — pure computation (n=15) | n/a (LLM not required) | n/a |
+| B — pure judgment (of 4 parsed, 15 total) | 3 | 0 |
+| C — hybrid (of 14 parsed, 20 total) | **9** | 1 |
 
-**Hybrid is where Python collapses.** On 60% of C-category tasks the
-Python author wrote code that looks computational, runs fine, and
-answers with garbage. AIL's `intent`/`pure fn` distinction is
-grammatical — you can't omit the LLM call the task requires.
+So of the 18 Python judgment-task programs that parsed at all, 12 (67%) hardcoded the judgment step instead of calling the LLM. The ones that did attempt an LLM call generally got the right answer — the silent-skip pattern accounts for most of Python's wrong answers on this benchmark, though not all of them (parse failures and exec errors account for the rest).
+
+Worth flagging explicitly: Python's behaviour here is model-dependent. On Claude Sonnet 4.6 (tested against the same corpus), only 1/20 hybrid programs silently skipped. The silent-skip pattern is severe on mid-tier models and largely absent at the frontier — but error-handling omission (§1 above) survives the move to Sonnet at 70%.
 
 ---
 
-## 3. Why AIL uses ~75% fewer tokens than a naive agent
+## 3. Where AIL's LLM-call count actually lands
 
-**Observation.** Across 50 tasks:
+**Observation.** Across the 50-prompt benchmark on `ail-coder:7b-v3`:
+
 - AIL: 37 total LLM calls
-- Python (same model): 18 calls (but silently skipped 15 it should have made)
-- Naive "LLM-for-everything" agent: ~150 calls (estimated 3/task avg)
+- Python, same model: 18 total LLM calls (but silently skipped 12 on parsed judgment tasks)
 
-**Mechanism.** The `pure fn` / `intent` split does the cost routing
-for you — computation runs on local silicon, judgment on LLM:
+**Mechanism.** The `pure fn` / `intent` split does the cost routing for you — computation runs on local silicon, judgment on LLM:
 
 ```ail
-pure fn bmi(h_cm: Number, w_kg: Number) -> Number {      // 0 LLM calls
+pure fn bmi(h_cm: Number, w_kg: Number) -> Number {      // 0 LLM calls — runs locally
     return round(w_kg / pow(h_cm / 100, 2), 2)
 }
-intent assess_health(bmi: Number) -> Text {              // 1 LLM call
+intent assess_health(bmi: Number) -> Text {              // 1 LLM call when the entry invokes it
     goal: health assessment
 }
 entry main(x: Text) {
@@ -133,9 +125,9 @@ entry main(x: Text) {
 }
 ```
 
-A naive "put everything in an LLM prompt" agent would LLM-call at least
-three times for this shape: to parse the spec, to compute, and to
-assess. AIL's runtime bypasses the first two entirely.
+**How to think about the comparison.** AIL uses *more* LLM calls than Python baseline (37 vs 18) on this benchmark — but that's because Python silently skipped calls it should have made, and got 26% fewer answers right as a result. The relevant question isn't "Python or AIL uses fewer tokens" — it's "per correct answer, what's the cost?"
+
+Against a hand-authored Python pipeline whose author correctly routes LLM only where needed, AIL uses roughly the same number of calls AIL does — no savings. Against an agent framework that LLM-calls every subtask (common naïve-agent pattern), AIL uses meaningfully fewer because the routing is structural rather than a model's runtime choice. The exact ratio depends on the agent framework and the task shape; the benchmark doesn't measure it directly, so any specific "N× savings" number would be an estimate, not data.
 
 **Why Python doesn't match this automatically.** Python has no
 language-level distinction between "deterministic" and "judgment"
@@ -237,7 +229,7 @@ negative, neutral`). Not a training effect.
 
 ---
 
-## 6. Why AIL is 2.5× slower than Python per task
+## 6. Why AIL is slower per task
 
 **Observation.** Per-task wall clock (v3 run):
 
@@ -247,39 +239,32 @@ negative, neutral`). Not a training effect.
 | B (intent) | 3.1 s | 2.2 s |
 | C (hybrid) | 6.8 s | 2.4 s |
 
-**Mechanism.** Two additive sources:
+**Mechanism — two additive sources:**
 
-1. **Python cheats on runtime by skipping LLM calls** (12/20 on C).
-   Each skipped call is ~2 s saved. Subtract those and Python's C
-   wall-clock would be similar to AIL's.
+1. **Python is faster partly because it skips work.** On C-category tasks, 9 of 14 parsed Python programs contained no LLM call at all, so the LLM latency (typically 1–3 seconds per call on the local Ollama server used for this benchmark) was avoided entirely. Adjust for that and Python's C wall-clock comes up toward AIL's.
+2. **AIL runtime overhead.** The reference Python implementation tracks provenance on every value, a trace entry per call, and calibration state per intent. These are real costs on top of the bare executor. They're measurable but typically tens of milliseconds per task, not seconds — the LLM call latency dominates.
 
-2. **AIL runtime overhead.** The reference Python implementation
-   tracks provenance on every value, trace entries on every call,
-   calibration state for intents. These are optional features the
-   Go runtime doesn't track. On a ~200-ms-per-task baseline this
-   is a real cost but not the dominant factor.
-
-**When this matters.** Batch pipelines, overnight runs, agent
-workloads — the 3 s extra per task is in the noise. Interactive
-chatbots with <1 s latency targets — the overhead would need tuning
-(or a switch to the Go runtime).
+**When this matters.** Batch pipelines, overnight runs, and agent workloads — a few extra seconds per task is noise. Interactive latency-sensitive applications (sub-second response) would need the Go runtime (which doesn't track provenance/calibration) and/or a faster model.
 
 ---
 
 ## 7. Why the gains compound: three independent mechanisms
 
-The headline numbers (70% answer correctness, 0% error omission, 75%
-token reduction) don't come from a single trick. They come from three
-layers, each addressing a different failure mode:
+The headline numbers — **AIL answer correctness 70% vs Python 48%** on the same model, **AIL error-handling omission 0% vs Python 42–86%** across every model tier, and **AIL parse rate 78% on a small fine-tuned model that beats frontier base models at authoring AIL** — do not come from a single trick. They come from three independent layers, each addressing a different failure mode:
 
-| Layer | Mechanism | Gap it closes |
+| Layer | Mechanism | Gap it closes (measured on `ail-coder:7b-v3`) |
 |---|---|---|
-| **Grammar** | `Result` type, `pure fn`, no `while` | Error handling (44% → 0%), infinite loops, side-effect hiding |
-| **Training** | QLoRA on 244 validated samples | Parse rate (42% base → 78%), fn/intent routing |
-| **Runtime** | `intent` dispatches through adapter | Silent LLM skip (60% → 5% on hybrid) |
+| **Grammar** | `Result` type, `pure fn`, no `while` | Error handling omission 0% (vs Python's 44% on this model, up to 86% on llama8b) |
+| **Training** | QLoRA on 244 validated samples | Parse rate moves from qwen14b base's 42% → 78% on the fine-tuned 7B |
+| **Runtime** | `intent` declarations always dispatch via the model adapter | Silent LLM skip on hybrid tasks: AIL 1/20, Python 9/20 |
 
-Remove any one and the claim collapses. Keep all three and the
-numbers hold across every model tier tested.
+Remove any one layer and the other two don't carry the claim:
+
+- Grammar alone (no fine-tune) gives you 36–42% AIL parse rates on base models — the harness survives but the authoring reliability does not.
+- Training alone (on a language without `Result`) would not have produced the 0% error-handling number; the fine-tune doesn't teach error handling, the grammar requires it.
+- Runtime alone (a library that intercepts function calls) cannot prevent the author from never declaring the intent — you need the grammar to make "declare it and skip it" unexpressible.
+
+The three-layer stack is the claim. The numbers are the evidence.
 
 **What this says about the design thesis.** "Build a harness around
 Python" (AGENTS.md, pre-commit hooks, custom linters) addresses one
@@ -301,11 +286,14 @@ python3 -c "
 import json
 d = json.load(open('docs/benchmarks/2026-04-21_ail-coder-7b-v3_opus50.json'))
 cases = [c for c in d['cases'] if c['category']=='C' and c['python'].get('parsed')]
-skips = [c for c in cases if (c['python'].get('llm_call_count') or 0)==0]
-print(f'Python hybrid parsed={len(cases)}, silent-skipped={len(skips)}')
+# Silent skip: source has no LLM-call attempt (uses_llm=False)
+silent = [c for c in cases if not c['python'].get('uses_llm')]
+print(f'Python hybrid parsed={len(cases)}, silent-skipped={len(silent)}')
 "
-# Python hybrid parsed=14, silent-skipped=12
+# Python hybrid parsed=14, silent-skipped=9
 ```
+
+Note: an alternative count uses `llm_call_count == 0` instead of `uses_llm == False`. Those can diverge — a program may contain a real LLM-call attempt that doesn't fire at runtime (wrong endpoint, timeout, or a code path that never reaches it). `uses_llm=False` is the stricter metric ("code truly has no LLM call") and is what's used in this document.
 
 Every JSON also carries per-case `source` fields so you can read the
 actual code each author produced for any prompt.
