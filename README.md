@@ -148,6 +148,56 @@ ail run examples/fizzbuzz.ail --input "20" --mock
 ail ask "sum the numbers 1 to 50" --show-source
 ```
 
+### Using a remote / external Ollama server
+
+Ollama does not have to run on the same machine as `ail ask`. If you
+serve Ollama on a LAN box, a GPU rig, or a bound-to-all-interfaces
+instance, point the CLI at it with `AIL_OLLAMA_HOST`:
+
+```bash
+export AIL_OLLAMA_HOST=http://10.0.0.1:11434     # your Ollama server
+export AIL_OLLAMA_MODEL=ail-coder:7b-v3           # any model it serves
+export AIL_OLLAMA_TIMEOUT_S=600                   # larger models need more
+
+ail ask "Calculate BMI for 175cm 70kg and assess it"
+```
+
+The three environment variables:
+
+| Variable | Default | What it controls |
+|---|---|---|
+| `AIL_OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL — scheme required, port required |
+| `AIL_OLLAMA_MODEL` | (required) | Model name as it appears in `ollama list` on the server |
+| `AIL_OLLAMA_TIMEOUT_S` | `300` | HTTP timeout per call. Bump for larger models or slower hardware |
+
+Notes for common remote setups:
+
+- **Ollama must bind to a non-localhost interface.** By default it
+  only listens on `127.0.0.1:11434`. To expose it on a LAN, set
+  `Environment="OLLAMA_HOST=0.0.0.0:11434"` in the systemd unit
+  (or equivalent for your init system), then restart Ollama. Verify
+  with `curl http://HOST:11434/api/tags` from the client machine.
+- **Firewalls.** Ollama has no built-in auth. Either keep the server
+  on a private network or front it with something that does auth
+  (nginx + basic auth, Tailscale, WireGuard, SSH tunnel).
+- **Model availability.** `AIL_OLLAMA_MODEL` must match a model
+  already pulled on the **server**, not the client. Check with
+  `OLLAMA_HOST=http://10.0.0.1:11434 ollama list`.
+- **Custom / fine-tuned models.** The same env vars work with any
+  model the server has registered — including custom Modelfile
+  entries like the AIL-tuned `ail-coder:7b-v3` shipped in
+  [`reference-impl/training/`](reference-impl/training/).
+
+The Go runtime reads the same env vars:
+
+```bash
+export AIL_OLLAMA_HOST=http://10.0.0.1:11434
+export AIL_OLLAMA_MODEL=ail-coder:7b-v3
+./ail-go run MY_PROGRAM.ail
+# or override the model per-run:
+./ail-go run MY_PROGRAM.ail --model ail-coder:7b-v3
+```
+
 ### Or install from source (for contributing)
 
 ```bash
