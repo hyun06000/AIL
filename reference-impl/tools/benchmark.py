@@ -467,9 +467,51 @@ def _dimension_summary(cases: list[CaseReport]) -> dict:
         },
     }
 
+    # Dimension D — Harness Effectiveness (Opus 4 April 2026 update).
+    # The core claim: AIL's grammar IS the harness; Python needs
+    # external tooling for the same guarantees. We quantify this as
+    # the count/rate of cases where Python emitted a structural bug
+    # (side-effect-in-pure or unbounded-loop) that AIL 0%-blocks by
+    # language design.
+    python_unsafe = sum(
+        1 for c in cases
+        if c.python.side_effect_violation or c.python.unbounded_loop
+    )
+    python_missed_errors = sum(
+        1 for c in cases if not c.python.error_handling_ok
+    )
+    D = {
+        "structural_safety_wins_over_python": {
+            "count": python_unsafe,
+            "total": len(cases),
+            "rate_pct": round(100 * python_unsafe / n, 1),
+            "meaning": "cases where Python emitted a structural bug "
+                       "(side-effect in pure code or unbounded loop) "
+                       "that AIL's grammar prevents by construction",
+        },
+        "error_handling_gap_over_python": {
+            "count": python_missed_errors,
+            "total": len(cases),
+            "rate_pct": round(100 * python_missed_errors / n, 1),
+            "meaning": "cases where Python skipped error handling on "
+                       "a failable operation; AIL's Result type forces "
+                       "explicit handling",
+        },
+        "ail_structural_safety_rate_pct": 100.0,
+        "note": "AIL's 100% is by language design — `pure fn` + no "
+                "`while` + Result-required parsing. Python's number "
+                "measures what a human or linter would have to catch "
+                "externally. `harness_overhead` (time to configure "
+                "linters / pre-commit hooks / AGENTS.md) is not "
+                "captured in this run — it is 0 for AIL by "
+                "construction; an empirical Python number would come "
+                "from a separate study.",
+    }
+
     return {"A_generation_quality": A,
             "B_safety": B,
             "C_efficiency": C,
+            "D_harness_effectiveness": D,
             "total_cases": len(cases)}
 
 
@@ -516,6 +558,16 @@ def _print_report(summary: dict) -> None:
           f"Py {C['avg_llm_calls']['python']}")
     print(f"  avg wall clock (ms)  AIL {C['avg_wall_clock_ms']['ail']}    "
           f"Py {C['avg_wall_clock_ms']['python']}")
+
+    print("\nD. Harness Effectiveness (new, per Opus 4 April 2026)")
+    D = summary["D_harness_effectiveness"]
+    sw = D["structural_safety_wins_over_python"]
+    eh = D["error_handling_gap_over_python"]
+    print(f"  structural bugs Py emitted that AIL grammar prevents")
+    print(f"    {sw['count']}/{sw['total']} cases ({sw['rate_pct']}%)")
+    print(f"  failable ops Py left unhandled (AIL Result forces it)")
+    print(f"    {eh['count']}/{eh['total']} cases ({eh['rate_pct']}%)")
+    print(f"  AIL structural safety rate: 100% (by grammar)")
     print("=" * 68 + "\n")
 
 

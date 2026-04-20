@@ -52,7 +52,9 @@ Wall clock on a 3070 with `qwen2.5-coder:14b-q4_K_M`: ~60s per case.
 | File | Model | Category | Cases | AIL parse | AIL route | Python parse | Python route | Note |
 |---|---|---|---|---|---|---|---|---|
 | `2026-04-20_qwen25-coder-14b_hybrid.json` | qwen2.5-coder:14b-instruct-q4_K_M | hybrid | 5 | 40% | 20% | 100% | 40% | **Initial baseline.** Python runs every time but 3 of 5 programs hardcoded the judgment subtask. |
-| `2026-04-20_qwen25-coder-14b_all.json` | qwen2.5-coder:14b-instruct-q4_K_M | all 50 | 50 | **64%** | 60% | 100% | 72% | **Full baseline to beat.** By category: hybrid parse 46% / route 33%, pure_fn parse 85% / answer 80%, pure_intent parse 53%. Python on hybrid routes through the LLM only 33% of the time — the other 67% are silent LLM-skips. |
+| `2026-04-20_qwen25-coder-14b_all.json` | qwen2.5-coder:14b-instruct-q4_K_M | all 50 | 50 | **64%** | 60% | 100% | 72% | **Full baseline to beat.** Bench_authoring corpus. By category: hybrid parse 46% / route 33%, pure_fn parse 85% / answer 80%, pure_intent parse 53%. Python on hybrid routes through the LLM only 33% of the time — the other 67% are silent LLM-skips. |
+| `2026-04-20_qwen25-coder-14b_opus50.json` | qwen2.5-coder:14b-instruct-q4_K_M | Opus 50 all 4 dims | 50 | 42% | 40% (fn/intent accuracy) | 100% | 64% | **Opus 50-prompt corpus, canonical bench.** Python wins A (generation) across the board; AIL wins error_handling_miss by 42 percentage points. No Python side-effect or infinite-loop bugs emerged (qwen is "nice"); the harness win is the error-handling gap. See [`2026-04-20_opus50_summary.md`](2026-04-20_opus50_summary.md). |
+| `2026-04-20_llama3.1-8b_opus50.json` | llama3.1:8b-instruct-q4_K_M | Opus 50 all 4 dims | 50 | 8% | 8% (fn/intent accuracy) | 14% | 80%* | **Model-capability floor.** llama3.1:8b fails to author both languages — 14% Python parse rate means the model is below the threshold for either. Python error-handling miss: 86%. The 80% routing is a scoring artefact (model couldn't emit Python so "no LLM call" got credit on fn_only prompts). |
 
 ---
 
