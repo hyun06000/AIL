@@ -76,6 +76,16 @@ REPO_ROOT = HERE.parent.parent
 PROMPTS_PATH = REPO_ROOT / "benchmarks" / "prompts.json"
 
 
+# Load a .env file at import time so ANTHROPIC_API_KEY and
+# ANTHROPIC_MODEL set there are visible to the module-level lookups
+# below. The helper is the same one `ail.run` uses, so the behavior
+# is consistent across the package: it looks in cwd and up to 4
+# parent directories, skips if nothing is found, never overwrites
+# an already-set env var.
+from ail import _load_dotenv_if_present as _load_dotenv   # noqa: E402
+_load_dotenv()
+
+
 OLLAMA_HOST = os.environ.get("AIL_OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("AIL_OLLAMA_MODEL", "llama3.1:latest")
 OLLAMA_TIMEOUT = int(os.environ.get("AIL_OLLAMA_TIMEOUT_S", "600"))
