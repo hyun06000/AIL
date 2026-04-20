@@ -80,10 +80,26 @@ OLLAMA_HOST = os.environ.get("AIL_OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("AIL_OLLAMA_MODEL", "llama3.1:latest")
 OLLAMA_TIMEOUT = int(os.environ.get("AIL_OLLAMA_TIMEOUT_S", "600"))
 
+# Backend selection:
+#   ollama    (default)  — existing Python-authoring path, POSTs to
+#                          localhost:11434
+#   anthropic            — Python-authoring side uses Anthropic's
+#                          messages.create. AIL side (via `ask`)
+#                          already auto-routes to Anthropic when
+#                          ANTHROPIC_API_KEY is set and no
+#                          AIL_OLLAMA_MODEL is set.
+BENCHMARK_BACKEND = os.environ.get("BENCHMARK_BACKEND", "ollama").lower()
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+
 
 # --- Python-authoring prompt -----------------------------------------------
+#
+# Two variants. The Ollama prompt tells the model to POST to a local
+# server for LLM judgment; the Anthropic prompt tells it to POST to
+# Anthropic's API with its API key. Both require the author to emit
+# raw Python — the execution harness is the same for both.
 
-PYTHON_AUTHOR_PROMPT = """You are a Python programmer. Write a single Python 3 \
+_PY_PROMPT_OLLAMA = """You are a Python programmer. Write a single Python 3 \
 program (stdlib only — no packages) that solves the task below.
 
 When the task requires LLM judgment (sentiment, classification, \
@@ -104,12 +120,35 @@ TASK:
 """
 
 
-def _ask_model_for_python(task: str) -> tuple[str, dict]:
-    """Return (raw_response_text, ollama_metadata_dict)."""
+_PY_PROMPT_ANTHROPIC = """You are a Python programmer. Write a single Python 3 \
+program (stdlib only — no packages) that solves the task below.
+
+When the task requires LLM judgment (sentiment, classification, \
+summarization, translation, extraction), POST to the Anthropic API at \
+https://api.anthropic.com/v1/messages using urllib.request. Read the \
+API key from the ANTHROPIC_API_KEY environment variable. Headers: \
+"x-api-key: <key>", "anthropic-version: 2023-06-01", \
+"content-type: application/json". Body: {"model": %(model)r, \
+"max_tokens": 256, "messages": [{"role": "user", "content": "<prompt>"}]}. \
+The response JSON has "content" as a list; use content[0]["text"].
+
+When the task requires computation (counting, parsing, arithmetic, \
+sorting, searching), write plain Python — do NOT call the API for that.
+
+Print ONLY the final answer to stdout. No explanation, no logs. All \
+input data is embedded in the task description. Output: raw Python \
+code only, no markdown fences, no preamble.
+
+TASK:
+%(task)s
+"""
+
+
+def _ask_ollama_for_python(task: str) -> tuple[str, dict]:
     body = json.dumps({
         "model": OLLAMA_MODEL,
         "messages": [{"role": "user",
-                      "content": PYTHON_AUTHOR_PROMPT % {
+                      "content": _PY_PROMPT_OLLAMA % {
                           "host": OLLAMA_HOST,
                           "model": OLLAMA_MODEL,
                           "task": task}}],
@@ -126,6 +165,41 @@ def _ask_model_for_python(task: str) -> tuple[str, dict]:
             {"prompt_eval_count": data.get("prompt_eval_count"),
              "eval_count": data.get("eval_count"),
              "total_duration_ns": data.get("total_duration")})
+
+
+def _ask_anthropic_for_python(task: str) -> tuple[str, dict]:
+    """Anthropic messages.create authoring path. Returns
+    (raw_response_text, usage_metadata)."""
+    try:
+        import anthropic
+    except ImportError:
+        raise RuntimeError(
+            "anthropic package not installed. "
+            "Run: pip install 'ail-interpreter[anthropic]'"
+        )
+    client = anthropic.Anthropic()
+    msg = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=2048,
+        temperature=0.0,
+        messages=[{"role": "user",
+                   "content": _PY_PROMPT_ANTHROPIC % {
+                       "model": ANTHROPIC_MODEL, "task": task}}],
+    )
+    text = "".join(
+        b.text for b in msg.content if getattr(b, "type", None) == "text"
+    )
+    return text, {
+        "input_tokens": msg.usage.input_tokens,
+        "output_tokens": msg.usage.output_tokens,
+    }
+
+
+def _ask_model_for_python(task: str) -> tuple[str, dict]:
+    """Dispatch to the configured backend."""
+    if BENCHMARK_BACKEND == "anthropic":
+        return _ask_anthropic_for_python(task)
+    return _ask_ollama_for_python(task)
 
 
 _FENCE = re.compile(r"```(?:python|py)?\s*\n?(.*?)\n?```", re.DOTALL)
@@ -526,9 +600,21 @@ def _print_line(c: CaseReport) -> None:
           f"{g(c.python)} Py {py_val}")
 
 
+def _active_model_label() -> str:
+    if BENCHMARK_BACKEND == "anthropic":
+        return f"anthropic:{ANTHROPIC_MODEL}"
+    return OLLAMA_MODEL
+
+
+def _active_host_label() -> str:
+    if BENCHMARK_BACKEND == "anthropic":
+        return "api.anthropic.com"
+    return OLLAMA_HOST
+
+
 def _print_report(summary: dict) -> None:
     print("\n" + "=" * 68)
-    print(f"MODEL: {OLLAMA_MODEL}   HOST: {OLLAMA_HOST}")
+    print(f"MODEL: {_active_model_label()}   HOST: {_active_host_label()}")
     print(f"Total cases: {summary['total_cases']}\n")
 
     print("A. Code Generation Quality")
@@ -595,8 +681,8 @@ def main() -> int:
     if args.limit:
         prompts = prompts[: args.limit]
 
-    print(f"Running {len(prompts)} prompts against {OLLAMA_MODEL} at "
-          f"{OLLAMA_HOST}")
+    print(f"Running {len(prompts)} prompts against {_active_model_label()} "
+          f"at {_active_host_label()}")
     print("Glyphs: [P]arse [R]oute [A]nswer — `·` = failed\n")
 
     t0 = time.perf_counter()
@@ -613,8 +699,9 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps({
-        "model": OLLAMA_MODEL,
-        "host": OLLAMA_HOST,
+        "model": _active_model_label(),
+        "host": _active_host_label(),
+        "backend": BENCHMARK_BACKEND,
         "started_at": started_at,
         "wall_clock_s": wall_clock_s,
         "prompts_file": str(args.prompts.relative_to(REPO_ROOT)),
