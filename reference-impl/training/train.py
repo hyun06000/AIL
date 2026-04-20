@@ -55,6 +55,12 @@ def main() -> int:
     p.add_argument("--lora-r", type=int, default=16)
     p.add_argument("--lora-alpha", type=int, default=16)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--save-strategy", type=str, default="no",
+                   choices=["no", "epoch", "steps"],
+                   help="Trainer checkpoint cadence. Default 'no' to keep "
+                        "the run single-save-at-end — under unsloth on an "
+                        "8 GB card (e.g. 3070) the epoch-boundary save "
+                        "spike OOMs. On a larger card switch to 'epoch'.")
     args = p.parse_args()
 
     # Imports live inside main() so `python train.py --help` works even
@@ -136,7 +142,7 @@ def main() -> int:
             optim="adamw_8bit",
             warmup_ratio=0.03,
             logging_steps=5,
-            save_strategy="epoch",
+            save_strategy=args.save_strategy,
             seed=args.seed,
             bf16=is_bfloat16_supported(),
             fp16=not is_bfloat16_supported(),
