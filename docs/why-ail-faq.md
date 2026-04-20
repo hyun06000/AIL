@@ -1,6 +1,6 @@
 # AIL FAQ — practical questions, measured answers
 
-🇰🇷 한국어: [`ko/why-ail-faq.ko.md`](ko/why-ail-faq.ko.md)
+🇰🇷 Korean: [`ko/why-ail-faq.ko.md`](ko/why-ail-faq.ko.md)
 
 This document answers the questions a team actually asks when
 evaluating AIL, with measured numbers from the April 2026

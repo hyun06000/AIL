@@ -1,6 +1,6 @@
 # Contributing to AIL
 
-🇰🇷 한국어: [`CONTRIBUTING.ko.md`](CONTRIBUTING.ko.md)
+🇰🇷 Korean: [`CONTRIBUTING.ko.md`](CONTRIBUTING.ko.md)
 
 AIL is an early-stage language project. At this point, design critique is as valuable as code — if not more. You don't need to write a pull request to contribute meaningfully.
 
