@@ -904,6 +904,12 @@ class Executor:
             if not raw:
                 return ConfidentValue("", conf)
             v = raw[0]
+            # AIL boolean literals are lowercase `true` / `false` per
+            # spec/08 line 160. Python's `str(True)` renders "True",
+            # diverging from the Go runtime and from the grammar's own
+            # literal form. Force lowercase.
+            if isinstance(v, bool):
+                return ConfidentValue("true" if v else "false", conf)
             # Number in AIL is backed by float in Python, so `to_text(5)`
             # of a whole number naturally prints as "5.0". That makes
             # output ugly and — more importantly — breaks conformance

@@ -1,0 +1,20 @@
+// Conformance (Python-only): Result.unwrap_or default-value
+// semantics. When a Result is error, unwrap_or yields the supplied
+// default; when ok, it yields the wrapped value. This is the path
+// AIL authors are meant to use at failable boundaries in place of
+// try/except.
+//
+// Go runtime has partial Result support (is_ok/is_error only; no
+// unwrap/unwrap_or), so .skip-go for now.
+
+pure fn safe_parse(raw: Text, default: Number) -> Number {
+    return unwrap_or(to_number(raw), default)
+}
+
+entry main(x: Text) {
+    a = to_text(safe_parse("42", -1))      // 42
+    b = to_text(safe_parse("not-a-num", -1)) // -1
+    c = to_text(safe_parse(" 7 ", -1))      // 7 after trim? no — to_number of " 7 " works
+    d = to_text(safe_parse("", 999))        // 999
+    return join([a, b, c, d], ",")
+}

@@ -1,0 +1,16 @@
+// Conformance: string transformation pipeline — trim, upper, lower,
+// split, join, length. These are the Text builtins both runtimes
+// document as supported. Put them in one program so any runtime
+// divergence on whitespace handling or case folding surfaces here.
+
+pure fn pipeline(raw: Text) -> Text {
+    trimmed = trim(raw)             // "  Hello World  " -> "Hello World"
+    parts = split(trimmed, " ")     // ["Hello", "World"]
+    upper_first = upper(get(parts, 0))  // "HELLO"
+    lower_second = lower(get(parts, 1)) // "world"
+    rejoined = join([upper_first, lower_second], "-")  // "HELLO-world"
+    n = length(rejoined)            // 11
+    return join([rejoined, to_text(n)], "|")
+}
+
+entry main(x: Text) { return pipeline(x) }

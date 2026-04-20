@@ -216,7 +216,7 @@ def test_builtin_starts_ends_with():
     }
     """
     result, _ = run(src, input="", adapter=MockAdapter())
-    assert result.value == "True,False"
+    assert result.value == "true,false"
 
 
 def test_modulo_operator():

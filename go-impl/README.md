@@ -112,6 +112,13 @@ Current conformance coverage (as of v1.8.2):
 | 006_result_handling | `ok`/`error`/`is_ok`/`unwrap` | ✅ | ⏭ not yet in go-impl |
 | 007_nested_lists | nested `for` over `[[…]]` | ✅ | ✅ |
 | 008_empty_list | empty-list edge in length/for | ✅ | ✅ |
+| 009_arithmetic_precedence | operator precedence table (`*`/`/`/`%` vs `+`/`-`, cmp) | ✅ | ✅ |
+| 010_boolean_ops | `and`/`or`/`not` precedence, `in`/`not in` | ✅ | ✅ |
+| 011_string_pipeline | `trim`+`upper`+`lower`+`split`+`join`+`length` composed | ✅ | ✅ |
+| 012_fibonacci | two-call recursion (stack/return handling) | ✅ | ✅ |
+| 013_list_ops | list-of-lists build, nested `for`, positional `get` | ✅ | ✅ |
+| 014_attempt_cascade | `attempt { try ... }` confidence-priority fallback | ✅ | ⏭ roadmap item 4 |
+| 015_unwrap_or | `Result.unwrap_or` default-value semantics | ✅ | ⏭ partial Result only |
 
 Adding a case is zero-code: drop `NNN_name.ail`, `NNN_name.input`,
 `NNN_name.expected` into `cases/`. Mark known Go gaps with a

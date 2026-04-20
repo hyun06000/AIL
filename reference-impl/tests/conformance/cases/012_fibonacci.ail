@@ -1,0 +1,19 @@
+// Conformance: two-call recursion. Factorial (003) is linear — one
+// self-call per frame. Fibonacci exercises two self-calls per frame,
+// which catches runtime bugs around return-value handling and stack
+// frame isolation that linear recursion can mask.
+
+pure fn fib(n: Number) -> Number {
+    if n < 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+pure fn trace(up_to: Number) -> Text {
+    parts = []
+    for i in range(0, up_to + 1) {
+        parts = append(parts, to_text(fib(i)))
+    }
+    return join(parts, ",")
+}
+
+entry main(x: Text) { return trace(to_number(x)) }

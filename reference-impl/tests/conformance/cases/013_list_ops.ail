@@ -1,0 +1,26 @@
+// Conformance: list manipulation primitives that aren't already
+// covered by 004 (insertion sort). Focus here: building a list of
+// lists, iterating over it with nested `for`, and extracting via
+// positional `get`. This is the shape `expense_analyzer` parses
+// transactions into; any Go runtime regression on nested-list
+// indexing would shatter that example silently.
+
+pure fn build() -> Text {
+    rows = []
+    rows = append(rows, ["alice", 30])
+    rows = append(rows, ["bob", 25])
+    rows = append(rows, ["carol", 42])
+    return format_all(rows)
+}
+
+pure fn format_all(rows: Text) -> Text {
+    parts = []
+    for row in rows {
+        name = get(row, 0)
+        age = get(row, 1)
+        parts = append(parts, join([name, ":", to_text(age)], ""))
+    }
+    return join(parts, "|")
+}
+
+entry main(x: Text) { return build() }

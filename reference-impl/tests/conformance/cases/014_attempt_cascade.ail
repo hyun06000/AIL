@@ -1,0 +1,43 @@
+// Conformance (Python-only): `attempt` block confidence-priority
+// cascade. Runs strategies in order and returns the first one whose
+// result is `ok`. Three strategies here, chosen so each input picks
+// a different tier:
+//
+//   input "42"         -> direct_parse succeeds -> 42
+//   input "x 7 y"      -> scan_tokens picks up 7
+//   input "nothing"    -> both fail, final fallback returns 0
+//
+// Go runtime doesn't implement `attempt` yet (see go-impl/README
+// roadmap item 4), so this case is .skip-go. When it lands there,
+// delete the skip marker.
+
+pure fn direct_parse(text: Text) -> Number {
+    return to_number(trim(text))
+}
+
+pure fn scan_tokens(text: Text) -> Number {
+    for t in split(text, " ") {
+        parsed = to_number(t)
+        if is_ok(parsed) { return parsed }
+    }
+    return error("no numeric token")
+}
+
+pure fn fallback() -> Number {
+    return ok(0)
+}
+
+pure fn extract(text: Text) -> Number {
+    return attempt {
+        try direct_parse(text)
+        try scan_tokens(text)
+        try fallback()
+    }
+}
+
+entry main(x: Text) {
+    a = to_text(unwrap(extract("42")))
+    b = to_text(unwrap(extract("x 7 y")))
+    c = to_text(unwrap(extract("nothing numeric")))
+    return join([a, b, c], ",")
+}

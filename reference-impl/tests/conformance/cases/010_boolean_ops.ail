@@ -1,0 +1,22 @@
+// Conformance: locks boolean operator semantics across runtimes.
+// `and` / `or` / `not`, plus membership (`in` / `not in`). Focus on
+// the cases AI-generated code gets wrong most often: precedence
+// between `and` and `or`, and the `not in` form.
+
+pure fn trace() -> Text {
+    a = true and false              // false
+    b = true or false               // true
+    c = not false                   // true
+    d = true and false or true      // true   (and binds tighter than or)
+    e = true or false and false     // true   (same rule — or sees the right as false)
+    f = not (true and false)        // true
+    g = 3 in [1, 2, 3]              // true
+    h = 5 not in [1, 2, 3]          // true
+    i = "x" in ["a", "b", "c"]      // false
+    j = not (5 in [1, 2, 3])        // true
+    return join([to_text(a), to_text(b), to_text(c), to_text(d),
+                 to_text(e), to_text(f), to_text(g), to_text(h),
+                 to_text(i), to_text(j)], ",")
+}
+
+entry main(x: Text) { return trace() }

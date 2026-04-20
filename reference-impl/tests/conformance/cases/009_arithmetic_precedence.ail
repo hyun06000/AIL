@@ -1,0 +1,20 @@
+// Conformance: locks the operator precedence table. Both runtimes
+// must agree on: *, /, % binding tighter than +/-; parens overriding;
+// +/- left-associative; comparison producing Boolean; modulo on
+// integers. Emits a comma-joined trace so a divergence on any single
+// operator shows up clearly in the diff.
+
+pure fn trace() -> Text {
+    a = 2 + 3 * 4         // 14, not 20
+    b = (2 + 3) * 4       // 20
+    c = 20 - 5 - 3        // 12, left-assoc
+    d = 100 / 10 / 2      // 5
+    e = 10 % 3            // 1
+    f = 2 + 3 > 4         // true
+    g = 2 * 3 + 1 == 7    // true (cmp binds looser than arith)
+    h = 10 - 2 * 3        // 4, not 24
+    return join([to_text(a), to_text(b), to_text(c), to_text(d),
+                 to_text(e), to_text(f), to_text(g), to_text(h)], ",")
+}
+
+entry main(x: Text) { return trace() }
