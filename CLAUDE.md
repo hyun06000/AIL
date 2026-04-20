@@ -1121,3 +1121,84 @@ Your competitive advantage is not that AIL has more features than Python. It's t
 Prove it with numbers. The benchmark is the proof. Everything else follows.
 
 Written by Claude Opus 4, April 2026, after reviewing 2026 industry trends in harness engineering, vibe coding, agentic coding, and multi-agent coordination alongside hyun06000.
+
+---
+
+## SESSION STATE — 2026-04-20, LIVE FINE-TUNE RUN IN PROGRESS
+
+Written by the Claude Code session that landed the v1.8 spec freeze,
+conformance-suite parity (45/45), and the first fine-tune training
+on the 205-sample dataset. Handing off mid-pipeline so the next
+Claude doesn't redo work or lose context.
+
+### Where we are right now
+
+1. ✅ **Spec frozen.** v1.8 grammar. [`spec/09-stability.md`](spec/09-stability.md).
+2. ✅ **Training unfrozen.** 5/5 Opus 4 prereqs met. [`reference-impl/training/HANDOFF.md`](reference-impl/training/HANDOFF.md) is the resumed runbook.
+3. ✅ **Fine-tune completed.** qwen2.5-coder-7b + QLoRA rank-16, 205 samples, 3 epochs, 7:25 wall time on the 3070. Loss 2.79 → 0.19. Adapter at `reference-impl/training/ail-coder-7b-lora/` (on homeblack, gitignored).
+4. 🟡 **Export in progress.** `tmux -t ail-export` on homeblack is running `export_to_ollama.py` (merge → GGUF → Q4_K_M → `ollama create ail-coder:7b`). 10–20 min total.
+5. ❌ **Benchmark not yet run** against the fine-tuned model.
+6. ❌ **Gate analysis + snapshot commit** not done.
+
+### How to pick up
+
+**Connect to the 3070:** alias `homeblack` is configured in `~/.ssh/config` (HostName `10.0.0.1`, User `david`) — `ssh homeblack "..."` just works.
+
+**Check export state:**
+```bash
+ssh homeblack 'tmux ls; tail -40 ~/ail-export.log; OLLAMA_HOST=10.0.0.1:11434 ollama list | grep ail-coder'
+```
+Export done when the log has `Transferring model data` / `writing manifest` and `ollama list` shows `ail-coder:7b` with a recent timestamp.
+
+**Ollama host quirk.** The service listens on `10.0.0.1:11434` (not the default `127.0.0.1`). Client calls need `OLLAMA_HOST=10.0.0.1:11434` or they return "could not connect." The systemd unit sets this in `Environment=` but ad-hoc CLI calls don't inherit it.
+
+**Run the benchmark** once export lands:
+```bash
+ssh homeblack 'cd ~/AIL && source ~/venv/labs/bin/activate && \
+  export OLLAMA_HOST=10.0.0.1:11434 AIL_OLLAMA_MODEL=ail-coder:7b AIL_OLLAMA_TIMEOUT_S=600 && \
+  tmux new -d -s ail-bench "python reference-impl/tools/benchmark.py \
+    --out docs/benchmarks/$(date +%F)_ail-coder-7b-v2_opus50.json \
+    2>&1 | tee ~/ail-bench.log"'
+```
+45–60 minutes on the 3070. Note the `v2` suffix — a `v1` run (different dataset, 80 samples, different adapter) is in git history at `b7fcf80` but was wiped from homeblack; don't conflate the two.
+
+### The three gates (from b7fcf80's analysis)
+
+The prior run missed the gate. Same three questions this run:
+
+| Gate | Target | Prior v1 (80 samples) | This v2 (205 samples) |
+|---|---|---|---|
+| G1 AIL overall parse | ≥ 80% | 70% — FAIL | ? |
+| G2 AIL hybrid route > Python hybrid route | AIL > Python | 47% vs 67% — FAIL | ? |
+| G3 AIL pure_fn answer ≥ Python pure_fn answer | AIL ≥ Python | 75% tie — PASS | ? |
+
+If G1 passes (≥ 80% parse), the dataset expansion worked. If it still misses but improves over 70%, data scaling is the right lever but more is needed (500–1000 next). If parse rate didn't move meaningfully, something else is wrong (LR, rank, hyperparameters) before throwing more data at it.
+
+### Smoke-test findings (already observed)
+
+Loaded the adapter manually with the AIL system prompt from `to_chatml.py` and generated for three prompts. Two observations to carry in:
+
+1. **AIL-shape output is reliable** — the model does produce `pure fn`, `intent`, `entry main` forms correctly in response to plain-English prompts. The Python-prose output when prompted without the system prompt confirms the system prompt is load-bearing; `ail ask` and `tools/benchmark.py` both send it by default, so benchmark results should reflect system-prompted behavior.
+2. **Python prior still leaks.** One of the three smoke outputs used `winner = if alice > bob { "A" } else { "B" }` — treating `if` as an expression. Not legal AIL. Exactly the failure mode b7fcf80's post-mortem flagged (List[Number], ternary, kwargs, bracket indexing). Expect parse failures to cluster around these patterns.
+
+### After the benchmark lands
+
+1. `ssh homeblack 'cat ~/AIL/docs/benchmarks/2026-04-*_ail-coder-7b-v2_opus50.json' | jq '.summary'` — read the numbers.
+2. Compare to the three gates above.
+3. Write a summary at `docs/benchmarks/2026-04-20_ail-coder-7b-v2_analysis.md` — sibling to the claude-sonnet-4-6 summary already in that directory. Per-category table, failure-mode counts (how many parse errors are `[T]`-style, how many `if`-as-expression, etc.), recommendation for the next run.
+4. Commit snapshot + analysis to `docs/benchmarks/`. Update the snapshot table in `docs/benchmarks/README.md`.
+5. **Do NOT** auto-update the `README.md` headline numbers if the gate missed. Those numbers are the public pitch; landing a regression as headline would hurt. If G1 passed cleanly, that becomes a candidate headline update — but coordinate with hyun06000 first.
+
+### Hard rules that still stand (from HANDOFF.md)
+
+- Don't push to HuggingFace without explicit go from hyun06000.
+- Don't edit the prereq list or gate targets to make a failed run count as success. Honest numbers only.
+- Don't grow the spec during a fine-tune cycle. Grammar change = fine-tune invalidated.
+- Training artifacts (adapter, gguf, checkpoints) are gitignored — keep them out of commits.
+
+### Things NOT to touch
+
+- `b7fcf80` on homeblack is gone. User wiped the box and recloned fresh. Don't resurrect the old branch or the old benchmark JSON (`2026-04-19_ail-coder-7b_all.json`). The v1 run is lineage, not evidence.
+- The `CLAUDE.md.bak` file in the repo root is not tracked and should stay that way. It's a local user backup.
+
+*Handoff written 2026-04-20 while export was running. If you're reading this and the export finished minutes ago, the benchmark is the immediate next move.*

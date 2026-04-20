@@ -184,10 +184,16 @@ go build -o ail-go .
 go test ./...                                          # Go unit tests
 ```
 
-The Go runtime covers a Phase-0 subset (fn, intent via Ollama,
-entry, control flow, core builtins). Provenance, purity checking,
-`attempt`, and parallelism remain Python-side for now — see
+The Go runtime covers the core feature set: `fn`, `intent` via
+Ollama, `entry`, control flow, core builtins, the full `Result`
+type (`ok` / `error` / `unwrap` / `unwrap_or` / `unwrap_error` /
+`is_ok` / `is_error`), and `attempt` blocks. Provenance, purity
+checking, and parallelism remain Python-side for now — see
 [`go-impl/README.md`](go-impl/README.md) for the coverage matrix.
+The cross-runtime conformance suite at
+[`reference-impl/tests/conformance/`](reference-impl/tests/conformance/)
+runs 15 programs through both interpreters on every PR and asserts
+byte-identical stdout (45 / 45 passing, 0 skipped).
 
 ---
 
