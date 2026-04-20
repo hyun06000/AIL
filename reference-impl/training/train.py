@@ -101,12 +101,23 @@ def main() -> int:
     dataset = load_dataset("json", data_files=str(args.dataset), split="train")
 
     def formatting_func(example):
-        # SFTTrainer expects the "messages" list applied through the
-        # chat template; we wrap once here so training sees exactly
-        # what inference sees.
-        return tokenizer.apply_chat_template(
-            example["messages"], tokenize=False, add_generation_prompt=False,
-        )
+        # unsloth/TRL call this with either a single example (dict whose
+        # "messages" is a list of dicts) during the warm-up probe, or a
+        # batched dict-of-lists when the dataset map runs. Must always
+        # return a list of rendered strings. Previously returned a bare
+        # string which crashed on unsloth 2026.4 + trl ≥ 0.22 — captured
+        # from the 2026-04-19 training attempt on the 3070 box.
+        msgs = example["messages"]
+        if msgs and isinstance(msgs[0], dict):
+            return [tokenizer.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=False,
+            )]
+        return [
+            tokenizer.apply_chat_template(
+                m, tokenize=False, add_generation_prompt=False,
+            )
+            for m in msgs
+        ]
 
     print(f"[4/5] training — {args.epochs} epochs × {len(dataset)} samples",
           file=sys.stderr)

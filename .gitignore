@@ -56,3 +56,14 @@ calibration.db
 # Go runtime build artifacts
 go-impl/ail-go
 go-impl/*.test
+
+# Training artifacts (large binaries — model blobs, adapters, GGUFs)
+reference-impl/training/ail-coder-*-lora/checkpoint-*/
+reference-impl/training/ail-coder-*-lora/*.safetensors
+reference-impl/training/ail-coder-*-lora/tokenizer*.json
+reference-impl/training/ail-coder-*-lora/adapter_config.json
+reference-impl/training/ail-coder-*-lora/chat_template.jinja
+reference-impl/training/ail-coder-*-lora/README.md
+reference-impl/training/ail-coder-*-gguf/
+reference-impl/unsloth_compiled_cache/
+.claude/scheduled_tasks.lock
