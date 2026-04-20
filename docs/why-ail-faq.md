@@ -228,6 +228,7 @@ If 5+ of these are true, AIL is worth a spike.
 
 ## Further reading
 
+- **Why the numbers come out this way — mechanics**: [`why-ail-mechanics.md`](why-ail-mechanics.md) (the *why* behind every metric in this FAQ)
 - Benchmark methodology & JSON snapshots: [`benchmarks/README.md`](benchmarks/README.md)
 - v3 full analysis: [`benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md`](benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md)
 - Language philosophy: [`why-ail.md`](why-ail.md)

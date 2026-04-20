@@ -218,6 +218,7 @@ naive agent = LLM 호출 3번 (파싱 + 계산 + 판단 각각).
 
 ## 추가 읽을거리
 
+- **왜 이런 숫자가 나오는가 — 메커니즘**: [`why-ail-mechanics.ko.md`](why-ail-mechanics.ko.md) (이 FAQ의 모든 숫자가 나오는 *이유*)
 - 벤치마크 방법론과 전체 JSON: [`../benchmarks/README.md`](../benchmarks/README.md)
 - v3 상세 분석: [`../benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md`](../benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md)
 - 언어 철학: [`../why-ail.md`](../why-ail.md)
