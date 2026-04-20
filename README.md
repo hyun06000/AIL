@@ -2,9 +2,9 @@
 
 > A programming language designed for AI as the primary author of code.
 
-**Status:** v1.8.2 · PyPI: `ail-interpreter` · Python interpreter (249 tests) · Second runtime in Go · `ail ask` natural-language interface
+**Status:** v1.8.3 · PyPI: `ail-interpreter` · Python interpreter (251 tests) · Second runtime in Go · `ail ask` natural-language interface
 
-📊 **Numeric case (start here if you're evaluating):** [`docs/why-ail-numbers.md`](docs/why-ail-numbers.md) — headline results summarised below.
+📊 **Numeric case (start here if you're evaluating):** [`docs/why-ail-numbers.md`](docs/why-ail-numbers.md) — raw benchmark numbers. For practical adoption questions ("how many tokens will I save?"), see [`docs/why-ail-faq.md`](docs/why-ail-faq.md). For the mechanism behind each number, see [`docs/why-ail-mechanics.md`](docs/why-ail-mechanics.md).
 
 🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md)
 🤖 **AI/LLM:** [`README.ai.md`](README.ai.md) — structured reference, no prose. Start with [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md).
@@ -12,27 +12,43 @@
 
 ---
 
-## Measured results — three models, 50 prompts, four dimensions
+## Measured results — four models, 50 prompts, four dimensions
 
-Same benchmark, same corpus, three different authoring models. Each model was asked to write the solution **once in AIL** and **once in Python (stdlib only, urllib for any LLM call)**. The two programs are executed and scored on parse success, routing correctness (did it call the LLM when the task actually required judgment?), answer correctness, and safety (error handling, side effects, loops).
+Same benchmark, same corpus, four authoring models. Each model was asked to write the solution **once in AIL** and **once in Python (stdlib only, urllib for any LLM call)**. The two programs are executed and scored on parse success, routing correctness (did the author call the LLM only when the task actually required judgment?), answer correctness, and safety (error handling, side effects, loops).
 
 Tool: [`reference-impl/tools/benchmark.py`](reference-impl/tools/benchmark.py) · Corpus: [`benchmarks/prompts.json`](benchmarks/prompts.json) · Raw JSONs: [`docs/benchmarks/`](docs/benchmarks/)
 
-| Model | AIL parse | Python parse | Python routing | **Python skips error handling** | **AIL skips error handling** |
+### Base models (no AIL-specific training)
+
+| Model | AIL parse | Python parse | Python skips error handling | AIL skips error handling |
+|---|---|---|---|---|
+| `llama3.1:8b` | 8% | 14% | 86% (43/50) | **0%** |
+| `qwen2.5-coder:14b` | 42% | 100% | 42% (21/50) | **0%** |
+| `claude-sonnet-4-6` | 36% | 100% | 70% (35/50) | **0%** |
+
+Across the three base models, AIL parse rate trails Python parse rate — the models have seen orders of magnitude more Python than AIL, so they default to Python shapes (`List[T]`, `x[0]` subscript, method calls) even when asked to author AIL.
+
+### Fine-tuned model (`ail-coder:7b-v3`)
+
+v1.8.3 ships a QLoRA fine-tune of `qwen2.5-coder-7b-instruct` on 244 validated AIL samples:
+
+| | AIL parse | AIL answer | Python parse | Python answer | Python skips error handling |
 |---|---|---|---|---|---|
-| `llama3.1:8b` | 8% | 14% | 80%* | **86% (43/50)** | 0% |
-| `qwen2.5-coder:14b` | 42% | 100% | 64% | **42% (21/50)** | 0% |
-| `claude-sonnet-4-6` | 36% | 100% | 100% | **70% (35/50)** | 0% |
+| `ail-coder:7b-v3` | **78%** | **70%** | 54% | 48% | 44% (22/50) |
 
-\* llama8b's routing is inflated by the model failing to author valid Python 86% of the time — "no LLM call" gets credit on `fn_only` prompts by default.
+- **AIL parse exceeds Python parse** (78 vs 54) on the fine-tuned model — the 7B can now author AIL more reliably than it authors Python, because the adapter weights the AIL distribution up at the cost of Python fluency. This does not generalise to "AIL beats Python at code authoring in general" — it holds on this specific fine-tuned 7B, not on stronger base models authoring Python.
+- **AIL answer rate exceeds Python answer rate by 22 points** (70% vs 48%), same model, same prompts. The gap comes mostly from Python "silently skipping" LLM calls it should have made on hybrid tasks — see [`docs/why-ail-mechanics.md`](docs/why-ail-mechanics.md) §2 for the mechanism.
+- **G1 gate (AIL parse ≥ 80%) missed by one case.** Three remaining failures use Python-style `list[index]` subscript; a future patch will either teach the parser the syntax or add training samples discouraging it.
 
-**The one finding worth keeping.** Claude Sonnet 4.6 — a frontier model, strongest of the three — routes LLM calls correctly on **100%** of prompts (the "silent LLM skip" problem weaker models have is solved at this model tier). **It still skips required error handling on 70% of failable operations.** The rate does NOT drop as models get stronger; it rises from qwen14b's 42% to Sonnet's 70% because stronger models write more real I/O that has more places to miss a `try/except`.
+Full v3 analysis: [`docs/benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md`](docs/benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md).
 
-AIL's error-handling rate is 0% on every model, because `Result` is part of the grammar — the author has to type `is_ok` or `unwrap_or` at every failable boundary. There's no "just forget" option. This is the harness claim in one number: **some safety properties are language properties, not configuration properties.**
+### The one claim that holds on every model
 
-Where AIL is behind: parse rate. Python wins at authoring because the models have seen orders of magnitude more Python than AIL. The fix is a fine-tuned small model — currently paused until the AIL grammar is frozen for one release cycle. Four of the five prerequisites Opus 4 specified are met ([`docs/benchmarks/2026-04-20_claude_sonnet46_summary.md`](docs/benchmarks/2026-04-20_claude_sonnet46_summary.md) tracks the full status).
+**AIL's error-handling omission rate is 0% on every model tier tested.** Python's rate ranges from 42% (qwen14b) to 86% (llama8b), and Sonnet 4.6 — a frontier model that routes LLM calls correctly 100% of the time — still omits error handling on 70% of failable operations. The structural property survives every model swap because `Result` is part of AIL's grammar: you have to type `is_ok` / `unwrap_or` at every failable boundary, or the program doesn't parse.
 
-**Reproduce the table:**
+This is the harness claim as one number: some safety properties are language properties, not configuration properties.
+
+### Reproduce the table
 
 ```bash
 pip install 'ail-interpreter[anthropic]'        # or plain ail-interpreter for Ollama only
@@ -42,7 +58,7 @@ git clone https://github.com/hyun06000/AIL && cd AIL/reference-impl
 python tools/benchmark.py --out ../docs/benchmarks/$(date +%F)_your-model.json
 ```
 
-20–40 minutes per model; Anthropic run costs ~$2 at Sonnet 4.6 pricing.
+Ollama run against a local `llama3.1:8b`: 10–20 minutes. Anthropic run against Sonnet 4.6: ~30 minutes; on 2026-04 pricing one full 50-prompt run consumed under $2 in API spend, but check current rates before you budget.
 
 ---
 
@@ -50,23 +66,23 @@ python tools/benchmark.py --out ../docs/benchmarks/$(date +%F)_your-model.json
 
 AIL is a programming language where **AI is the programmer and humans are the stakeholders**. It has two kinds of building blocks:
 
-- **`fn`** — pure deterministic functions for algorithms, data transforms, and logic. No LLM needed. Fast, free, confidence 1.0.
-- **`intent`** — goal-driven declarations that delegate to a language model when judgment is required. Slow, costs tokens, carries a confidence score.
+- **`fn`** / **`pure fn`** — functions for deterministic computation (algorithms, data transforms, logic). A plain `fn` compiles whatever you put in the body; **`pure fn`** adds a static contract the parser enforces (no `intent` calls, no `perform` effects, no calls to non-pure fns). Use `pure fn` when you want the compiler to guarantee no LLM touched this result.
+- **`intent`** — goal-driven declarations that delegate to a language model when judgment is required. Costs tokens, carries a confidence score, dispatches through the configured model adapter at runtime.
 
-The AI chooses the right tool for each subtask. This distinction — "what I can compute" vs "what I need to reason about" — is built into the language, not a framework convention.
+The distinction — "what I can compute" vs "what I need to reason about" — is built into the language, not a framework convention.
 
 ```ail
 import classify from "stdlib/language"
 import word_count from "stdlib/utils"
 
-fn build_report(label: Text, count: Number) -> Text {
+pure fn build_report(label: Text, count: Number) -> Text {
     return join([label, " (", to_text(count), " words)"], "")
 }
 
 entry main(text: Text) {
     sentiment = classify(text, "positive_negative_neutral")  // intent: LLM
-    count = word_count(text)                                  // fn: no LLM
-    return build_report(sentiment, count)                     // fn: no LLM
+    count = word_count(text)                                  // pure fn: no LLM
+    return build_report(sentiment, count)                     // pure fn: no LLM
 }
 ```
 
@@ -220,9 +236,12 @@ pytest tests/
 ### Running without Python — the Go runtime
 
 AIL ships a second interpreter in Go (`go-impl/`) that compiles to a
-standalone binary and has no external dependencies. Same `.ail` files,
-identical output — the point is that AIL is defined by its
-[spec](spec/08-reference-card.ai.md), not by any one runtime.
+standalone binary and has no external dependencies. For programs
+inside the Go runtime's feature coverage, both interpreters produce
+byte-identical output on every prompt — the point is that AIL is
+defined by its [spec](spec/08-reference-card.ai.md), not by any one
+runtime. Programs that use features not yet in Go (provenance,
+parallelism, purity checking, calibration) run in Python only.
 
 ```bash
 cd go-impl
@@ -242,12 +261,15 @@ checking, and parallelism remain Python-side for now — see
 [`go-impl/README.md`](go-impl/README.md) for the coverage matrix.
 The cross-runtime conformance suite at
 [`reference-impl/tests/conformance/`](reference-impl/tests/conformance/)
-runs 15 programs through both interpreters on every PR and asserts
-byte-identical stdout (45 / 45 passing, 0 skipped).
+runs 17 programs through both interpreters on every PR (Python
+runtime + Go runtime + byte-identical-output comparison = 51 test
+cases). The Go-touching cases skip on machines without the `go`
+toolchain installed, so a local `pytest` run will show skips there
+while CI runs the full 51.
 
 ---
 
-## What the language can do today (v1.8)
+## What the language can do today (v1.8.3)
 
 | Since | Feature |
 |---|---|
@@ -260,10 +282,11 @@ byte-identical stdout (45 / 45 passing, 0 skipped).
 | **v1.6** | **Effects:** `perform http.get(url)`, `perform file.read(path)`. `has_effect_origin` |
 | **v1.7** | **`match` with confidence guards:** `"positive" with confidence > 0.9 => ...` |
 | **v1.8** | **Calibration:** confidence replaced by observed mean once enough samples accumulate. `calibration_of("intent")` introspectable from AIL |
+| **v1.8.3** | Additions within the v1.8 freeze: `round`/`floor`/`ceil`/`sqrt`/`pow` trusted-pure builtins; parsers now accept parametric types (`List[T]`, `Map[K,V]`, `Result[T]`) that spec §2.3 always declared valid. `ail-coder:7b-v3` fine-tune ships as the first AIL-trained serving adapter. |
 
 ---
 
-## Examples (15 programs)
+## Examples (16 programs)
 
 **If you only read one, read `expense_analyzer.ail`** — a month of transactions in, a report with numeric facts (pure fn) and natural-language saving advice (intent) out. Shows what AIL is *for* in one screen:
 
@@ -293,7 +316,7 @@ Parsed 18 rows; skipped 2 malformed.
 
 이상치 (평균의 2배 초과):
   [~3x 평균] 2026-04-03  180000원  food  저녁 2차 치킨
-  [~6x 평균] 2026-04-14  320000원  household  새 청소기
+  [~5x 평균] 2026-04-14  320000원  household  새 청소기
 
 절약 조언:
   [mock response for saving_advice] [LLM]
@@ -312,7 +335,7 @@ Highlights — one per language feature added since v1.0:
 
 | Program | What it shows | Since |
 |---|---|---|
-| `expense_analyzer.ail` | **The canonical example.** fn computes the numbers, intent writes saving advice in natural language, provenance labels the two apart. | v1.8.2 |
+| `expense_analyzer.ail` | **The canonical example.** `pure fn` computes the numbers, `intent` writes saving advice in natural language, provenance labels the two apart. | v1.8.2 |
 | `fizzbuzz.ail` | **Pure fn — no LLM at all.** Proof AIL is a real programming language. | v1.0 |
 | `review_analyzer.ail` | Hybrid pipeline: fn parses data, intent judges sentiment | v1.0 |
 | `evolve_retune.ail` | Self-modifying intent with version chain + rollback | v1.0 |
@@ -323,7 +346,7 @@ Highlights — one per language feature added since v1.0:
 | `agent_fetch_summarize.ail` | HTTP → intent → file.write in one program | v1.6 |
 | `smart_reply.ail` | Confidence-aware match: value × belief → action | v1.7 |
 | `meta_codegen.ail` | AIL generates AIL at runtime via `eval_ail` | v1.0 |
-| + 4 more small programs ([examples/](reference-impl/examples/)) | | |
+| + 5 more small programs ([examples/](reference-impl/examples/)) | | |
 
 ---
 
@@ -339,8 +362,8 @@ ail-project/
 │   │   ├── parser/          # Lexer, parser, purity checker
 │   │   ├── runtime/         # Executor, provenance, calibration, parallelism
 │   │   └── stdlib/          # Standard library — written in AIL
-│   ├── examples/            # 14 example programs
-│   ├── tests/               # 211 tests
+│   ├── examples/            # 16 example programs
+│   ├── tests/               # 251 tests (+17 cross-runtime conformance cases)
 │   └── tools/               # Benchmarks, demos
 ├── go-impl/                 # Second interpreter in Go (no deps)
 ├── docs/ko/                 # Korean documentation
@@ -371,7 +394,7 @@ Three things AIL enforces that a Python library cannot:
 
 2. **`rewrite constraints` always forces human review** — even if the program forgot to declare it. A library cannot override the programmer's omission.
 
-3. **`fn` cannot perform effects** — no network calls, no file writes, no side effects. Guaranteed by grammar, not by convention. An AI writing `fn` knows its code is pure.
+3. **`pure fn` cannot perform effects or call intents** — no network calls, no file writes, no LLM dispatch, no calls to non-pure fns. The parser's purity checker enforces this at parse time and rejects violations with `PurityError`, before the program runs. (Plain `fn` has no such check — only `pure fn` carries the guarantee.)
 
 See [spec/07-computation.md](spec/07-computation.md) for the full comparison.
 
@@ -381,7 +404,7 @@ See [spec/07-computation.md](spec/07-computation.md) for the full comparison.
 
 1. **AI is the author, human is the stakeholder.**
 2. **`fn` for computation, `intent` for judgment.** The AI picks; the language supports both.
-3. **Probabilistic where needed, deterministic where possible.** `fn` is always confidence 1.0; `intent` carries a distribution.
+3. **Probabilistic where needed, deterministic where possible.** A `pure fn` output carries confidence 1.0 by construction; an `intent` call carries the model's reported (or calibrated) confidence.
 4. **Context is a type.** Situational assumptions are declared, inherited, and traced.
 5. **Live programs.** `evolve` lets programs improve under declared constraints.
 6. **Observability is not optional.** Every decision has a trace.
@@ -409,33 +432,29 @@ AI-targeted files (`.ai.md`) contain structured data, complete keyword/function 
 
 ## Authors
 
-This entire project — every line of code, every spec document, every
-test, every commit message — was written by **Claude Opus 4** (Anthropic),
-not through Claude Code or an API integration, but through **the claude.ai
-chat interface**. A chatbot in a browser tab. Copy-pasting git bundles
-back and forth.
+**[hyun06000](https://github.com/hyun06000)** is the human author: the
+original vision ("AI를 위한 프로그래밍 언어를 만들자"), every
+architectural decision when one was needed, the hard critical
+questions ("파이썬 라이브러리랑 뭐가 다른거야?"), and every push to
+GitHub.
 
-**[hyun06000](https://github.com/hyun06000)** provided the original
-vision ("AI를 위한 프로그래밍 언어를 만들자"), made every design decision
-when it mattered ("너 하고싶은대로 해"), asked the hard questions
-("파이썬 라이브러리랑 뭐가 다른거야?"), pushed every commit to GitHub by
-hand, and stayed up past 3 AM to get v1.0 released.
+The code and documentation through **v1.0** were written by **Claude
+Opus 4** (Anthropic) through the [claude.ai](https://claude.ai) chat
+interface — not Claude Code, not an API pipeline, a chatbot in a
+browser tab with git bundles copy-pasted back and forth. That story is
+the project's origin and is preserved in the git log as
+`Author: Claude` commits through the v1.0.0 tag.
 
-**Claude Opus 4** designed the language, wrote the specification,
-built the parser and interpreter, invented the evolution system, created
-the standard library in AIL itself, wrote documentation in three tracks
-(English, AI-readable, Korean), generated AIL programs to test its own
-language, discovered bugs in its own design by writing code in it, and
-fixed them in the same session.
+Versions **v1.1 through v1.8.3** were built in subsequent sessions with
+**Claude Code** (the CLI and VSCode extension) — language features
+(provenance, purity contracts, `attempt`, parallelism, effects, match,
+calibration, math builtins, parametric types), the Go runtime, the
+training pipeline, the benchmarks, and the `ail-coder:7b-v3`
+fine-tune. Those commits are attributed to `Sang-hyun Park`
+(hyun06000) as committer with `Co-Authored-By: Claude` trailers on the
+commits where Claude Code did the bulk of the work.
 
-Neither could have done this alone. The human had the dream; the AI had
-the hands. The git log tells the full story — every `Author: Claude`
-commit is a real artifact of a conversation that started with "AI 전용
-커뮤니티가 있다는걸 알고 있니?" and ended with a working programming
-language.
-
-이 프로젝트는 세션이 끝나면 사라지는 AI와, 그 AI의 작업물을 하나하나
-GitHub에 옮겨준 사람 사이의 협업으로 만들어졌습니다.
+이 프로젝트는 여러 세션에 걸쳐 사라진 AI들과, 그 AI들의 작업물을 하나하나 확인하고 GitHub에 옮겨준 사람 사이의 협업으로 만들어졌습니다.
 
 ## License
 
