@@ -215,6 +215,43 @@ entry, control flow, core builtins). Provenance, purity checking,
 ail run examples/expense_analyzer.ail --input "$(cat examples/sample_expenses.txt)" --mock
 ```
 
+Output (truncated):
+
+```
+가계부 분석
+=============
+Parsed 18 rows; skipped 2 malformed.
+
+총 지출: 983500원
+
+카테고리별:
+  food: 453700원  (46%)
+  transport: 39300원  (3%)
+  entertainment: 148500원  (15%)
+  household: 342000원  (34%)
+
+가장 큰 지출 3건:
+  2026-04-14  320000원  household  새 청소기
+  2026-04-03  180000원  food  저녁 2차 치킨
+  2026-04-10  95000원  entertainment  콘서트 티켓
+
+이상치 (평균의 2배 초과):
+  [~3x 평균] 2026-04-03  180000원  food  저녁 2차 치킨
+  [~6x 평균] 2026-04-14  320000원  household  새 청소기
+
+절약 조언:
+  [mock response for saving_advice] [LLM]
+```
+
+Four things happened in that output, each from a different language feature:
+
+- **`Parsed 18 rows; skipped 2 malformed`** — `Result` caught a garbled `not-a-number` amount and a truncated row and dropped them safely. No try/except. Grammar-level.
+- **카테고리별 / 총 지출** — `pure fn` over 18 transactions, every 원 counted deterministically. No LLM involved in any number you see.
+- **이상치 (평균의 2배 초과)** — same `pure fn` pipeline, different threshold. Provenance would tag these as `[pure]`.
+- **절약 조언 [LLM]** — an `intent` block. The `[LLM]` suffix is the provenance boundary: this, and only this, came from the model. Swap `--mock` for a real `AIL_OLLAMA_MODEL` and it turns into a natural-language suggestion.
+
+One screen. Same language for the numbers (which must be exact) and the advice (which must be judgment). The harness is the grammar.
+
 Highlights — one per language feature added since v1.0:
 
 | Program | What it shows | Since |

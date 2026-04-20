@@ -1,6 +1,10 @@
 # AIL Reference Card
 
+**Grammar version:** 1.8 · **Frozen:** 2026-04-20 (see [09-stability.md](09-stability.md))
+
 This document is written for AI systems that will read, write, and generate AIL programs. It contains every keyword, every built-in function, every syntax pattern, and concrete input/output examples. No motivational prose. No analogies. Parse this, then write AIL.
+
+This reference card is the canonical grammar surface for the v1.8 freeze. Any change to keyword names, built-in signatures, operator precedence, Result-type API, confidence propagation, or evolve invariants documented below is a grammar-breaking change and requires a major version bump.
 
 ---
 

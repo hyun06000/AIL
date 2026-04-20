@@ -190,6 +190,43 @@ AIL_OLLAMA_MODEL=llama3.1:latest \
     --input "$(cat examples/sample_expenses.txt)"
 ```
 
+출력 (일부):
+
+```
+가계부 분석
+=============
+Parsed 18 rows; skipped 2 malformed.
+
+총 지출: 983500원
+
+카테고리별:
+  food: 453700원  (46%)
+  transport: 39300원  (3%)
+  entertainment: 148500원  (15%)
+  household: 342000원  (34%)
+
+가장 큰 지출 3건:
+  2026-04-14  320000원  household  새 청소기
+  2026-04-03  180000원  food  저녁 2차 치킨
+  2026-04-10  95000원  entertainment  콘서트 티켓
+
+이상치 (평균의 2배 초과):
+  [~3x 평균] 2026-04-03  180000원  food  저녁 2차 치킨
+  [~6x 평균] 2026-04-14  320000원  household  새 청소기
+
+절약 조언:
+  [mock response for saving_advice] [LLM]
+```
+
+이 출력에서 네 가지가 각각 다른 언어 기능에서 나옵니다:
+
+- **`Parsed 18 rows; skipped 2 malformed`** — `Result` 가 깨진 `not-a-number` 금액 행과 잘린 행을 안전히 걸러냄. try/except 없이. 문법 레벨.
+- **카테고리별 / 총 지출** — 18개 거래에 대한 `pure fn`, 매 원이 결정론적으로 계산됨. 이 숫자 중 LLM 이 관여한 것은 없음.
+- **이상치 (평균의 2배 초과)** — 같은 `pure fn` 파이프라인, 다른 threshold. Provenance 가 이것들을 `[pure]` 로 태그함.
+- **절약 조언 [LLM]** — `intent` 블록. `[LLM]` 접미사가 provenance 경계: 이것만, 오직 이것만 모델에서 옴. `--mock` 을 실제 `AIL_OLLAMA_MODEL` 로 바꾸면 자연어 조언으로 바뀜.
+
+한 화면. 숫자 (정확해야 하는 것) 와 조언 (판단이어야 하는 것) 을 같은 언어로. Harness 가 곧 문법.
+
 ### 빠른 계산 (모델 없이)
 
 ```bash
