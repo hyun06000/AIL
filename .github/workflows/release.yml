@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          # CHANGELOG 형식: "## v1.8.3 — 날짜" 섹션을 다음 "## v" 전까지 추출
+          awk "/^## ${VERSION}[[:space:]]/{ found=1; next } found && /^## v/{ exit } found{ print }" CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "CHANGELOG.md에 ${VERSION} 항목이 없습니다." > release_notes.md
+          fi
+
+      - name: Create GitHub Release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release_notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
