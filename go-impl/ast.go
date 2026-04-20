@@ -36,6 +36,13 @@ type MembershipExpr struct {
 	Negated    bool
 }
 
+// AttemptExpr is the `attempt { try EXPR try EXPR ... }` cascade.
+// Evaluation walks Tries in order and returns the first whose value
+// is not a Result-wrapped error. If every try is an error, the last
+// one is returned (low-confidence fall-through, mirroring Python's
+// behavior at executor.py:_eval_attempt).
+type AttemptExpr struct{ Tries []Expr }
+
 func (*LiteralExpr) exprNode()    {}
 func (*IdentExpr) exprNode()      {}
 func (*FieldAccess) exprNode()    {}
@@ -44,6 +51,7 @@ func (*BinaryExpr) exprNode()     {}
 func (*UnaryExpr) exprNode()      {}
 func (*ListExpr) exprNode()       {}
 func (*MembershipExpr) exprNode() {}
+func (*AttemptExpr) exprNode()    {}
 
 // ---------------- Statements ----------------
 

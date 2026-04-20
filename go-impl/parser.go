@@ -740,8 +740,47 @@ func (p *Parser) parsePrimary() (Expr, error) {
 			return &LiteralExpr{Value: true}, nil
 		case "false":
 			return &LiteralExpr{Value: false}, nil
+		case "attempt":
+			return p.parseAttempt()
 		}
 		return &IdentExpr{Name: t.Value}, nil
 	}
 	return nil, ParseError{Msg: fmt.Sprintf("unexpected token %s(%q)", tokName(t.Kind), t.Value), Line: t.Line, Col: t.Col}
+}
+
+// parseAttempt consumes the body of an `attempt { try EXPR ... }`
+// block. The leading `attempt` ident has already been advanced past
+// by parsePrimary. Mirrors reference-impl/ail/parser/parser.py
+// parse_attempt — no threshold syntax yet, at-least-one try required.
+func (p *Parser) parseAttempt() (Expr, error) {
+	if _, err := p.expect(TokLBrace); err != nil {
+		return nil, err
+	}
+	var tries []Expr
+	for !p.check(TokRBrace) {
+		if !p.checkKW("try") {
+			t := p.peek()
+			return nil, ParseError{
+				Msg:  fmt.Sprintf("expected `try` inside attempt block, got %s(%q)", tokName(t.Kind), t.Value),
+				Line: t.Line, Col: t.Col,
+			}
+		}
+		p.advance() // consume `try`
+		e, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		tries = append(tries, e)
+	}
+	if _, err := p.expect(TokRBrace); err != nil {
+		return nil, err
+	}
+	if len(tries) == 0 {
+		t := p.peek()
+		return nil, ParseError{
+			Msg:  "attempt block must contain at least one `try`",
+			Line: t.Line, Col: t.Col,
+		}
+	}
+	return &AttemptExpr{Tries: tries}, nil
 }

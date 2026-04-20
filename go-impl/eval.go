@@ -168,6 +168,8 @@ func (e *Evaluator) evalExpr(expr Expr, scope map[string]Value) (Value, error) {
 		return Value{}, fmt.Errorf("unknown unary op %q", ex.Op)
 	case *CallExpr:
 		return e.evalCall(ex, scope)
+	case *AttemptExpr:
+		return e.evalAttempt(ex, scope)
 	case *MembershipExpr:
 		elem, err := e.evalExpr(ex.Element, scope)
 		if err != nil {
@@ -267,6 +269,56 @@ func (e *Evaluator) evalCall(c *CallExpr, scope map[string]Value) (Value, error)
 		return v, err
 	}
 	return Value{}, fmt.Errorf("unknown callable %q", name)
+}
+
+// evalAttempt implements the attempt-block cascade. It evaluates each
+// `try` expression in order and returns the first whose value is NOT
+// a Result-wrapped error. If every try yields an error, the last one
+// is returned as-is (the low-confidence fall-through behavior in the
+// Python reference — executor.py:_eval_attempt).
+//
+// Threshold semantics (confidence gating) aren't implemented here:
+// the Go runtime doesn't track confidence as richly as Python, and
+// the surface syntax has no threshold clause yet (spec/08 reserves
+// it for a future extension). Result-error is therefore the only
+// skip condition, which is sufficient for every existing conformance
+// case.
+func (e *Evaluator) evalAttempt(ex *AttemptExpr, scope map[string]Value) (Value, error) {
+	var last Value
+	for _, tryExpr := range ex.Tries {
+		v, err := e.evalExpr(tryExpr, scope)
+		if err != nil {
+			return Value{}, err
+		}
+		last = v
+		if isResultError(v.V) {
+			continue
+		}
+		return v, nil
+	}
+	return last, nil
+}
+
+// isResultError reports whether v is a Result wrapping an error —
+// i.e. {_result:true, ok:false, error:...}. Matches the Python
+// predicate at executor.py:_is_result_error.
+func isResultError(v interface{}) bool {
+	m, ok := v.(map[string]Value)
+	if !ok {
+		return false
+	}
+	r, ok := m["_result"]
+	if !ok {
+		return false
+	}
+	if r.V != true {
+		return false
+	}
+	okv, ok := m["ok"]
+	if !ok {
+		return false
+	}
+	return okv.V == false
 }
 
 func (e *Evaluator) invokeFn(fn *FnDecl, args []Value) (Value, error) {

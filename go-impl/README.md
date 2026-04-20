@@ -41,6 +41,8 @@ Implemented:
 - `intent` (dispatched via HTTP to Ollama at `localhost:11434`)
 - `entry`
 - `if / else if / else`, `for VAR in COLLECTION`, `return`
+- `attempt { try EXPR try EXPR ... }` — Result-error skipping cascade
+  (no confidence threshold syntax yet)
 - Arithmetic: `+ - * / %`
 - Comparison: `== != < <= > >=`
 - Boolean: `and or not` (short-circuit)
@@ -56,7 +58,8 @@ Not yet (owned by the Python runtime for now):
 
 - Provenance tracking (`origin_of`, `lineage_of`, `has_intent_origin`)
 - Purity contract enforcement (parse accepts `pure fn`, no checker)
-- `attempt` blocks
+- Confidence threshold gating on `attempt` (block body works; threshold
+  syntax is reserved in the spec but unimplemented in both runtimes)
 - Implicit parallelism
 - `evolve` / `context` / `with` / `branch` / `perform`
 - Full stdlib imports (Python runtime bundles `stdlib/*.ail`; the Go
@@ -116,7 +119,7 @@ Current conformance coverage (as of v1.8.2):
 | 011_string_pipeline | `trim`+`upper`+`lower`+`split`+`join`+`length` composed | ✅ | ✅ |
 | 012_fibonacci | two-call recursion (stack/return handling) | ✅ | ✅ |
 | 013_list_ops | list-of-lists build, nested `for`, positional `get` | ✅ | ✅ |
-| 014_attempt_cascade | `attempt { try ... }` confidence-priority fallback | ✅ | ⏭ roadmap item 4 |
+| 014_attempt_cascade | `attempt { try ... }` confidence-priority fallback | ✅ | ✅ |
 | 015_unwrap_or | `Result.unwrap_or` default-value semantics | ✅ | ✅ |
 
 Adding a case is zero-code: drop `NNN_name.ail`, `NNN_name.input`,
@@ -139,9 +142,8 @@ In priority order:
 2. `pure fn` static checker (mirror `parser/purity.py`)
 3. Provenance tree attached to every `Value` (mirror
    `runtime/provenance.py`)
-4. `attempt` block
-5. Implicit parallelism via goroutines (a natural fit)
-6. Full effect system
+4. Implicit parallelism via goroutines (a natural fit)
+5. Full effect system
 
 None of these are in scope for v0.1. The point of v0.1 is to prove the
 language is implementation-independent.
