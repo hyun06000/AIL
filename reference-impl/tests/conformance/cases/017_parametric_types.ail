@@ -1,0 +1,24 @@
+// Conformance: parametric type annotations (List[T], Map[K,V], etc.).
+// Added 2026-04-20 after the ail-coder:7b v2 benchmark showed
+// "LBRACK after type" as the dominant parse-error class. Spec §2.3
+// says List[Text] is frozen-valid; the parsers were silently
+// discarding the brackets. Both runtimes must accept the spec-valid
+// shape without trying to enforce the inner type (AIL is dynamic).
+
+pure fn sum(xs: List[Number]) -> Number {
+    total = 0
+    for x in xs { total = total + x }
+    return total
+}
+
+pure fn first_or(xs: List[Text], default: Text) -> Text {
+    if length(xs) == 0 { return default }
+    return get(xs, 0)
+}
+
+entry main(_: Text) {
+    a = to_text(sum([1, 2, 3, 4]))
+    b = first_or(["alpha", "beta"], "none")
+    c = first_or([], "empty")
+    return join([a, b, c], ",")
+}

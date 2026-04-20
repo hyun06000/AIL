@@ -179,9 +179,28 @@ func (p *Parser) parseParams() ([]Param, error) {
 }
 
 func (p *Parser) parseTypeName() (string, error) {
+	// Parses parametric types like List[Number], Map[Text, Number],
+	// Result[Text], Tuple[Number, Text]. Spec §2.3 freezes this
+	// surface syntax. The inner types are consumed and discarded —
+	// AIL is dynamically typed at runtime — but the model's preferred
+	// shape parses cleanly. Must stay in lockstep with the Python
+	// parser at reference-impl/ail/parser/parser.py:parse_type_name.
 	t, err := p.expect(TokIdent)
 	if err != nil {
 		return "", err
+	}
+	if p.peek().Kind == TokLBrack {
+		p.advance()
+		depth := 1
+		for depth > 0 && p.peek().Kind != TokEOF {
+			k := p.peek().Kind
+			p.advance()
+			if k == TokLBrack {
+				depth++
+			} else if k == TokRBrack {
+				depth--
+			}
+		}
 	}
 	return t.Value, nil
 }
