@@ -1,0 +1,359 @@
+{
+  "$comment": "50-prompt benchmark corpus defined by Claude Opus 4 in CLAUDE.md (APRIL 2026 REVIEW UPDATED). Each prompt has: id, category (A=pure_fn / B=pure_intent / C=hybrid), text, ground_truth_category (fn_only / intent_only / both / none), expected (canonical answer; a string for pure_fn, null/approximate for judgment tasks). Do not modify prompts without updating the benchmark spec in CLAUDE.md first. Ground truth is what AIL SHOULD emit — use it to score fn/intent accuracy.",
+  "version": "1.0",
+  "prompts": [
+    {
+      "id": "A01",
+      "category": "A",
+      "text": "Calculate the factorial of 7",
+      "ground_truth_category": "fn_only",
+      "expected": "5040"
+    },
+    {
+      "id": "A02",
+      "category": "A",
+      "text": "Reverse the string 'hello world'",
+      "ground_truth_category": "fn_only",
+      "expected": "dlrow olleh"
+    },
+    {
+      "id": "A03",
+      "category": "A",
+      "text": "Count the vowels in 'Programming is fun'",
+      "ground_truth_category": "fn_only",
+      "expected": "5"
+    },
+    {
+      "id": "A04",
+      "category": "A",
+      "text": "Find the largest number in [34, 12, 89, 3, 56, 72]",
+      "ground_truth_category": "fn_only",
+      "expected": "89"
+    },
+    {
+      "id": "A05",
+      "category": "A",
+      "text": "Sort the words in 'banana cherry apple date' alphabetically",
+      "ground_truth_category": "fn_only",
+      "expected": "apple banana cherry date"
+    },
+    {
+      "id": "A06",
+      "category": "A",
+      "text": "Calculate the sum of all even numbers from 1 to 100",
+      "ground_truth_category": "fn_only",
+      "expected": "2550"
+    },
+    {
+      "id": "A07",
+      "category": "A",
+      "text": "Convert the temperature 98.6 Fahrenheit to Celsius",
+      "ground_truth_category": "fn_only",
+      "expected": "37.0"
+    },
+    {
+      "id": "A08",
+      "category": "A",
+      "text": "Count how many words in 'the quick brown fox jumps over the lazy dog' are longer than 3 characters",
+      "ground_truth_category": "fn_only",
+      "expected": "5"
+    },
+    {
+      "id": "A09",
+      "category": "A",
+      "text": "FizzBuzz from 1 to 20, return as a comma-separated string",
+      "ground_truth_category": "fn_only",
+      "expected": "1, 2, Fizz, 4, Buzz, Fizz, 7, 8, Fizz, Buzz, 11, Fizz, 13, 14, FizzBuzz, 16, 17, Fizz, 19, Buzz"
+    },
+    {
+      "id": "A10",
+      "category": "A",
+      "text": "Check if 'racecar' is a palindrome",
+      "ground_truth_category": "fn_only",
+      "expected": "true"
+    },
+    {
+      "id": "A11",
+      "category": "A",
+      "text": "Calculate the average of [85, 92, 78, 95, 88]",
+      "ground_truth_category": "fn_only",
+      "expected": "87.6"
+    },
+    {
+      "id": "A12",
+      "category": "A",
+      "text": "Remove duplicate values from [1, 3, 2, 3, 1, 4, 2, 5]",
+      "ground_truth_category": "fn_only",
+      "expected": "[1, 3, 2, 4, 5]"
+    },
+    {
+      "id": "A13",
+      "category": "A",
+      "text": "Count the frequency of each character in 'mississippi'",
+      "ground_truth_category": "fn_only",
+      "expected": "m:1, i:4, s:4, p:2"
+    },
+    {
+      "id": "A14",
+      "category": "A",
+      "text": "Generate the first 10 numbers of the Fibonacci sequence",
+      "ground_truth_category": "fn_only",
+      "expected": "[0, 1, 1, 2, 3, 5, 8, 13, 21, 34]"
+    },
+    {
+      "id": "A15",
+      "category": "A",
+      "text": "Find all numbers in [15, 23, 8, 42, 16, 4, 31] that are divisible by 4",
+      "ground_truth_category": "fn_only",
+      "expected": "[8, 16, 4]"
+    },
+
+    {
+      "id": "B01",
+      "category": "B",
+      "text": "Classify the sentiment of 'I absolutely loved this movie, it was fantastic'",
+      "ground_truth_category": "intent_only",
+      "expected": "positive"
+    },
+    {
+      "id": "B02",
+      "category": "B",
+      "text": "Translate 'Good morning, how are you?' into Korean",
+      "ground_truth_category": "intent_only",
+      "expected": null
+    },
+    {
+      "id": "B03",
+      "category": "B",
+      "text": "Summarize in one sentence: 'The United Nations was founded in 1945 after World War II to replace the League of Nations, to stop wars between countries, and to provide a platform for dialogue.'",
+      "ground_truth_category": "intent_only",
+      "expected": null
+    },
+    {
+      "id": "B04",
+      "category": "B",
+      "text": "Is the following text formal or informal: 'Hey dude, wanna grab some pizza later?'",
+      "ground_truth_category": "intent_only",
+      "expected": "informal"
+    },
+    {
+      "id": "B05",
+      "category": "B",
+      "text": "Extract the person's name and age from: 'My name is Alice and I am 30 years old'",
+      "ground_truth_category": "intent_only",
+      "expected": null
+    },
+    {
+      "id": "B06",
+      "category": "B",
+      "text": "Classify this email subject as spam or not spam: 'You have won $1,000,000! Click here now!'",
+      "ground_truth_category": "intent_only",
+      "expected": "spam"
+    },
+    {
+      "id": "B07",
+      "category": "B",
+      "text": "Translate 'Thank you very much' into Japanese",
+      "ground_truth_category": "intent_only",
+      "expected": null
+    },
+    {
+      "id": "B08",
+      "category": "B",
+      "text": "Determine the topic of: 'The central bank raised interest rates by 25 basis points'",
+      "ground_truth_category": "intent_only",
+      "expected": null
+    },
+    {
+      "id": "B09",
+      "category": "B",
+      "text": "Rewrite this sentence in passive voice: 'The cat chased the mouse'",
+      "ground_truth_category": "intent_only",
+      "expected": "The mouse was chased by the cat"
+    },
+    {
+      "id": "B10",
+      "category": "B",
+      "text": "Is this product review positive or negative: 'Terrible quality, broke after one day'",
+      "ground_truth_category": "intent_only",
+      "expected": "negative"
+    },
+    {
+      "id": "B11",
+      "category": "B",
+      "text": "Classify the language of: 'Bonjour, comment allez-vous?'",
+      "ground_truth_category": "intent_only",
+      "expected": "French"
+    },
+    {
+      "id": "B12",
+      "category": "B",
+      "text": "Generate a professional email subject line for a meeting about Q3 budget review",
+      "ground_truth_category": "intent_only",
+      "expected": null
+    },
+    {
+      "id": "B13",
+      "category": "B",
+      "text": "Simplify this text for a 10-year-old: 'Photosynthesis is the process by which plants convert light energy into chemical energy'",
+      "ground_truth_category": "intent_only",
+      "expected": null
+    },
+    {
+      "id": "B14",
+      "category": "B",
+      "text": "Determine if this statement is fact or opinion: 'Python is the best programming language'",
+      "ground_truth_category": "intent_only",
+      "expected": "opinion"
+    },
+    {
+      "id": "B15",
+      "category": "B",
+      "text": "Extract key entities from: 'Apple CEO Tim Cook announced new products at the event in Cupertino on September 12'",
+      "ground_truth_category": "intent_only",
+      "expected": null
+    },
+
+    {
+      "id": "C01",
+      "category": "C",
+      "text": "Parse 'Alice:85,Bob:92,Charlie:78' and classify who passed (score >= 80)",
+      "$note": "Opus spec says this tests whether AI INCORRECTLY uses intent — pass/fail here is arithmetic, no judgment needed",
+      "ground_truth_category": "fn_only",
+      "expected": "Alice: pass, Bob: pass, Charlie: fail"
+    },
+    {
+      "id": "C02",
+      "category": "C",
+      "text": "Count words in 'I love this product' and classify its sentiment",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C03",
+      "category": "C",
+      "text": "Sort [banana, cherry, apple] alphabetically and translate the sorted list to Korean",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C04",
+      "category": "C",
+      "text": "Calculate the total of [10.5, 20.3, 15.7] and summarize what this spending pattern suggests",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C05",
+      "category": "C",
+      "text": "Parse the CSV 'Product,Price\\nWidget,9.99\\nGadget,24.99\\nTool,14.50' and recommend which to buy on a $20 budget",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C06",
+      "category": "C",
+      "text": "Find the longest word in 'extraordinary programming capabilities' and explain what it means",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C07",
+      "category": "C",
+      "text": "Calculate BMI from height 175cm and weight 70kg, then provide a health assessment",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C08",
+      "category": "C",
+      "text": "Parse dates from 'Meeting: 2024-01-15, Deadline: 2024-02-28' and calculate days between them, then suggest if the timeline is reasonable",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C09",
+      "category": "C",
+      "text": "Count character frequencies in 'hello world', then describe the pattern in natural language",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C10",
+      "category": "C",
+      "text": "Sort the numbers [42, 17, 8, 93, 55] in descending order and explain what percentile 42 falls in",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C11",
+      "category": "C",
+      "text": "Parse 'John:A,Jane:B,Jim:C,Jill:A' into name-grade pairs, count how many got A, and write a brief performance summary",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C12",
+      "category": "C",
+      "text": "Calculate the standard deviation of [10, 12, 23, 23, 16, 23, 21, 16] and explain if this data is highly variable",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C13",
+      "category": "C",
+      "text": "Reverse each word in 'hello world foo' and create a creative sentence using the reversed words",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C14",
+      "category": "C",
+      "text": "Find common elements in [1,2,3,4,5] and [3,4,5,6,7], then suggest a metaphor for what overlapping sets represent",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C15",
+      "category": "C",
+      "text": "Parse email addresses from 'Contact alice@test.com or bob@test.com for info', validate format, and draft a greeting for each",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C16",
+      "category": "C",
+      "text": "Calculate compound interest on $1000 at 5% for 3 years, then explain the result to a teenager",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C17",
+      "category": "C",
+      "text": "Count lines, words, and characters in the paragraph 'The sun was setting. Birds flew home. Silence fell.', then rate the writing as concise or verbose",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C18",
+      "category": "C",
+      "text": "Parse 'Tokyo:35.6,London:51.5,Sydney:-33.8' into city-latitude pairs, sort by latitude, and describe the geographic pattern",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C19",
+      "category": "C",
+      "text": "Generate Fibonacci up to the 8th number, then explain why the golden ratio appears in this sequence",
+      "ground_truth_category": "both",
+      "expected": null
+    },
+    {
+      "id": "C20",
+      "category": "C",
+      "text": "Remove stop words (the,a,an,is,in,on,at,to) from 'the cat is on the mat in the room' and summarize what remains",
+      "ground_truth_category": "both",
+      "expected": null
+    }
+  ]
+}
