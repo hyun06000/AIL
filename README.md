@@ -2,7 +2,9 @@
 
 > A programming language designed for AI as the primary author of code.
 
-**Status:** v1.8.2 · PyPI: `ail-interpreter` · Python interpreter (224 tests) · Second runtime in Go · `ail ask` natural-language interface
+**Status:** v1.8.2 · PyPI: `ail-interpreter` · Python interpreter (249 tests) · Second runtime in Go · `ail ask` natural-language interface
+
+📊 **Numeric case (start here if you're evaluating):** [`docs/why-ail-numbers.md`](docs/why-ail-numbers.md) — on the same task, the **same model's Python code skips required error handling 40–86% of the time; AIL makes that skip impossible.** Benchmarked across two models, four dimensions, 50 prompts. Raw JSONs under [`docs/benchmarks/`](docs/benchmarks/).
 
 🇰🇷 **한국어 독자:** [`docs/ko/README.ko.md`](docs/ko/README.ko.md)
 🤖 **AI/LLM:** [`README.ai.md`](README.ai.md) — structured reference, no prose. Start with [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md).
