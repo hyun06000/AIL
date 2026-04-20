@@ -573,6 +573,76 @@ func callBuiltin(name string, args []Value) (Value, bool, error) {
 			}
 		}
 		return B(false), true, nil
+	case "ok":
+		// ok(v) -> {_result:true, ok:true, value:v}. Shape matches the
+		// Python runtime at executor.py:948 so the two interpreters
+		// exchange Result values with identical layout.
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		m := map[string]Value{
+			"_result": B(true),
+			"ok":      B(true),
+			"value":   {V: raw[0], Conf: minc},
+		}
+		return Value{V: m, Conf: minc}, true, nil
+	case "error":
+		// error(msg) -> {_result:true, ok:false, error:msg}. Same shape
+		// produced internally by to_number on parse failure above.
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		m := map[string]Value{
+			"_result": B(true),
+			"ok":      B(false),
+			"error":   {V: raw[0], Conf: minc},
+		}
+		return Value{V: m, Conf: minc}, true, nil
+	case "unwrap":
+		// Python returns "UNWRAP_ERROR: ..." with confidence 0 on
+		// error; mirror that exactly.
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		if m, ok := raw[0].(map[string]Value); ok {
+			if m["_result"].V == true {
+				if m["ok"].V == true {
+					return m["value"], true, nil
+				}
+				errText, _ := m["error"].V.(string)
+				return Value{V: "UNWRAP_ERROR: " + errText, Conf: 0.0}, true, nil
+			}
+		}
+		return Value{V: raw[0], Conf: minc}, true, nil
+	case "unwrap_or":
+		if len(raw) < 2 {
+			if len(raw) >= 1 {
+				return Value{V: raw[0], Conf: minc}, true, nil
+			}
+			return Value{}, true, nil
+		}
+		if m, ok := raw[0].(map[string]Value); ok {
+			if m["_result"].V == true {
+				if m["ok"].V == true {
+					return m["value"], true, nil
+				}
+				return Value{V: raw[1], Conf: minc}, true, nil
+			}
+		}
+		return Value{V: raw[0], Conf: minc}, true, nil
+	case "unwrap_error":
+		if len(raw) < 1 {
+			return Value{V: "NOT_A_RESULT", Conf: 0.0}, true, nil
+		}
+		if m, ok := raw[0].(map[string]Value); ok {
+			if m["_result"].V == true {
+				if m["ok"].V == true {
+					return Value{V: "NOT_AN_ERROR", Conf: 0.0}, true, nil
+				}
+				return m["error"], true, nil
+			}
+		}
+		return Value{V: "NOT_A_RESULT", Conf: 0.0}, true, nil
 	}
 	return Value{}, false, nil
 }

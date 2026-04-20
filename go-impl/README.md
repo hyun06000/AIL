@@ -46,7 +46,8 @@ Implemented:
 - Boolean: `and or not` (short-circuit)
 - Membership: `in`, `not in`
 - List literals and the builtins: `length split join append range
-  to_text to_number trim upper lower get is_ok is_error`
+  to_text to_number trim upper lower get is_ok is_error ok error
+  unwrap unwrap_or unwrap_error`
 - Tolerant `(value, confidence)` response parsing — identical tolerance
   matrix as the Python shared parser (pure JSON, code-fenced JSON,
   JSON-in-prose, confidence clamping)
@@ -61,8 +62,6 @@ Not yet (owned by the Python runtime for now):
 - Full stdlib imports (Python runtime bundles `stdlib/*.ail`; the Go
   runtime skips imports so programs using stdlib utilities must inline
   what they need)
-- `Result` helpers `ok`, `error`, `unwrap` (partial — `is_ok` /
-  `is_error` work)
 
 ## Usage
 
@@ -109,7 +108,7 @@ Current conformance coverage (as of v1.8.2):
 | 003_factorial | pure fn recursion, Number formatting | ✅ | ✅ |
 | 004_insertion_sort | list manipulation, append, `to_text` | ✅ | ✅ |
 | 005_korean_concat | Unicode strings, `trim` | ✅ | ✅ |
-| 006_result_handling | `ok`/`error`/`is_ok`/`unwrap` | ✅ | ⏭ not yet in go-impl |
+| 006_result_handling | `ok`/`error`/`is_ok`/`unwrap` | ✅ | ✅ |
 | 007_nested_lists | nested `for` over `[[…]]` | ✅ | ✅ |
 | 008_empty_list | empty-list edge in length/for | ✅ | ✅ |
 | 009_arithmetic_precedence | operator precedence table (`*`/`/`/`%` vs `+`/`-`, cmp) | ✅ | ✅ |
@@ -118,7 +117,7 @@ Current conformance coverage (as of v1.8.2):
 | 012_fibonacci | two-call recursion (stack/return handling) | ✅ | ✅ |
 | 013_list_ops | list-of-lists build, nested `for`, positional `get` | ✅ | ✅ |
 | 014_attempt_cascade | `attempt { try ... }` confidence-priority fallback | ✅ | ⏭ roadmap item 4 |
-| 015_unwrap_or | `Result.unwrap_or` default-value semantics | ✅ | ⏭ partial Result only |
+| 015_unwrap_or | `Result.unwrap_or` default-value semantics | ✅ | ✅ |
 
 Adding a case is zero-code: drop `NNN_name.ail`, `NNN_name.input`,
 `NNN_name.expected` into `cases/`. Mark known Go gaps with a
