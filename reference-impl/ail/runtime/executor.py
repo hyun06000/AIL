@@ -12,6 +12,7 @@ Scope limits: no evolution, no calibration, no parallelism, no Authority
 beyond a simple yes/no prompt for `human_confirmation`.
 """
 from __future__ import annotations
+import math
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -931,6 +932,28 @@ class Executor:
         if name == "min":
             if raw and isinstance(raw[0], list):
                 return ConfidentValue(min(raw[0]), conf)
+        if name == "round":
+            if len(raw) >= 2:
+                return ConfidentValue(round(raw[0], int(raw[1])), conf)
+            if raw:
+                return ConfidentValue(round(raw[0]), conf)
+        if name == "floor":
+            if raw:
+                return ConfidentValue(math.floor(raw[0]), conf)
+        if name == "ceil":
+            if raw:
+                return ConfidentValue(math.ceil(raw[0]), conf)
+        if name == "sqrt":
+            if raw:
+                v = raw[0]
+                if v < 0:
+                    return ConfidentValue(
+                        {"_result": True, "ok": False,
+                         "error": f"sqrt: negative argument {v}"}, conf)
+                return ConfidentValue(math.sqrt(v), conf)
+        if name == "pow":
+            if len(raw) >= 2:
+                return ConfidentValue(raw[0] ** raw[1], conf)
 
         # --- Meta ---
         if name == "eval_ail":

@@ -215,6 +215,12 @@ to_boolean(value: Any) -> Boolean
 abs(n: Number) -> Number
 max(list: [Number]) -> Number
 min(list: [Number]) -> Number
+round(n: Number) -> Number                   // banker's rounding
+round(n: Number, digits: Number) -> Number   // round to N decimal places
+floor(n: Number) -> Number
+ceil(n: Number) -> Number
+sqrt(n: Number) -> Number | Result           // Result error on negative input
+pow(base: Number, exp: Number) -> Number
 ```
 
 ### Result (error handling)

@@ -695,6 +695,89 @@ func callBuiltin(name string, args []Value) (Value, bool, error) {
 			}
 		}
 		return Value{V: "NOT_A_RESULT", Conf: 0.0}, true, nil
+	case "abs":
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		if x, ok := raw[0].(float64); ok {
+			return Value{V: math.Abs(x), Conf: minc}, true, nil
+		}
+		return Value{}, true, nil
+	case "max":
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		list, ok := raw[0].([]Value)
+		if !ok || len(list) == 0 {
+			return Value{}, true, nil
+		}
+		best, _ := list[0].V.(float64)
+		for _, v := range list[1:] {
+			if x, ok := v.V.(float64); ok && x > best {
+				best = x
+			}
+		}
+		return Value{V: best, Conf: minc}, true, nil
+	case "min":
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		list, ok := raw[0].([]Value)
+		if !ok || len(list) == 0 {
+			return Value{}, true, nil
+		}
+		best, _ := list[0].V.(float64)
+		for _, v := range list[1:] {
+			if x, ok := v.V.(float64); ok && x < best {
+				best = x
+			}
+		}
+		return Value{V: best, Conf: minc}, true, nil
+	case "round":
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		x, _ := raw[0].(float64)
+		// Python's round() uses banker's rounding; math.RoundToEven matches.
+		if len(raw) >= 2 {
+			nd, _ := raw[1].(float64)
+			p := math.Pow(10, nd)
+			return Value{V: math.RoundToEven(x*p) / p, Conf: minc}, true, nil
+		}
+		return Value{V: math.RoundToEven(x), Conf: minc}, true, nil
+	case "floor":
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		x, _ := raw[0].(float64)
+		return Value{V: math.Floor(x), Conf: minc}, true, nil
+	case "ceil":
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		x, _ := raw[0].(float64)
+		return Value{V: math.Ceil(x), Conf: minc}, true, nil
+	case "sqrt":
+		if len(raw) < 1 {
+			return Value{}, true, nil
+		}
+		x, _ := raw[0].(float64)
+		if x < 0 {
+			errMap := map[string]Value{
+				"_result": B(true),
+				"ok":      B(false),
+				"error":   S(fmt.Sprintf("sqrt: negative argument %v", x)),
+			}
+			return Value{V: errMap, Conf: minc}, true, nil
+		}
+		return Value{V: math.Sqrt(x), Conf: minc}, true, nil
+	case "pow":
+		if len(raw) < 2 {
+			return Value{}, true, nil
+		}
+		base, _ := raw[0].(float64)
+		exp, _ := raw[1].(float64)
+		return Value{V: math.Pow(base, exp), Conf: minc}, true, nil
 	}
 	return Value{}, false, nil
 }

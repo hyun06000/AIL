@@ -1,0 +1,23 @@
+// Conformance: math builtins round / floor / ceil / sqrt / pow.
+// Added 2026-04-20 after the ail-coder:7b v2 benchmark revealed C07
+// (BMI) and C12 (std-dev) failed PurityError because round/sqrt were
+// not in the trusted-pure builtin set. Both runtimes must now evaluate
+// these identically — numerically and as Result on sqrt of a negative.
+
+pure fn bmi(h_cm: Number, w_kg: Number) -> Number {
+    return round(w_kg / pow(h_cm / 100, 2), 2)
+}
+
+pure fn euclid(x: Number, y: Number) -> Number {
+    return sqrt(x * x + y * y)
+}
+
+entry main(_: Text) {
+    a = to_text(bmi(175, 70))            // 22.86
+    b = to_text(euclid(3, 4))            // 5
+    c = to_text(round(2.5))              // banker's rounding: 2
+    d = to_text(floor(2.9))              // 2
+    e = to_text(ceil(2.1))               // 3
+    f = to_text(pow(2, 10))              // 1024
+    return join([a, b, c, d, e, f], ",")
+}

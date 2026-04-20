@@ -60,6 +60,7 @@ _PURE_BUILTINS: frozenset[str] = frozenset({
     "to_number", "to_text", "to_boolean",
     # Math
     "abs", "max", "min",
+    "round", "floor", "ceil", "sqrt", "pow",
     # Result
     "ok", "error", "is_ok", "is_error",
     "unwrap", "unwrap_or", "unwrap_error",
