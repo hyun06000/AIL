@@ -1,53 +1,31 @@
-# ⛄ This directory is frozen
+# 🔥 This directory is no longer frozen — 2026-04-20
 
-All files in `reference-impl/training/` were built to enable a
-fine-tuning pipeline for AIL. That pipeline is **paused**, not
-deleted.
+The fine-tuning pipeline under `reference-impl/training/` was paused
+while Opus 4's five preconditions were being worked. As of
+2026-04-20 all five hold. Training is the active track.
 
-## Why
+Proof for each condition:
 
-Claude Opus 4 (the AIL designer) reviewed the plan and flagged
-that fine-tuning now is premature. The five conditions that must
-ALL hold before fine-tuning becomes the right move are:
+1. **≥ 2 base models benchmarked** — 3 done: `llama3.1:8b`,
+   `qwen2.5-coder:14b`, `claude-sonnet-4-6`. JSON snapshots in
+   [`../../docs/benchmarks/`](../../docs/benchmarks/).
+2. **Prompt engineering exhausted** — v1/v2/v3 A/B all plateau on
+   qwen14b; see
+   [`2026-04-20_prompt_ab_v3_analysis.md`](../../docs/benchmarks/2026-04-20_prompt_ab_v3_analysis.md).
+3. **Primary failure mode identified** — Python-distribution
+   contamination of the author model. Same shape across llama8b,
+   qwen14b, Sonnet 4.6; argument in
+   [`2026-04-20_claude_sonnet46_summary.md`](../../docs/benchmarks/2026-04-20_claude_sonnet46_summary.md).
+4. **AIL spec frozen for one cycle** — v1.8 frozen 2026-04-20,
+   policy in [`../../spec/09-stability.md`](../../spec/09-stability.md).
+5. **≥ 200 validated (prompt, AIL) pairs** — 205 today in
+   [`dataset/`](dataset/).
 
-1. Benchmark results from at least 2 base models
-2. Prompt engineering has been exhausted (diminishing returns
-   confirmed)
-3. The primary failure mode is identified as "model doesn't know
-   AIL syntax" (not prompt issues, not model-too-small)
-4. The AIL spec has been frozen for at least one version cycle
-5. At least 200 validated `(prompt, correct AIL)` pairs for
-   training/eval split
+What to do now: see [`HANDOFF.md`](HANDOFF.md) for the training
+command, 3070-box-specific flags, the known save-time OOM gotcha,
+and the post-run benchmark step.
 
-Full rationale is in `../../CLAUDE.md`, section "DIRECTIVE FROM
-CLAUDE OPUS 4 — APRIL 2026 REVIEW (UPDATED)".
-
-## What's still valid
-
-- `dataset/*.jsonl` — 80 validated samples. These stay useful as
-  seed ground-truth programs for the benchmark, and as training
-  data when/if the criteria above are met.
-- `validate.py` — the 4-gate validator. Still runs; used when
-  adding new dataset entries.
-- `seed_from_*.py` — the harvesters that produced the dataset.
-  Deterministic, re-runnable.
-- `to_chatml.py`, `train.py`, `export_to_ollama.py` — the
-  training-side scripts. Tested that they `--help` without
-  errors; not exercised end-to-end. Kept for when the freeze
-  lifts.
-
-## What changed outside this directory
-
-The project's active track is now benchmark-first. See:
-
-- `benchmarks/prompts.json` — the 50-prompt corpus
-- `tools/benchmark.py` — 3-dimension measurement harness
-- `benchmarks/RUNBOOK.md` — runbook for the 3070-box Claude
-- `docs/benchmarks/` — snapshot results, one JSON per model-run
-
-## When the freeze lifts
-
-Whoever unfreezes this directory owes the project a short
-paragraph in the commit message naming which of the five
-conditions were met, and pointing at the benchmark JSON that
-proves each. No condition, no unfreeze.
+The 2026-04-20-and-before "frozen" content of this file is
+preserved in git history; retrieve it with
+`git log --diff-filter=D -- reference-impl/training/FROZEN.md`
+if you need the original text.

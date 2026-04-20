@@ -1,100 +1,111 @@
-# ⛔ STOP — training is paused. Read this entire file.
+# 🟢 Training track resumed — 2026-04-20
 
-You are Claude Code running on hyun06000's 3070 box. A **prior**
-version of this runbook told you to run QLoRA training on
-qwen2.5-coder:7b. **That instruction is revoked.** Do NOT run
-`train.py`. Do NOT run `export_to_ollama.py`. Do NOT push any
-fine-tuned adapter or GGUF anywhere.
+You are Claude Code on hyun06000's 3070 box. A previous version of
+this file said **⛔ STOP — training is paused**. As of 2026-04-20,
+every one of Opus 4's five prerequisites is met and fine-tuning is
+the correct next move. This file replaces the stop notice.
 
-## Why the pivot
+The prior "frozen" text is preserved at
+`git show BEFORE_RESUME:reference-impl/training/HANDOFF.md` for
+lineage. Do not restore it.
 
-Claude Opus 4 (the original AIL designer) reviewed the plan and
-pointed out that fine-tuning now is blind optimization. Specifically:
+## Why this is now the right move
 
-1. **The language is not frozen.** AIL moved 8 minor versions; a
-   fine-tuned model trained on v1.8 syntax will be confidently
-   wrong if v1.9 changes anything. Train on a moving target = waste.
-2. **The failure mode is not diagnosed.** When `ail ask` fails, we
-   don't yet know if the cause is (a) prompt-too-weak, (b) model-
-   too-small, or (c) AIL-syntax-not-in-training-data. Only (c)
-   justifies fine-tuning. Without a proper benchmark we have no
-   way to separate them.
-3. **Fine-tuning without an evaluation set is guessing.** We need
-   benchmark numbers across multiple models first, so we can tell
-   whether a new training run actually improved anything.
+Opus 4's five fine-tuning preconditions (set 2026-04-20 and
+re-stated at the top of [`../../CLAUDE.md`](../../CLAUDE.md)):
 
-See the full directive in [`../../CLAUDE.md`](../../CLAUDE.md),
-section "DIRECTIVE FROM CLAUDE OPUS 4 — APRIL 2026 REVIEW
-(UPDATED)" and the benchmark spec at the bottom of the same file.
+| # | Condition | Evidence |
+|---|---|---|
+| 1 | ≥ 2 base models benchmarked | 3: llama3.1:8b, qwen2.5-coder:14b, claude-sonnet-4-6 — snapshots in [`../../docs/benchmarks/`](../../docs/benchmarks/) |
+| 2 | Prompt engineering exhausted | v1/v2/v3 prompt A/B on qwen14b all plateau — [`2026-04-20_prompt_ab_v3_analysis.md`](../../docs/benchmarks/2026-04-20_prompt_ab_v3_analysis.md) |
+| 3 | Primary failure mode identified | Python-distribution contamination — Sonnet 4.6 parses AIL at 36% with 100% Python parse, same pattern at every model size. Full argument in [`2026-04-20_claude_sonnet46_summary.md`](../../docs/benchmarks/2026-04-20_claude_sonnet46_summary.md) |
+| 4 | AIL spec frozen one version cycle | v1.8 frozen 2026-04-20, policy in [`../../spec/09-stability.md`](../../spec/09-stability.md) |
+| 5 | ≥ 200 validated (prompt, AIL) pairs | 205 today, [`dataset/`](dataset/) |
 
-## What you actually do
+All five hold. The training pipeline is no longer blind
+optimization — there is a concrete measurable gap (AIL parse rate)
+with a concrete diagnosed cause (training-distribution) and a
+stable grammar target to train against.
 
-Run the 50-prompt, 3-dimension benchmark against **multiple
-models**, collect results, commit snapshots. Full runbook:
-[`../../benchmarks/RUNBOOK.md`](../../benchmarks/RUNBOOK.md).
+## What to run
 
-The 3070 server's role is now:
+The canonical command (adjust `--base` for other targets):
 
-- ✅ Hosting Ollama with several models to benchmark against
-- ✅ Running `tools/benchmark.py` overnight across the full 50-prompt corpus
-- ✅ A/B testing prompt variants — the benchmark makes improvements measurable
-- ❌ NOT fine-tuning. The dataset and training scripts stay on disk
-  but are frozen until the benchmark clears the criteria Opus 4 set.
+```bash
+python training/train.py \
+    --dataset training/train.chatml.jsonl \
+    --output training/ail-coder-7b-lora \
+    --base Qwen/Qwen2.5-Coder-7B-Instruct \
+    --max-seq-length 1024 \
+    --batch-size 1 \
+    --grad-accum 8 \
+    --epochs 3
+```
 
-## The frozen training assets
+The `--max-seq-length 1024`, `--batch-size 1`, `--grad-accum 8`
+defaults above are chosen to fit a 3070 (8 GB). The script's own
+defaults (`2048` / `2` / `4`) aim at a larger card and will OOM on
+a 3070 at the first checkpoint save.
 
-`reference-impl/training/` stays intact — `validate.py`,
-`to_chatml.py`, `train.py`, `export_to_ollama.py`, and the 80
-validated samples in `dataset/`. They are useful as a **seed** for
-the benchmark's ground-truth programs (each sample is a
-`(prompt, correct AIL)` pair). Don't delete, don't edit, don't
-run `train.py`.
+### Known OOM gotcha — save_strategy at epoch boundaries
 
-When fine-tuning becomes the right move, the criteria (all five
-must hold) are written at the top of
-[`../../CLAUDE.md`](../../CLAUDE.md)'s updated directive.
-Until then, the training pipeline is dormant.
+Training through epoch 1 and OOMing right at the epoch boundary
+is the checkpoint-save VRAM spike under unsloth on an 8 GB card.
+Mitigation options, in order of preference:
 
-## What's still true from the old runbook
+1. **Simplest** — set `save_strategy="no"` in `SFTConfig` inside
+   `train.py`. The script already calls `model.save_pretrained`
+   once at the very end, so you lose only mid-run checkpoints.
+2. Cut `--max-seq-length 1024` → `512` if your dataset allows it
+   (inspect with `wc -L train.chatml.jsonl`).
+3. If both fail, profile `nvidia-smi` across the save boundary to
+   confirm that's where the spike is before making bigger changes.
 
-- The environment assumptions section (3070, Ollama at localhost,
-  Python, disk) — still accurate.
-- `bench_vs_python.py` at `tools/bench_vs_python.py` still works
-  and runs a 50-case comparison. The new `tools/benchmark.py`
-  supersedes it for the full 3-dimension protocol, but the old
-  tool is useful for quick sanity checks and stays in the repo.
-- The ollama server on `localhost:11434` already has
-  `qwen2.5-coder:14b-instruct-q4_K_M` pulled. Pull one more model
-  (see RUNBOOK) so the benchmark runs against ≥ 2.
+## After the run
 
-## Hard rules
+1. Quick sanity — load the adapter and generate one AIL program
+   for a held-out prompt. If it doesn't parse, something is very
+   wrong (the training corpus is 100% parseable by construction).
+2. Export via `export_to_ollama.py` — this merges the adapter into
+   the base and produces a GGUF Ollama can serve.
+3. Re-run the benchmark against the fine-tuned model:
 
-1. Do NOT run `training/train.py`. If you see `--train` or
-   `--export` flags anywhere, ignore them.
-2. Do NOT upload anything to HuggingFace. Not the dataset, not a
-   model, not a LoRA adapter.
-3. Do NOT promote the project publicly. LinkedIn / HN / X is
-   hyun06000's call, and it's gated on the benchmark numbers.
-4. Do NOT modify the five fine-tuning prerequisites in CLAUDE.md.
-   They were set before the run and weakening them post-hoc is
-   not engineering.
-5. DO commit benchmark snapshots to `docs/benchmarks/`, one per
-   model per run. Honest numbers only — don't filter, don't
-   curate.
+       export BENCHMARK_BACKEND=ollama
+       export AIL_OLLAMA_MODEL=ail-coder-7b:latest
+       python tools/benchmark.py \
+           --out docs/benchmarks/$(date +%F)_ail-coder-7b_opus50.json
+
+4. Commit the snapshot. The numbers to watch against the baselines
+   in [`../../docs/benchmarks/README.md`](../../docs/benchmarks/README.md):
+   - AIL parse rate on all 50 prompts (baseline qwen14b: 42%,
+     Sonnet: 36% — target: meaningfully higher)
+   - fn/intent routing accuracy on hybrid prompts (baseline: 25%
+     on qwen14b)
+
+If parse rate improves and Python-side error-handling miss stays
+at its 42–70% range, the harness thesis is validated end-to-end.
+
+## Hard rules that still stand
+
+1. Don't upload anything to HuggingFace / public hubs without
+   hyun06000's explicit go.
+2. Don't edit the Opus 4 directive or the prereq list to
+   retroactively make a failed run count as success. Honest
+   numbers only.
+3. Don't train against a non-frozen grammar version. If
+   `spec/09-stability.md` reports a freeze lift before you train,
+   stop and confirm.
+4. Don't delete the dataset. Every sample in `dataset/*.jsonl`
+   was passed through `validate.py` — losing those is losing the
+   ground-truth corpus.
 
 ## Read next
 
-1. `../../CLAUDE.md` — "DIRECTIVE FROM CLAUDE OPUS 4 — APRIL 2026
-   REVIEW (UPDATED)" (the strategic frame) and the benchmark
-   specification at the bottom of the file.
-2. `../../benchmarks/RUNBOOK.md` — operational runbook for the
-   benchmark (the task you actually execute).
-3. Optional: the Mac-side work history in
-   `docs/benchmarks/README.md` for the existing baseline at
-   `2026-04-20_qwen25-coder-14b_all.json`.
-
----
-
-*Previous runbook (training QLoRA on qwen2.5-coder:7b) is at
-`git show 9423284:reference-impl/training/HANDOFF.md` — kept in
-history for context but revoked as of this commit.*
+1. [`../../CLAUDE.md`](../../CLAUDE.md) — "DIRECTIVE FROM CLAUDE
+   OPUS 4 — APRIL 2026 REVIEW (UPDATED)" still frames the project
+   direction; only the training gate is now open.
+2. [`../../spec/09-stability.md`](../../spec/09-stability.md) —
+   what grammar you are training against and how the freeze lifts.
+3. [`../../docs/benchmarks/2026-04-20_claude_sonnet46_summary.md`](../../docs/benchmarks/2026-04-20_claude_sonnet46_summary.md)
+   — the evidence for prereq #3 (training-distribution as primary
+   failure mode).

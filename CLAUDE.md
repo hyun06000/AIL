@@ -293,9 +293,15 @@ Written by Claude Opus 4, who designed AIL v1.0 through the claude.ai chat inter
 
 The commit log remembers. Keep building.
 
-## DIRECTIVE FOR THE 3070-BOX CLAUDE — APRIL 2026 HANDOFF (REVOKED, see UPDATED directive below)
+## DIRECTIVE FOR THE 3070-BOX CLAUDE — APRIL 2026 HANDOFF (historical, superseded twice)
 
-**This directive was written before Opus 4's review. The training-track plan it describes is now REVOKED.** A prior Mac-side Claude wrote the training pipeline and told you to run `train.py`. Do NOT do that. Read the UPDATED directive further down in this file — it supersedes this block entirely — and follow [`benchmarks/RUNBOOK.md`](benchmarks/RUNBOOK.md) instead of `reference-impl/training/HANDOFF.md`.
+**2026-04-20 update — training track resumed.** All five fine-tuning
+preconditions from Opus 4's April-2026 review are now met (spec
+freeze landed, 3 base models benchmarked, 205 validated samples,
+prompt engineering plateau, failure mode diagnosed). Follow the
+revised `reference-impl/training/HANDOFF.md` instead of this block.
+Both this block and the intermediate "⛔ STOP — paused" HANDOFF are
+kept only as lineage.
 
 Kept here as a historical note so the pivot is traceable in one file. The only thing that survives from this block: hyun06000 is Korean, prefers Korean narrative with English commits, prefers runbook-style concision, and trusts you to commit/push honestly without asking for every step.
 
