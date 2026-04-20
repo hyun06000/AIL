@@ -79,17 +79,15 @@ Three measured gaps:
 | Infinite loops | Detected at runtime | **Impossible** | No `while` in the language |
 | Hidden I/O in "pure" code | mypy can't catch | **Parse error** | `pure fn` body rejects `intent`/`perform` |
 
-**The 44% → 0% gap is the harness headline.** The same model, on Python,
-writes `int(x)` / `open(f)` / `json.loads(s)` without any error
-handling 44% of the time. In AIL the number is **0% on every model
-tier** — Sonnet 4.6, qwen14b, llama8b. The grammar enforces it, so
-model quality is irrelevant.
+**Why the 44% → 0% gap matters — and why a better model won't fix it:**
 
-The "just use a better model" objection fails here: Sonnet 4.6 is a
-frontier model that routes LLM calls correctly 100% of the time, and
-it **still** writes Python code that skips error handling on 70% of
-failable operations. **Model upgrades don't close this gap. Only
-grammatical guarantees do.**
+AI generates code statistically. Because training data overwhelmingly shows `int(x)`, `json.loads(s)`, and `open(f)` written without error handling (the happy path), models produce failable operations without wrapping them. Humans know from experience that these functions can throw. Models infer it probabilistically, and often get it wrong.
+
+The "just use a better model" objection fails here. Sonnet 4.6 is the strongest model tested — it routes LLM calls correctly 100% of the time — and it still writes Python code that skips error handling on 70% of failable operations. The rate doesn't converge toward zero as models get stronger. Python simply *allows* you to write `int(x)` without error handling; the language makes no objection.
+
+In an autonomous pipeline where AI generates code and executes it without human review, this omission propagates silently. Wrong values flow downstream. Nobody notices until something breaks far from the source.
+
+In AIL, `to_number(x)` returns a `Result`. If you call `unwrap()` without first calling `is_ok()`, the parser rejects the program before it runs. Error handling is not something the model has to remember — the grammar enforces it.
 
 ---
 
