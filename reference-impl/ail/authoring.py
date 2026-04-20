@@ -871,6 +871,103 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
                 '}'
             ),
         ),
+    ] + _v3_extra_examples()
+
+
+def _v3_extra_examples() -> list[tuple[list[Any], Any]]:
+    """Additional hybrid-specific few-shots, behind AIL_AUTHOR_PROMPT_VARIANT=v3.
+
+    The v1 prompt + v2 FORBIDDEN block both produced 15% parse / 10%
+    routing on the 20 C-category prompts (qwen2.5-coder:14b, Opus 50
+    corpus, 2026-04-20). The null result on v2 ruled out "the model
+    needs to be told what NOT to write." The remaining prompt-layer
+    lever is demonstration: more few-shot examples that exhibit the
+    exact hybrid shapes the benchmark is asking for.
+
+    Three additions, each a different hybrid shape the base four
+    don't cover:
+
+      - numeric compute + categorical judgment (BMI → category)
+      - aggregate + interpretive phrase (scores → comment)
+      - text transform + describe (reverse each word → describe)
+
+    Returns [] unless the env var is set, preserving v1 behaviour.
+    """
+    import os as _os
+    if _os.environ.get("AIL_AUTHOR_PROMPT_VARIANT") != "v3":
+        return []
+    return [
+        # Shape: numeric compute → intent that categorises the number.
+        # Mirrors benchmark C07 (BMI + assessment) and C16 (compound
+        # interest + teenager explanation).
+        (
+            [{"prompt": "Calculate BMI from height 175cm and weight 70kg and give a short health category"}],
+            (
+                'intent health_category(summary: Text) -> Text {\n'
+                '    goal: underweight_normal_overweight_or_obese\n'
+                '}\n'
+                'pure fn bmi(height_cm: Number, weight_kg: Number) -> Number {\n'
+                '    meters = height_cm / 100\n'
+                '    return weight_kg / (meters * meters)\n'
+                '}\n'
+                'entry main(x: Text) {\n'
+                '    value = bmi(175, 70)\n'
+                '    summary = join(["BMI ", to_text(value)], "")\n'
+                '    return join([summary, " - ", health_category(summary)], "")\n'
+                '}'
+            ),
+        ),
+        # Shape: aggregate over a list → intent interprets the number.
+        # Mirrors C04 (total + spending summary), C11 (count grades +
+        # performance summary), C12 (stddev + variability comment),
+        # C17 (counts + conciseness rating).
+        (
+            [{"prompt": "Compute the average of scores 85, 92, 78 and give a short performance comment"}],
+            (
+                'intent performance_comment(summary: Text) -> Text {\n'
+                '    goal: one short phrase describing the performance level\n'
+                '}\n'
+                'pure fn average(nums: Number) -> Number {\n'
+                '    total = 0\n'
+                '    for n in nums { total = total + n }\n'
+                '    return total / length(nums)\n'
+                '}\n'
+                'entry main(x: Text) {\n'
+                '    avg = average([85, 92, 78])\n'
+                '    summary = join(["average ", to_text(avg)], "")\n'
+                '    return join([summary, " - ", performance_comment(summary)], "")\n'
+                '}'
+            ),
+        ),
+        # Shape: text transform → intent describes / comments on the
+        # transformed text. Mirrors C13 (reverse each word + creative
+        # sentence), C20 (remove stopwords + summarize).
+        (
+            [{"prompt": "Reverse each word in 'hello world' and describe the result in one short phrase"}],
+            (
+                'intent describe_playfully(text: Text) -> Text {\n'
+                '    goal: one short playful phrase describing the text\n'
+                '}\n'
+                'pure fn reverse_text(s: Text) -> Text {\n'
+                '    chars = split(s, "")\n'
+                '    result = ""\n'
+                '    for i in range(0, length(chars)) {\n'
+                '        result = join([result, get(chars, length(chars) - 1 - i)], "")\n'
+                '    }\n'
+                '    return result\n'
+                '}\n'
+                'pure fn reverse_each_word(text: Text) -> Text {\n'
+                '    words = split(text, " ")\n'
+                '    out = []\n'
+                '    for w in words { out = append(out, reverse_text(w)) }\n'
+                '    return join(out, " ")\n'
+                '}\n'
+                'entry main(x: Text) {\n'
+                '    reversed = reverse_each_word("hello world")\n'
+                '    return join([reversed, " - ", describe_playfully(reversed)], "")\n'
+                '}'
+            ),
+        ),
     ]
 
 
