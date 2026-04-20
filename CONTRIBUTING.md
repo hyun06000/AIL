@@ -1,5 +1,7 @@
 # Contributing to AIL
 
+🇰🇷 한국어: [`CONTRIBUTING.ko.md`](CONTRIBUTING.ko.md)
+
 Thank you for looking at this project. AIL is an early-stage design effort —
 a programming language, runtime, and OS designed for a world where AI is the
 primary author of code. At this stage, **design critique is as valuable as
