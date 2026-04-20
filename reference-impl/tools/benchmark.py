@@ -248,8 +248,15 @@ _LLM_HTTP_PATTERNS = (
 )
 
 _PY_IO_PATTERNS = (
-    r"\bopen\s*\(", r"\bsubprocess\b", r"\bos\.(system|remove|unlink|mkdir|"
-    r"chmod|rename|chdir|environ)", r"\bshutil\b", r"\binput\s*\(",
+    r"\bopen\s*\(", r"\bsubprocess\b",
+    # os.environ is a READ of runtime config — not a dangerous side
+    # effect. B/C tasks legitimately read an API key via
+    # os.environ["ANTHROPIC_API_KEY"]; flagging that as a side-effect
+    # violation produces a false 68%-100% rate on those categories.
+    # Keep only the patterns that actually mutate / trigger external
+    # effects.
+    r"\bos\.(system|remove|unlink|mkdir|chmod|rename|chdir)\b",
+    r"\bshutil\b", r"\binput\s*\(",
     r"\bsys\.exit\b", r"socket\.", r"urllib\.request\.urlretrieve",
 )
 

@@ -1967,5 +1967,6 @@
         "error": null
       }
     }
-  ]
+  ],
+  "rescored_note": "side-effect-in-pure metric was re-computed after fixing a false positive where os.environ READ was flagged as a side effect. The legitimate LLM-authentication pattern `os.environ['ANTHROPIC_API_KEY']` no longer counts as a harmful side effect. Re-scored 2026-04-20."
 }

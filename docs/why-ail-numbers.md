@@ -7,11 +7,17 @@ that you can download and diff yourself.
 
 The one sentence:
 
-> On the same task, with the same model, **Python code written by
-> an AI skips required error handling 40–86% of the time. AIL makes
-> that skip impossible.**
+> Across three models — an 8B open model, a 14B coder, and
+> Anthropic's frontier Claude Sonnet 4.6 — **Python code written
+> by an AI skips required error handling 42–86% of the time.
+> AIL's rate is 0%, on every model, because Result is part of
+> the grammar.**
 
-That's the harness claim, measured.
+That's the harness claim, measured. The number worth staring at:
+Sonnet 4.6 — a frontier model that routes LLM calls correctly
+**100% of the time** — still skips error handling on 70% of
+failable operations. Better models don't solve this. Only a
+grammatical guarantee does.
 
 ---
 
@@ -46,19 +52,31 @@ urllib requests, file opens — things that can raise):
 
 | Model | Python programs that skip error handling | AIL programs that skip it |
 |---|---|---|
-| qwen2.5-coder:14b | **42% (21/50)** | 0% by grammar — AIL's `Result` makes `is_ok`/`unwrap` part of the code the model must type |
-| llama3.1:8b | **86% (43/50)** | 0% by grammar |
+| llama3.1:8b (small open model) | **86% (43/50)** | 0% by grammar |
+| qwen2.5-coder:14b (mid coder) | **42% (21/50)** | 0% by grammar |
+| **claude-sonnet-4-6 (frontier)** | **70% (35/50)** | 0% by grammar |
 
-This isn't a cherry-picked metric. The Python programs that
-"work" — parse 100%, run cleanly, print a plausible answer —
-are the same programs that silently drop try/except on ~half
-(qwen) to ~all (llama) of their failable calls. AIL doesn't
-let the author skip. The Result type makes `is_ok` or
-`unwrap_or` part of the syntax you have to write.
+Sonnet 4.6 is the strongest model in the industry when this was
+written. It routes LLM calls correctly 100% of the time — the
+"silent LLM skip" mistake weaker models make (`if "love" in words:
+return "positive"`) is solved at this model tier. You no longer
+need AIL to prevent THAT mistake.
+
+But error-handling miss goes UP at the frontier tier compared to
+qwen14b (70% vs 42%). Why? Because Sonnet writes MORE real
+Python — it actually uses `urllib.request`, `json.loads`,
+`int()` for their intended purposes, instead of hardcoding. More
+failable operations in the code means more places where `try` /
+`except` is needed and skipped. AIL's rate stays 0% because
+`Result` is part of the grammar — the author has to type
+`is_ok` or `unwrap_or` at every failable boundary. There's no
+"just forget" option.
 
 Raw data:
-- [`2026-04-20_qwen25-coder-14b_opus50.json`](benchmarks/2026-04-20_qwen25-coder-14b_opus50.json)
 - [`2026-04-20_llama3.1-8b_opus50.json`](benchmarks/2026-04-20_llama3.1-8b_opus50.json)
+- [`2026-04-20_qwen25-coder-14b_opus50.json`](benchmarks/2026-04-20_qwen25-coder-14b_opus50.json)
+- [`2026-04-20_claude-sonnet-4-6_opus50.json`](benchmarks/2026-04-20_claude-sonnet-4-6_opus50.json)
+- Full analysis: [`2026-04-20_claude_sonnet46_summary.md`](benchmarks/2026-04-20_claude_sonnet46_summary.md)
 
 ---
 
@@ -149,8 +167,9 @@ AIL's parse rate is below Python's on every model tested:
 
 | Model | AIL parse (50 prompts) | Python parse |
 |---|---|---|
-| qwen2.5-coder:14b | 42% | 100% |
 | llama3.1:8b | 8% | 14% |
+| qwen2.5-coder:14b | 42% | 100% |
+| **claude-sonnet-4-6** | **36%** | **100%** |
 
 This is a real gap, not a benchmark artefact. It's also not a
 language-design problem — it's a **training-distribution**
@@ -174,8 +193,8 @@ training samples we now have are actually used.
 
 Current status against the 5 fine-tuning prerequisites:
 
-- ✅ Benchmark results from ≥ 2 base models
-- ✅ Prompt engineering exhausted (v1 / v2 / v3 all plateau)
+- ✅ Benchmark results from ≥ 2 base models (now **3**: llama8b, qwen14b, Sonnet 4.6)
+- ✅ Prompt engineering exhausted (v1 / v2 / v3 all plateau on qwen14b)
 - ✅ Primary failure mode identified (Python-distribution contamination)
 - ❌ AIL spec frozen for one version cycle
 - ✅ ≥ 200 validated (prompt, correct AIL) pairs — **205 today** ([`reference-impl/training/dataset/`](../reference-impl/training/dataset/))
@@ -244,8 +263,9 @@ hash. Short pointers:
 
 | Claim | File | Commit |
 |---|---|---|
-| qwen14b baseline (all 50) | [`2026-04-20_qwen25-coder-14b_opus50.json`](benchmarks/2026-04-20_qwen25-coder-14b_opus50.json) | f31e41c |
-| llama8b baseline | [`2026-04-20_llama3.1-8b_opus50.json`](benchmarks/2026-04-20_llama3.1-8b_opus50.json) | f31e41c |
+| qwen14b baseline (all 50) | [`2026-04-20_qwen25-coder-14b_opus50.json`](benchmarks/2026-04-20_qwen25-coder-14b_opus50.json) | f31e41c (rescored) |
+| llama8b baseline | [`2026-04-20_llama3.1-8b_opus50.json`](benchmarks/2026-04-20_llama3.1-8b_opus50.json) | f31e41c (rescored) |
+| claude-sonnet-4-6 frontier baseline | [`2026-04-20_claude-sonnet-4-6_opus50.json`](benchmarks/2026-04-20_claude-sonnet-4-6_opus50.json) | this commit |
 | Prompt v1 vs v2 (hybrid) | [`2026-04-20_qwen25-coder-14b_v2-forbidden_C.json`](benchmarks/2026-04-20_qwen25-coder-14b_v2-forbidden_C.json) | 654b0c0 |
 | Prompt v1 vs v3 (hybrid) | [`2026-04-20_qwen25-coder-14b_v3-more-fewshot_C.json`](benchmarks/2026-04-20_qwen25-coder-14b_v3-more-fewshot_C.json) | 5104b04 |
 
@@ -265,10 +285,14 @@ row, never an edit.
 - **Fine-tuned AIL beats Python across the board.** We haven't
   fine-tuned yet. That's the next experiment, and it has a gate
   (see the 5 prerequisites above).
-- **These numbers hold for every model.** Two models isn't a lot.
-  Claude and GPT-4 class models would likely push both parse
-  rates up; the relative harness gap is the hypothesis we expect
-  to hold, not a proven fact.
+- **These numbers hold for every model.** Three models is still
+  a small sample — we've shown the pattern on llama3.1:8b,
+  qwen2.5-coder:14b, and Claude Sonnet 4.6. GPT-5 / Gemini 2.5 /
+  Claude Opus 4.7 class runs would tighten the claim further.
+  The Sonnet 4.6 data point does show the expected shape: stronger
+  models route LLM calls correctly but still skip error handling
+  at a high rate, so the harness win survives moving to a
+  frontier model.
 
 The current evidence is strong enough to justify the investment
 but not strong enough to declare victory. This document will be

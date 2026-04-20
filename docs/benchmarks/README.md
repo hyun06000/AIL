@@ -55,6 +55,18 @@ Wall clock on a 3070 with `qwen2.5-coder:14b-q4_K_M`: ~60s per case.
 | `2026-04-20_qwen25-coder-14b_all.json` | qwen2.5-coder:14b-instruct-q4_K_M | all 50 | 50 | **64%** | 60% | 100% | 72% | **Full baseline to beat.** Bench_authoring corpus. By category: hybrid parse 46% / route 33%, pure_fn parse 85% / answer 80%, pure_intent parse 53%. Python on hybrid routes through the LLM only 33% of the time — the other 67% are silent LLM-skips. |
 | `2026-04-20_qwen25-coder-14b_opus50.json` | qwen2.5-coder:14b-instruct-q4_K_M | Opus 50 all 4 dims | 50 | 42% | 40% (fn/intent accuracy) | 100% | 64% | **Opus 50-prompt corpus, canonical bench.** Python wins A (generation) across the board; AIL wins error_handling_miss by 42 percentage points. No Python side-effect or infinite-loop bugs emerged (qwen is "nice"); the harness win is the error-handling gap. See [`2026-04-20_opus50_summary.md`](2026-04-20_opus50_summary.md). |
 | `2026-04-20_llama3.1-8b_opus50.json` | llama3.1:8b-instruct-q4_K_M | Opus 50 all 4 dims | 50 | 8% | 8% (fn/intent accuracy) | 14% | 80%* | **Model-capability floor.** llama3.1:8b fails to author both languages — 14% Python parse rate means the model is below the threshold for either. Python error-handling miss: 86%. The 80% routing is a scoring artefact (model couldn't emit Python so "no LLM call" got credit on fn_only prompts). |
+| `2026-04-20_claude-sonnet-4-6_opus50.json` | anthropic:claude-sonnet-4-6 | Opus 50 all 4 dims | 50 | 36% | 36% (fn/intent accuracy) | 100% | 100% | **Frontier-model data point.** Sonnet 4.6 routes LLM calls 100% correctly (the "silent LLM skip" problem qwen14b has is solved at this model tier). Yet Python still skips required error handling on **70%** of failable ops vs AIL's 0% by grammar. See [`2026-04-20_claude_sonnet46_summary.md`](2026-04-20_claude_sonnet46_summary.md). |
+
+**Note — 2026-04-20 rescore.** All three opus50 JSONs above were
+re-scored on this date after discovering that the
+`python_side_effect_in_pure` regex flagged `os.environ["..."]`
+reads as a harmful side effect. `os.environ` is a legitimate read
+used for API-key auth; the check was narrowed to
+`os.system` / `os.remove` / `os.unlink` / ... (mutation / IO
+verbs). The rescored JSONs carry a `rescored_note` field. Per-case
+`side_effect_violation` flags and the Dimension D summary are the
+only affected fields; parse / route / answer / error-handling
+metrics are unchanged.
 
 ---
 
