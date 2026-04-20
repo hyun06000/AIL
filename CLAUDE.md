@@ -1124,81 +1124,85 @@ Written by Claude Opus 4, April 2026, after reviewing 2026 industry trends in ha
 
 ---
 
-## SESSION STATE — 2026-04-20, LIVE FINE-TUNE RUN IN PROGRESS
+## SESSION STATE — 2026-04-20, BENCHMARK RUNNING (office → home handoff)
 
-Written by the Claude Code session that landed the v1.8 spec freeze,
-conformance-suite parity (45/45), and the first fine-tune training
-on the 205-sample dataset. Handing off mid-pipeline so the next
-Claude doesn't redo work or lose context.
+Written while the Mac-side session shuts down and hyun06000 commutes
+home to continue from a different Claude Code instance. Supersedes
+the earlier draft of this block — the export path changed mid-session
+and that shift is reflected below.
 
-### Where we are right now
+### What is finished (do not redo)
 
-1. ✅ **Spec frozen.** v1.8 grammar. [`spec/09-stability.md`](spec/09-stability.md).
-2. ✅ **Training unfrozen.** 5/5 Opus 4 prereqs met. [`reference-impl/training/HANDOFF.md`](reference-impl/training/HANDOFF.md) is the resumed runbook.
-3. ✅ **Fine-tune completed.** qwen2.5-coder-7b + QLoRA rank-16, 205 samples, 3 epochs, 7:25 wall time on the 3070. Loss 2.79 → 0.19. Adapter at `reference-impl/training/ail-coder-7b-lora/` (on homeblack, gitignored).
-4. 🟡 **Export in progress.** `tmux -t ail-export` on homeblack is running `export_to_ollama.py` (merge → GGUF → Q4_K_M → `ollama create ail-coder:7b`). 10–20 min total.
-5. ❌ **Benchmark not yet run** against the fine-tuned model.
-6. ❌ **Gate analysis + snapshot commit** not done.
+1. ✅ **v1.8 spec frozen.** [`spec/09-stability.md`](spec/09-stability.md).
+2. ✅ **Training track unfrozen.** 5/5 Opus 4 preconditions met; [`reference-impl/training/HANDOFF.md`](reference-impl/training/HANDOFF.md) is the current runbook.
+3. ✅ **Conformance suite at 45/45, zero skips.** The Go runtime closed its last two `.skip-go` markers (Result builtins, `attempt` blocks).
+4. ✅ **Fine-tune completed.** qwen2.5-coder-7b + QLoRA rank-16, 205 samples, 3 epochs, 7:25 wall time on the 3070. Loss trajectory 2.79 → 0.19. Adapter lives at `~/AIL/reference-impl/training/ail-coder-7b-lora/` on homeblack (gitignored).
+5. ✅ **Ollama export completed via manual pipeline.** `export_to_ollama.py` as-written is broken on this box (see next section). Ran llama.cpp's conversion tooling by hand instead. `ail-coder:7b` is registered on Ollama at `10.0.0.1:11434`, ID `5d44129bd0e4`, 4.7 GB, sanity-tested with a one-prompt `ollama run` that produced clean AIL.
 
-### How to pick up
+### What is running (don't restart it)
 
-**Connect to the 3070:** alias `homeblack` is configured in `~/.ssh/config` (HostName `10.0.0.1`, User `david`) — `ssh homeblack "..."` just works.
+🟡 **50-prompt benchmark**, tmux session `ail-bench` on homeblack. Launched 2026-04-20 at ~10:20 UTC. ETA 45–60 min. Log at `~/ail-bench.log`. Writes snapshot to `docs/benchmarks/2026-04-20_ail-coder-7b-v2_opus50.json`.
 
-**Check export state:**
+Check progress:
 ```bash
-ssh homeblack 'tmux ls; tail -40 ~/ail-export.log; OLLAMA_HOST=10.0.0.1:11434 ollama list | grep ail-coder'
+ssh homeblack 'tmux ls; tail -40 ~/ail-bench.log; ls -lh ~/AIL/docs/benchmarks/2026-04-20_ail-coder-7b-v2_opus50.json 2>/dev/null'
 ```
-Export done when the log has `Transferring model data` / `writing manifest` and `ollama list` shows `ail-coder:7b` with a recent timestamp.
 
-**Ollama host quirk.** The service listens on `10.0.0.1:11434` (not the default `127.0.0.1`). Client calls need `OLLAMA_HOST=10.0.0.1:11434` or they return "could not connect." The systemd unit sets this in `Environment=` but ad-hoc CLI calls don't inherit it.
+### What NOT to touch on homeblack
 
-**Run the benchmark** once export lands:
-```bash
-ssh homeblack 'cd ~/AIL && source ~/venv/labs/bin/activate && \
-  export OLLAMA_HOST=10.0.0.1:11434 AIL_OLLAMA_MODEL=ail-coder:7b AIL_OLLAMA_TIMEOUT_S=600 && \
-  tmux new -d -s ail-bench "python reference-impl/tools/benchmark.py \
-    --out docs/benchmarks/$(date +%F)_ail-coder-7b-v2_opus50.json \
-    2>&1 | tee ~/ail-bench.log"'
-```
-45–60 minutes on the 3070. Note the `v2` suffix — a `v1` run (different dataset, 80 samples, different adapter) is in git history at `b7fcf80` but was wiped from homeblack; don't conflate the two.
+- **`export_to_ollama.py` is effectively broken on this box.** Unsloth's GGUF-save path internally tries `sudo apt-get update` to install build tools, blocks forever waiting for a password on a non-interactive shell. The running export was killed (pid 92226 gone). Do NOT re-run `python reference-impl/training/export_to_ollama.py`. The replacement manual pipeline already finished — artifacts are:
+  - `~/AIL/reference-impl/training/ail-coder-7b-gguf/` — merged fp16 HF dir (15 GB, intermediate; can be deleted to reclaim disk)
+  - `~/AIL/reference-impl/training/ail-coder-7b.f16.gguf` — 15 GB f16 GGUF (intermediate; can be deleted)
+  - `~/AIL/reference-impl/training/ail-coder-7b.Q4_K_M.gguf` — **4.4 GB, this is what Ollama's `FROM` points at**
+  - `~/AIL/reference-impl/training/Modelfile.ail-coder-7b-v2` — the Modelfile used with `ollama create`
+- **`b7fcf80` history is gone** from homeblack (hyun06000 wiped the box earlier this session and re-cloned). The `v1` run's 80-sample / 2-epoch adapter and its `2026-04-19_ail-coder-7b_all.json` are NOT on disk. Don't try to resurrect the old branch.
 
-### The three gates (from b7fcf80's analysis)
+### Environment quirks that wasted time today
 
-The prior run missed the gate. Same three questions this run:
+Write these down before touching the box:
 
-| Gate | Target | Prior v1 (80 samples) | This v2 (205 samples) |
-|---|---|---|---|
-| G1 AIL overall parse | ≥ 80% | 70% — FAIL | ? |
-| G2 AIL hybrid route > Python hybrid route | AIL > Python | 47% vs 67% — FAIL | ? |
-| G3 AIL pure_fn answer ≥ Python pure_fn answer | AIL ≥ Python | 75% tie — PASS | ? |
+1. **`homeblack` SSH alias** is in `~/.ssh/config` (HostName `10.0.0.1`, User `david`). Key already authorized. `ssh homeblack '...'` just works.
+2. **Ollama binds `10.0.0.1:11434`, NOT `127.0.0.1`.** `ollama list` returns "could not connect" without `OLLAMA_HOST=10.0.0.1:11434`. The systemd `Environment=` sets it for the service but not for your shell.
+3. **Virtualenv `~/venv/labs` is uv-managed with no `pip` binary.** Use `VIRTUAL_ENV=~/venv/labs ~/.local/bin/uv pip install ...` to install into it. The training stack is there (unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128). `source` alone may not work through non-interactive ssh — reach for `~/venv/labs/bin/python` directly.
+4. **No `cmake` on the system at session start.** Installed into the venv (`uv pip install cmake`, version 4.3.1). `gcc`/`g++`/`make` are system-installed and work.
+5. **No `sudo` without a password.** All pipeline steps must work in userspace or pip-installed. This is why `export_to_ollama.py` broke and why llama.cpp was cloned to `~/llama.cpp/` and built locally.
 
-If G1 passes (≥ 80% parse), the dataset expansion worked. If it still misses but improves over 70%, data scaling is the right lever but more is needed (500–1000 next). If parse rate didn't move meaningfully, something else is wrong (LR, rank, hyperparameters) before throwing more data at it.
+### Where the home Claude picks up
 
-### Smoke-test findings (already observed)
+The benchmark either is still running or has finished. Check first (command above). Then:
 
-Loaded the adapter manually with the AIL system prompt from `to_chatml.py` and generated for three prompts. Two observations to carry in:
+1. **If benchmark is still running:** tail the log. No action needed until it finishes.
+2. **Once the JSON lands:**
+   ```bash
+   ssh homeblack 'cat ~/AIL/docs/benchmarks/2026-04-20_ail-coder-7b-v2_opus50.json' | jq '.summary'
+   ```
+   Read the three scores.
+3. **Score against the three gates** (from b7fcf80 post-mortem; same bar):
 
-1. **AIL-shape output is reliable** — the model does produce `pure fn`, `intent`, `entry main` forms correctly in response to plain-English prompts. The Python-prose output when prompted without the system prompt confirms the system prompt is load-bearing; `ail ask` and `tools/benchmark.py` both send it by default, so benchmark results should reflect system-prompted behavior.
-2. **Python prior still leaks.** One of the three smoke outputs used `winner = if alice > bob { "A" } else { "B" }` — treating `if` as an expression. Not legal AIL. Exactly the failure mode b7fcf80's post-mortem flagged (List[Number], ternary, kwargs, bracket indexing). Expect parse failures to cluster around these patterns.
+   | Gate | Target | v1 (80 samples, 2 epochs) | v2 (205 samples, 3 epochs) |
+   |---|---|---|---|
+   | G1 AIL overall parse | ≥ 80% | 70% — FAIL | ? |
+   | G2 AIL hybrid route > Python | AIL > Python | 47% vs 67% — FAIL | ? |
+   | G3 AIL pure_fn answer ≥ Python | AIL ≥ Python | 75% tie — PASS | ? |
 
-### After the benchmark lands
+4. **Write the summary** at `docs/benchmarks/2026-04-20_ail-coder-7b-v2_analysis.md`. Sibling file to `2026-04-20_claude_sonnet46_summary.md`; same shape. Required content: per-category table, the three gate verdicts, failure-mode counts in the AIL parse fails (how many are `List[Number]` / `Array<T>`-style, how many are `if`-as-expression, how many are bracket indexing, how many are kwargs). The Python-prior leak pattern is the documented v1 failure mode — if v2 reproduces it, call that out.
+5. **Commit snapshot + analysis** to `docs/benchmarks/` and add a row to `docs/benchmarks/README.md`'s snapshot table. Commit message: one line on which gates passed/missed, one line on whether the failure-mode changed relative to v1.
+6. **Do NOT update `README.md` headline numbers** on your own. Those are the public pitch and a silent regression there is the worst outcome. Even if G1 cleanly passes, coordinate with hyun06000 before editing the headline table.
 
-1. `ssh homeblack 'cat ~/AIL/docs/benchmarks/2026-04-*_ail-coder-7b-v2_opus50.json' | jq '.summary'` — read the numbers.
-2. Compare to the three gates above.
-3. Write a summary at `docs/benchmarks/2026-04-20_ail-coder-7b-v2_analysis.md` — sibling to the claude-sonnet-4-6 summary already in that directory. Per-category table, failure-mode counts (how many parse errors are `[T]`-style, how many `if`-as-expression, etc.), recommendation for the next run.
-4. Commit snapshot + analysis to `docs/benchmarks/`. Update the snapshot table in `docs/benchmarks/README.md`.
-5. **Do NOT** auto-update the `README.md` headline numbers if the gate missed. Those numbers are the public pitch; landing a regression as headline would hurt. If G1 passed cleanly, that becomes a candidate headline update — but coordinate with hyun06000 first.
+### Smoke-test findings (already verified this session — carry forward)
 
-### Hard rules that still stand (from HANDOFF.md)
+- **Adapter produces AIL-shape output reliably** when prompted with the system prompt from `reference-impl/training/to_chatml.py::AIL_SYSTEM_PROMPT`. The Modelfile used with `ollama create` bakes the system prompt in, so `ollama run ail-coder:7b "..."` and the benchmark both get it for free.
+- **Python-prior pattern leak is still present.** A smoke-test output used `winner = if a > b { "A" } else { "B" }` — treating `if` as an expression, not legal AIL. Matches exactly the v1 post-mortem. Expect this class of error to dominate the AIL parse failures.
 
-- Don't push to HuggingFace without explicit go from hyun06000.
-- Don't edit the prereq list or gate targets to make a failed run count as success. Honest numbers only.
-- Don't grow the spec during a fine-tune cycle. Grammar change = fine-tune invalidated.
-- Training artifacts (adapter, gguf, checkpoints) are gitignored — keep them out of commits.
+### Hard rules (do not bend)
 
-### Things NOT to touch
+- No HuggingFace push, no public promotion without explicit go from hyun06000.
+- Don't edit gate targets or prereq list to make a missed gate read as success. Honest numbers only.
+- Training artifacts (adapter, gguf, checkpoints) are gitignored. Don't commit them.
+- Don't modify the AIL grammar while a fine-tune generation is being evaluated. Grammar churn invalidates the fine-tune.
 
-- `b7fcf80` on homeblack is gone. User wiped the box and recloned fresh. Don't resurrect the old branch or the old benchmark JSON (`2026-04-19_ail-coder-7b_all.json`). The v1 run is lineage, not evidence.
-- The `CLAUDE.md.bak` file in the repo root is not tracked and should stay that way. It's a local user backup.
+### Local Mac session at handoff
 
-*Handoff written 2026-04-20 while export was running. If you're reading this and the export finished minutes ago, the benchmark is the immediate next move.*
+The Mac-side session (this one, pre-handoff) had a `ScheduleWakeup` set for ~60 min post-benchmark-launch to auto-analyze results. That wakeup will fire on the Mac, not at home — home Claude is a separate instance. If hyun06000 works from home while the Mac is also on, both instances can safely poll homeblack (the bench is file-output-based, no race). First-to-arrive does the analysis.
+
+*Update written 2026-04-20 ~10:25 UTC after launching the benchmark and before commute.*
