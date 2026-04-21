@@ -608,6 +608,124 @@ CANON: dict[str, dict] = {
             '}'
         ),
     },
+
+    # ------------------------------------------------------------------
+    # R3 failure patterns — added after Round 3 benchmark analysis
+    # ------------------------------------------------------------------
+
+    # A12: unique/dedup — avoid dict, use `in` operator check
+    "fn_list_unique": {
+        "ail": (
+            'pure fn deduplicate(items: [Number]) -> [Number] {\n'
+            '    result = []\n'
+            '    for item in items {\n'
+            '        if not (item in result) { result = append(result, item) }\n'
+            '    }\n'
+            '    return result\n'
+            '}\n'
+            'entry main(x: Text) { return deduplicate([1, 3, 2, 3, 1, 4, 2, 5]) }'
+        ),
+        "expected": "[1, 3, 2, 4, 5]",
+    },
+
+    # A13/C09: frequency count — encode as "char:count" pairs without dict
+    "fn_text_char_freq": {
+        "ail": (
+            'pure fn count_char(s: Text, ch: Text) -> Number {\n'
+            '    count = 0\n'
+            '    for c in split(s, "") {\n'
+            '        if c == ch { count = count + 1 }\n'
+            '    }\n'
+            '    return count\n'
+            '}\n'
+            'pure fn unique_chars(s: Text) -> [Text] {\n'
+            '    chars = split(s, "")\n'
+            '    result = []\n'
+            '    for c in chars {\n'
+            '        if not (c in result) { result = append(result, c) }\n'
+            '    }\n'
+            '    return sort(result)\n'
+            '}\n'
+            'entry main(x: Text) {\n'
+            '    s = "mississippi"\n'
+            '    chars = unique_chars(s)\n'
+            '    pairs = []\n'
+            '    for c in chars {\n'
+            '        pairs = append(pairs, join([c, ":", to_text(count_char(s, c))], ""))\n'
+            '    }\n'
+            '    return join(pairs, ", ")\n'
+            '}'
+        ),
+        "expected": "i:4, m:1, p:2, s:4",
+    },
+
+    # A14: Fibonacci — use to_text when joining numbers
+    "fn_fibonacci_sequence": {
+        "ail": (
+            'pure fn fib(n: Number) -> Number {\n'
+            '    if n <= 1 { return n }\n'
+            '    return fib(n - 1) + fib(n - 2)\n'
+            '}\n'
+            'entry main(x: Text) {\n'
+            '    results = []\n'
+            '    for i in range(0, 8) {\n'
+            '        results = append(results, to_text(fib(i)))\n'
+            '    }\n'
+            '    return join(results, ", ")\n'
+            '}'
+        ),
+        "expected": "0, 1, 1, 2, 3, 5, 8, 13",
+    },
+
+    # C18: sort with named fn key — no anonymous fn in sort()
+    # Shows the pattern: define pure fn, pass name to sort.
+    # (alphabetical sort by name extracted from "name:score" pairs)
+    "fn_sort_by_key": {
+        "ail": (
+            'pure fn name_key(pair: Text) -> Text {\n'
+            '    return get(split(pair, ":"), 0)\n'
+            '}\n'
+            'entry main(x: Text) {\n'
+            '    pairs = ["Charlie:78", "Alice:85", "Bob:92"]\n'
+            '    return join(sort(pairs, name_key), ", ")\n'
+            '}'
+        ),
+        "expected": "Alice:85, Bob:92, Charlie:78",
+    },
+
+    # C01: hybrid where pure fn parses list, entry calls intent per item
+    "hybrid_parse_then_classify_each": {
+        "ail": (
+            'intent classify_student(name: Text, score: Text) -> Text {\n'
+            '    goal: pass_or_fail\n'
+            '}\n'
+            'pure fn parse_entry(pair: Text) -> [Text] {\n'
+            '    return split(pair, ":")\n'
+            '}\n'
+            'entry main(x: Text) {\n'
+            '    pairs = split("Alice:85,Bob:92,Charlie:78", ",")\n'
+            '    results = []\n'
+            '    for pair in pairs {\n'
+            '        parts = parse_entry(pair)\n'
+            '        name = trim(get(parts, 0))\n'
+            '        score = trim(get(parts, 1))\n'
+            '        label = classify_student(name, score)\n'
+            '        results = append(results, join([name, ": ", label], ""))\n'
+            '    }\n'
+            '    return join(results, ", ")\n'
+            '}'
+        ),
+    },
+
+    # C20: intent must always have { goal: ... } body
+    "intent_with_goal_body": {
+        "ail": (
+            'intent summarize(text: Text) -> Text {\n'
+            '    goal: one sentence summary\n'
+            '}\n'
+            'entry main(x: Text) { return summarize(x) }'
+        ),
+    },
 }
 
 
