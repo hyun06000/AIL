@@ -1186,6 +1186,22 @@ Opus 4의 지침과 충돌 시 이 블록이 우선한다.
 
 현재 세션은 `dev` 브랜치에서 진행 중. homeblack도 `dev`를 pull해서 사용.
 
+### 규칙 5 — 커밋할 때마다 SESSION STATE 업데이트 (2026-04-22 도입, 영구 규칙)
+
+**모든 커밋 후 반드시 CLAUDE.md의 SESSION STATE를 업데이트하고 즉시 push한다.**
+
+업데이트 내용:
+- 방금 완료한 것 (✅ 체크리스트 형식)
+- 다음 우선순위 (번호 순서, 구체적인 커맨드/파일 경로 포함)
+- 프로젝트 상태 변화 (벤치마크 수치, 브랜치 상태, homeblack 환경 변화 등)
+
+**이유:** 여러 Claude Code 세션(사무실/집/서버)이 동시에 작업한다. SESSION STATE가 최신이어야 어느 세션이든 `git pull` 한 번으로 동일한 컨텍스트를 가지고 이어받을 수 있다. SESSION STATE가 오래된 것은 없는 것보다 나쁘다 — 틀린 정보로 작업하게 된다.
+
+**형식 규칙:**
+- 이전 SESSION STATE는 HISTORICAL로 표시하고 `git show <hash>:CLAUDE.md`로 복원 가능하다고 명시 후 내용 삭제
+- 새 SESSION STATE는 파일 맨 끝에 추가
+- 벤치마크 수치가 바뀌면 표도 반드시 갱신
+
 ---
 
 ## SESSION STATE — 2026-04-20/21 HISTORICAL (superseded below)
