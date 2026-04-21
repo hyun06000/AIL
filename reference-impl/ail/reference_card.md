@@ -250,6 +250,15 @@ has_effect_origin(value: Any) -> Boolean     // true iff a perform is anywhere i
 calibration_of(intent_name: Text) -> Record  // bucket stats for an intent
 ```
 
+### Self-reflection (AIL programs that reason about AIL)
+```
+ail_parse_check(source: Text) -> Result[Text]   // ok(source) if valid, error(msg) if not
+```
+Pure — parses only, does not execute. Distinct from `eval_ail(source, input)`
+which runs the inner program and is therefore impure. Use `ail_parse_check`
+when you need to validate syntactic correctness of generated AIL without
+firing any intents or effects it declares.
+
 Origin kinds: `"literal"`, `"input"`, `"fn"`, `"intent"`, `"builtin"`, `"attempt"`, `"effect"`.
 Intent and effect origins additionally carry `at` (ISO-8601 timestamp).
 Intent origins also carry `model_id`.

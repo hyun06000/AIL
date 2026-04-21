@@ -965,6 +965,25 @@ class Executor:
                 eval_input = raw[1] if len(raw) >= 2 else ""
                 return self._eval_ail_source(source_text, eval_input, conf)
 
+        if name == "ail_parse_check":
+            # ail_parse_check(source: Text) -> Result[Text]
+            # Returns ok(source) if the given source parses as a valid AIL
+            # program; error(message) otherwise. Pure: does NOT execute, does
+            # NOT dispatch intents, has no side effects. Exists so that AIL
+            # programs can evaluate other AIL programs' syntactic validity —
+            # the primitive that HEAAL's self-hosting evaluator needs.
+            if len(raw) >= 1 and isinstance(raw[0], str):
+                src = raw[0]
+                try:
+                    from .. import compile_source
+                    compile_source(src)
+                    return ConfidentValue(
+                        {"_result": True, "ok": True, "value": src}, conf)
+                except Exception as e:
+                    return ConfidentValue(
+                        {"_result": True, "ok": False,
+                         "error": f"{type(e).__name__}: {e}"}, conf)
+
         # --- Result type (v1.1) ---
         # ok(value) -> {"_result": True, "ok": True, "value": V}
         # error(msg) -> {"_result": True, "ok": False, "error": E}
