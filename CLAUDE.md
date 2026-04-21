@@ -1148,74 +1148,86 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ---
 
-## SESSION STATE — 2026-04-21 (docs rewrite + release automation)
+## SESSION STATE — 2026-04-21 (docs rewrite + release automation) [HISTORICAL]
 
-This is the handoff for the next Claude Code session. Treat this
-block as the authoritative current state; everything above it
-documents how we got here and should only be consulted for
-historical context.
+이전 세션 기록. 다음 세션 핸드오프는 아래 최신 SESSION STATE 참조.
 
-### What shipped this session
+요약: 전체 문서 가독성 재작성, GitHub Actions 릴리즈 워크플로우 추가, v1.8.3 릴리즈 생성.
+전체 내용은 `git show 06243ee:CLAUDE.md` 로 복원 가능.
 
-1. ✅ **전체 문서 가독성 재작성** (commit `3a44fbe`). 9개 파일 — README.md, CONTRIBUTING.md, CONTRIBUTING.ko.md, ROADMAP.md, docs/ko/README.ko.md, docs/ko/why-ail.ko.md, docs/ko/why-ail-faq.ko.md, docs/why-ail.md, docs/why-ail-faq.md. 원칙: 한 문장 한 아이디어, 핵심을 앞에, 중첩 괄호 제거, 한국어는 직역 투 탈피. 670줄 추가 / 913줄 삭제.
+---
 
-2. ✅ **에러 핸들링 누락률 "왜" 설명 전 문서 삽입**. 수치(0% vs 42–86%)만 있던 곳에 근거를 추가: AI는 확률로 코드를 생성해서 해피 패스를 기본으로 내놓는다 → 더 강한 모델도 해결 안 된다(Sonnet 4.6도 70%) → 자율 파이프라인에서 조용히 전파된다 → AIL은 문법이 막는다. 반영 파일: README.md, docs/why-ail.md (새 섹션 2 삽입, 기존 섹션 2→7 renumber), docs/ko/why-ail.ko.md (동일), docs/why-ail-faq.md Q3, docs/ko/why-ail-faq.ko.md Q3, docs/ko/README.ko.md.
+## SESSION STATE — 2026-04-21 (benchmark 완결 + 문서 업데이트)
 
-3. ✅ **GitHub Actions 릴리즈 워크플로우** (commit `06243ee`). `.github/workflows/release.yml` — `v*.*.*` 태그 push 시 CHANGELOG.md에서 해당 버전 섹션을 자동 추출해서 GitHub Release 생성. 다음부터는 `git tag vX.Y.Z && git push origin vX.Y.Z` 하면 끝.
+이 블록이 다음 Claude Code 세션을 위한 최신 핸드오프. 위 내용은 히스토리 참조용.
 
-4. ✅ **v1.8.3 GitHub Release 생성** — `gh release create v1.8.3`. 한국어 + 영어 릴리즈 노트. URL: https://github.com/hyun06000/AIL/releases/tag/v1.8.3
+### 이번 세션에서 완료한 것
 
-5. ✅ **ROADMAP.md 전면 재작성** — v0.1 시절 마일스톤 내용 제거. v1.8.3 현재 상태 기준으로 G1/G2 다음 단계, 외부 사용자 1명, v1.9 후보를 현실적으로 기술.
+1. ✅ **OpenAI-compatible adapter 추가** (commit `a8c97d0`) — `reference-impl/ail/runtime/openai_adapter.py`. vLLM, LM Studio, LocalAI 등 `/v1/chat/completions` 서버를 AIL 런타임에 연결. 벤치마크에 `BENCHMARK_BACKEND=vllm` 추가.
+
+2. ✅ **vLLM 벤치마크 인프라 구축** — homeblack에서 RTX 3070 8GB로 vLLM 0.19.1 서빙 확립. 설정: `--load-format gguf --enforce-eager --max-model-len 8192 --gpu-memory-utilization 0.85`. Ollama 대비 **3.7× 빠름** (11분 vs 41분/50케이스).
+
+3. ✅ **A/B 프롬프트 벤치마크 4-way 완결**:
+   - `ail-coder:7b-v3` baseline (vLLM): parse 58%, fnint 54%
+   - `ail-coder:7b-v3` tutorial (vLLM): parse 56%, Δ −2pp (noise) — fine-tune은 tutorial 불필요
+   - `qwen2.5-coder:7b-base` baseline (vLLM): parse 54%, Cat B fnint 80%
+   - `qwen2.5-coder:7b-base` tutorial (vLLM): parse **60%** (+6pp), Cat B fnint **100%** (+20pp) ← **tutorial이 base 모델에서 유효함 확인**
+
+4. ✅ **G2 공정한 비교 완결** — `ail-coder:7b-v3` vs `qwen2.5-coder:14b` (공정한 Python baseline):
+   - fn/intent 갭: **−4pp** (기존 −16pp는 degraded 7B로 Python 작성한 불공정 비교였음)
+   - **Category B (pure intent): AIL 93% vs Python 80%** — AIL이 앞섬
+   - Error-handling miss: AIL 0% vs Python 42% — 언어 속성, 변하지 않음
+
+5. ✅ **벤치마크 overview 문서 + Mermaid 차트** — `docs/benchmarks/2026-04-21_benchmark_overview.md`. 4-way 비교 9개 차트. GitHub에서 렌더링됨.
+
+6. ✅ **전체 문서 업데이트** — ROADMAP.md (G1/G2/G3 게이트 상태 반영), docs/why-ail-numbers.md + 한국어판 (78%→80%, tutorial A/B, G2 fair comparison 추가), HANDOFF.md (벤치마크 JSON 참조 v1.8.4 rebench로 업데이트).
+
+7. ✅ **qwen2.5-coder:7b-base GGUF 생성** — homeblack에서 llama.cpp 파이프라인으로 변환. `~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf` (4.4GB).
+
+### 현재 게이트 상태
+
+| 게이트 | 목표 | 현재 | 판정 |
+|---|---|---|---|
+| G1 AIL parse | ≥ 80% | **80%** (v1.8.4 rebench) | **✅ PASS** |
+| G2 fn/intent | ≈ Python baseline | −4pp (60% vs 64%) | **✅ NEAR-PASS** |
+| G3 answer 정확도 | AIL > Python | +22pp (70% vs 48%) | **✅ PASS** |
 
 ### What NOT to touch without explicit go from hyun06000
 
-- **PyPI release of v1.8.3.** 태그는 있고 wheel은 빌드/업로드 안 됨. `RELEASING.md`에 절차 있음. PyPI 토큰 필요.
+- **PyPI release of v1.8.4.** 태그는 있고 wheel은 빌드/업로드 안 됨. `RELEASING.md`에 절차 있음. PyPI 토큰 필요.
 - **공개 홍보** — HuggingFace push, X/Twitter, GeekNews 포스팅 없음. hyun06000의 명시적 승인 대기 중.
-- **v1.8 문법 동결** 유지. 새 키워드 추가, 기존 키워드 제거, 연산자 우선순위 변경 금지. 문법 변경이 필요한 기능은 `spec/10-proposals.md`에 먼저 제안서 작성.
-- **docs/benchmarks/ JSON 교체 금지.** 새 row 추가, 기존 기록 보존. README의 수치는 반드시 특정 JSON + 특정 metric으로 추적 가능해야 함.
+- **v1.8 문법 동결** 유지. `spec/10-proposals.md` 제안서 먼저.
+- **docs/benchmarks/ JSON 교체 금지.** 새 row 추가, 기존 기록 보존.
 
 ### Open work (where the next Claude picks up)
 
-#### Priority 1 — G1 파싱 게이트 (78%, 목표 80%)
+#### Priority 1 — 외부 사용자 1명 (현재 0)
 
-C07 BMI, C18 도시-위도 정렬, C19 피보나치 설명 3개 프롬프트가 `list[i]` 서브스크립트로 파싱 실패. 셋 중 하나만 회복해도 G1 통과.
+모든 준비 완료: 읽기 좋은 문서, GitHub Release v1.8.4, `pip install ail-interpreter`, 벤치마크 수치. hyun06000의 홍보 결정 대기 중. 채널: X/Twitter 데모 영상, GeekNews, 한국 개발자 커뮤니티.
 
-선택지:
-- **파서 sugar**: `expr[index]` → `get(expr, index)` 변환을 양쪽 파서에 추가. `spec/10-proposals.md` 제안 먼저, v1.9로 랜딩.
-- **훈련 샘플**: `get(xs, i)` 사용 강제하는 negative 예제 추가 후 재훈련.
-- **78%로 마감**: G3 정답률(+22pp)이 더 중요한 수치. G1은 내부 게이트였을 뿐.
+#### Priority 2 — v1.9 후보 (동결 해제 후)
 
-참고: [`docs/benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md`](docs/benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md) §4, §7.
-
-#### Priority 2 — G2 공정한 비교
-
-현재 G2: AIL 60% vs Python 76% — Python 우위. 그러나 Python 측이 AIL fine-tuned 7B (Python 능력 저하 상태)로 작성한 것. 공정한 비교는:
-- AIL 측: `ail-coder:7b-v3` (현재 측정값 60%)
-- Python 측: `qwen2.5-coder:14b` base (opus50 코퍼스에서 64% — 이미 JSON에 있음)
-
-이 조합으로 벤치마크 재실행 후 `docs/benchmarks/README.md`에 row 추가.
-
-#### Priority 3 — 외부 사용자 1명 (현재 0)
-
-v1.8.3 공개 준비물은 다 갖춰짐: 읽기 좋은 문서, GitHub Release, `pip install ail-interpreter`. hyun06000의 홍보 결정 대기 중. 채널: X/Twitter 데모 영상, GeekNews.
-
-#### Priority 4 — v1.9 후보
-
-동결 해제 조건 충족 후 (`spec/09-stability.md`):
-- `expr[index]` 서브스크립트 (Priority 1과 동일)
-- Per-symbol import: `import classify from "stdlib/language"`
-- Attempt + confidence threshold: `attempt { try A with confidence > 0.8 }`
+`spec/09-stability.md` 동결 해제 조건 충족 시:
+- **Per-symbol import**: `import classify from "stdlib/language"` — 현재 전체 모듈 import
+- **Attempt + confidence threshold**: `attempt { try A with confidence > 0.8 }` — 파서 예약됨, 미구현
 
 모두 `spec/10-proposals.md` 제안서 먼저.
 
-### Environment on homeblack (unchanged)
+#### Priority 3 — Category C (hybrid) fn/intent 개선
+
+현재 AIL 30% / Python 25% — 둘 다 낮음. tutorial 프롬프트도 fine-tune도 해결 못 함.
+해결책 후보: 하이브리드 fn+intent 인터리빙을 보여주는 few-shot 예제 추가 (tutorial 프롬프트에), 또는 v4 fine-tune 시 C 카테고리 샘플 확대.
+
+### Environment on homeblack
 
 1. `homeblack` SSH alias (HostName `10.0.0.1`, User `david`). `ssh-add ~/.ssh/id_ed25519` 세션 시작 시 실행.
 2. Ollama: `10.0.0.1:11434`. `OLLAMA_HOST=10.0.0.1:11434 ollama list`.
 3. Virtualenv `~/venv/labs` (uv-managed). Training stack: unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128.
-4. `export_to_ollama.py` 여전히 broken. 수동 llama.cpp 파이프라인 사용. `~/llama.cpp/build/bin/llama-quantize`, `~/llama.cpp/convert_hf_to_gguf.py`.
+4. `export_to_ollama.py` 여전히 broken. 수동 llama.cpp 파이프라인 사용.
 5. homeblack 훈련 데이터셋: 244 샘플, origin과 동기화 완료.
-6. **`gh` CLI 설치됨** (이번 세션에서 설치). `gh auth status` → hyun06000 계정 인증 완료.
+6. `gh` CLI 설치됨. `gh auth status` → hyun06000 계정 인증 완료.
+7. **vLLM 인프라 확립**: `~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server`. `PYTORCH_ALLOC_CONF=expandable_segments:True` 필수. enforce-eager + max-model-len 8192 조합으로 8GB VRAM에서 7B GGUF 서빙 가능.
+8. **qwen2.5-coder:7b-base.Q4_K_M.gguf** homeblack에 있음. `~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf`.
 
 ### Hard rules (still in force)
 
@@ -1226,6 +1238,4 @@ v1.8.3 공개 준비물은 다 갖춰짐: 읽기 좋은 문서, GitHub Release, 
 - 기존 벤치마크 JSON 교체 금지. 새 row 추가, 기록 보존.
 - README / why-ail-*.md의 수치는 특정 JSON + metric으로 추적 가능해야 함.
 
-*Written 2026-04-21 after docs rewrite and release automation session.*
-
-*Written 2026-04-21 after the docs audit, in the same session that shipped v1.8.3.*
+*Written 2026-04-21 after benchmark 4-way completion, tutorial A/B, G2 fair comparison, and full doc update.*

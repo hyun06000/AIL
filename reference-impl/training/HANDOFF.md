@@ -18,7 +18,7 @@ version of this file. The prior text is in git history — `git show
 | v3 Q4_K_M GGUF | `~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf` | **4.4 GB, Ollama's `FROM` target** |
 | v3 Modelfile | `~/AIL/reference-impl/training/Modelfile.ail-coder-7b-v3` | Baked-in SYSTEM prompt (matches `to_chatml.py::AIL_SYSTEM_PROMPT`) |
 | Ollama registration | `ail-coder:7b-v3` @ `10.0.0.1:11434`, ID `06e5e7ce2c72` | Served by the running Ollama |
-| Benchmark JSON | [`../../docs/benchmarks/2026-04-21_ail-coder-7b-v3_opus50.json`](../../docs/benchmarks/2026-04-21_ail-coder-7b-v3_opus50.json) | 50-prompt run, 78% parse / 70% answer |
+| Benchmark JSON | [`../../docs/benchmarks/2026-04-21_ail-coder-7b-v3-rebench-v1.8.4_opus50.json`](../../docs/benchmarks/2026-04-21_ail-coder-7b-v3-rebench-v1.8.4_opus50.json) | 50-prompt run under v1.8.4, **80% parse** / 70% answer (G1 ✅) |
 
 All Opus 4 preconditions still hold as of v1.8.3 — the training
 track is open and will stay open as long as the v1.8 freeze is in

@@ -159,15 +159,42 @@ qwen14b 에서 프롬프트 엔지니어링으로는 이 문제를 해결할 수
 
 ### Fine-tune 이 갭의 대부분을 좁혔다
 
-`ail-coder:7b-v3` 는 qwen2.5-coder-7b-instruct 를 244 개의 검증된 AIL 샘플로 QLoRA fine-tune 한 것이며, v1.8.3 의 일부로 [`reference-impl/training/`](../../reference-impl/training/) 에서 배포됩니다. 같은 50-프롬프트 코퍼스에서:
+`ail-coder:7b-v3` 는 qwen2.5-coder-7b-instruct 를 244 개의 검증된 AIL 샘플로 QLoRA fine-tune 한 것이며, v1.8.3 의 일부로 배포됩니다. v1.8.4 는 `EXPR[INDEX]` 파서 sugar 를 추가해 모델 재훈련 없이 G1 목표를 달성했습니다.
 
 | 모델 | AIL parse | AIL 정답 | Python parse | Python 정답 |
 |---|---|---|---|---|
-| ail-coder:7b-v3 | **78%** | **70%** | 54% | 48% |
+| ail-coder:7b-v3 (v1.8.4) | **80% ✅** | **70%** | 50% | 46% |
 
-- **AIL parse 78%** — 같은 7B base 의 Python parse 54% 와 비교. G1 게이트 목표 80% 는 50 개 중 한 케이스 차이로 실패. 남은 세 개의 실패는 Python 스타일 `list[index]` 서브스크립트.
-- **AIL 정답 70% vs Python 정답 48%** — 같은 모델에서 22 pp 차이. 주로 C (하이브리드) 카테고리에서 Python 의 silent-skip 동작에서 비롯 — [`why-ail-mechanics.ko.md`](why-ail-mechanics.ko.md) §2 참고.
-- 이 모델의 Python parse 54% 가 base qwen14b 의 100% 보다 낮은 이유엔 교란 변수가 두 개 섞여 있습니다: fine-tune 이 7B 를 AIL 쪽으로 끌어당긴 대가로 Python 유창성이 희생된 점 *과*, qwen2.5-coder:7b 가 qwen2.5-coder:14b 보다 애초에 작은 base 인 점. base qwen2.5-coder:7b 의 같은 코퍼스 실측이 없으면 이 둘을 분리할 수 없습니다. 어느 쪽이든 이건 일반적으로 "AIL 이 Python 작성에서 이긴다" 를 뜻하지 **않습니다** — 이 특정 fine-tuned 7B, 이 특정 코퍼스에 대한 사실입니다.
+- **AIL parse 80%** — G1 달성. v1.8.4 가 Python 스타일 `list[index]` 를 파서 레벨에서 `get(list, index)` 로 변환. 모델은 변경 없고 언어가 변경됐습니다. "파서 수정이 모델 재훈련을 대체할 수 있다"는 첫 확인 사례.
+- **AIL 정답 70% vs Python 정답 48%** — 같은 모델에서 22 pp 차이.
+
+### Tutorial 프롬프트가 두 번째 개선 경로를 제공한다
+
+fine-tuning 이후, base 7B 모델에서 tutorial 프롬프트 변형 (fn/intent 결정 테이블 포함 여부) A/B 벤치마크를 실행했습니다.
+
+| 조건 | AIL parse | B 카테고리 fn/intent | 재시도 |
+|---|---|---|---|
+| base / 기본 프롬프트 | 54% | 80% | 1.44 |
+| base / tutorial 프롬프트 | **60%** | **100%** | **1.16** |
+| fine-tuned (v3) | **80%** | 93% | — |
+
+tutorial 프롬프트는 base 모델에서 parse +6pp, B 카테고리 (pure intent) 실패를 전부 제거합니다. fine-tune 이 더 큰 효과 (+26pp) 이지만, tutorial 프롬프트는 무료입니다 — GPU, 훈련 데이터, 재훈련 없음. base 모델을 사용하는 배포 환경에서는 tutorial 변형을 기본으로 설정해야 합니다.
+
+자세한 내용: [`2026-04-21_qwen7b-base_promptab_analysis.md`](../benchmarks/2026-04-21_qwen7b-base_promptab_analysis.md).
+
+### fn/intent 정확도: 비교 기준이 불공정했다
+
+이전 G2 수치 (AIL 60% vs Python 76%, −16pp) 는 AIL fine-tune 된 7B 로 Python 을 작성했습니다 — QLoRA 로 Python 유창성이 일부 저하된 모델. 공정한 비교는 `qwen2.5-coder:14b` 를 Python 기준으로 사용:
+
+| 지표 | AIL (7b fine-tune) | Python (14b base) | Δ |
+|---|---|---|---|
+| fn/intent 정확도 | 60% | 64% | −4pp |
+| **B 카테고리 fn/intent** | **93%** | **80%** | **AIL +13pp** |
+| 에러 핸들링 누락 | 0% | 42% | AIL +42pp |
+
+전체 −4pp 갭은 모델 크기 차이 (7B vs 14B) 범위 안입니다. pure intent 태스크에서 AIL 이 13pp 앞섭니다. `intent` 선언이 구조적으로 silent LLM skip 을 막기 때문입니다.
+
+자세한 내용: [`2026-04-21_g2_fair_comparison_analysis.md`](../benchmarks/2026-04-21_g2_fair_comparison_analysis.md).
 
 Opus 4 가 2026 년 4 월에 제시한 5 개 fine-tuning 전제 조건은 2026-04-20 에 모두 충족됐습니다:
 

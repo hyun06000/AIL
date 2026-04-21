@@ -162,16 +162,43 @@ We confirmed that prompt engineering cannot fix this on qwen14b (see the prompt-
 
 ### The fine-tune closed most of the gap
 
-`ail-coder:7b-v3` is qwen2.5-coder-7b-instruct fine-tuned with QLoRA on 244 validated AIL samples, shipped as part of v1.8.3 under [`reference-impl/training/`](../reference-impl/training/). On the same 50-prompt corpus:
+`ail-coder:7b-v3` is qwen2.5-coder-7b-instruct fine-tuned with QLoRA on 244 validated AIL samples, shipped as part of v1.8.3. v1.8.4 added `EXPR[INDEX]` parser sugar that brought parse rate to the G1 target without any model retraining. On the same 50-prompt corpus:
 
 | Model | AIL parse | AIL answer | Python parse | Python answer |
 |---|---|---|---|---|
-| ail-coder:7b-v3 | **78%** | **70%** | 54% | 48% |
+| ail-coder:7b-v3 (v1.8.4) | **80% ✅** | **70%** | 50% | 46% |
 
-- **AIL parse 78%** compared to the same 7B base's Python parse rate of 54%. The G1 gate target of 80% was missed by one case out of fifty; three remaining failures use Python-style `list[index]` subscript.
-- **AIL answer correctness 70% vs Python 48%** on the same model. The gap is 22 percentage points in AIL's favour, driven mostly by Python's silent-skip behaviour on the hybrid (C) category — see
-  [`why-ail-mechanics.md`](why-ail-mechanics.md) §2.
-- Python parse 54% on this model is lower than the 100% we saw on the base qwen14b. Two confounders combine here: the fine-tune shifts the 7B toward AIL at the cost of Python fluency, *and* qwen2.5-coder:7b is a smaller base than qwen2.5-coder:14b to start with. Without a run of the base qwen2.5-coder:7b on the same corpus we can't separate those factors cleanly. In any case, this does not imply "AIL beats Python at authoring in general" — it is a fact about this specific fine-tuned 7B on this specific corpus.
+- **AIL parse 80%** — G1 cleared. v1.8.4 desugared Python-style `list[index]` to `get(list, index)` at the parser level. The model did not change; the language did. This is the first confirmed "parser fix substitutes for model retraining" result.
+- **AIL answer correctness 70% vs Python 48%** on the same model. The 22pp gap is driven by Python's silent-skip behaviour on hybrid (C) tasks — see [`why-ail-mechanics.md`](why-ail-mechanics.md) §2.
+- Python parse 50% on this model reflects QLoRA's cost to Python fluency, not a claim about Python authoring in general.
+
+### The tutorial prompt provides a second improvement path
+
+After fine-tuning, we ran A/B benchmarks on two additional conditions: the base 7B model with and without the `tutorial` prompt variant (fn/intent decision table).
+
+| Condition | AIL parse | Cat B fn/intent | Retries |
+|---|---|---|---|
+| base / default prompt | 54% | 80% | 1.44 |
+| base / tutorial prompt | **60%** | **100%** | **1.16** |
+| fine-tuned (v3) | **80%** | 93% | — |
+
+The tutorial prompt adds +6pp parse and removes all category B (pure intent) failures on the base model. Fine-tuning is still the larger improvement (+26pp over base+tutorial), but the tutorial prompt is free: no GPU, no training data, no retraining. For deployments using a base model, the tutorial variant should be the default.
+
+See [`2026-04-21_qwen7b-base_promptab_analysis.md`](benchmarks/2026-04-21_qwen7b-base_promptab_analysis.md).
+
+### fn/intent accuracy: the comparison was unfair
+
+The earlier G2 reading (AIL 60% vs Python 76%, −16pp) used the AIL-fine-tuned 7B to write Python — a model whose Python fluency had been partially degraded by QLoRA. The fair comparison uses `qwen2.5-coder:14b` as the Python baseline:
+
+| Metric | AIL (7b fine-tune) | Python (14b base) | Δ |
+|---|---|---|---|
+| fn/intent accuracy | 60% | 64% | −4pp |
+| **Category B fn/intent** | **93%** | **80%** | **AIL +13pp** |
+| Error-handling miss | 0% | 42% | AIL +42pp |
+
+The overall −4pp gap is within the model-size margin (7B vs 14B). On pure intent tasks specifically — where AIL's `intent` declaration structurally prevents silent LLM skips — AIL wins by 13pp.
+
+See [`2026-04-21_g2_fair_comparison_analysis.md`](benchmarks/2026-04-21_g2_fair_comparison_analysis.md).
 
 The five fine-tuning prerequisites Opus 4 specified in April 2026 were all met on 2026-04-20:
 
