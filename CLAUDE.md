@@ -1229,44 +1229,54 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ---
 
-## SESSION STATE — 2026-04-21 (Round 2 완료 + 분기 전략)
+## SESSION STATE — 2026-04-21 (Round 2 완료 + 분기 전략) [HISTORICAL — superseded below]
 
-### 기준선 — Round 2 결과 (현재 최고)
+이전 세션 기록. 최신 SESSION STATE는 아래 참조.
+요약: R2/C4 64% 달성, Python baseline 돌파, dev/main 브랜치 전략 확립.
+전체 내용: `git show 2e12a33:CLAUDE.md` 로 복원 가능.
 
-**기준 파일**: `docs/benchmarks/2026-04-21_r2_analysis.md` + 7개 JSON
+---
 
-**목표 달성: R2/C4 (ft+nofs+FORBIDDEN) = 64% — Python baseline(56%) 돌파 +8pp**
+## SESSION STATE — 2026-04-21 (Round 3 완료)
+
+### 기준선 — Round 3 결과 (현재 최고)
+
+**기준 파일**: `docs/benchmarks/2026-04-21_r3_cond4_finetuned_nofewshot.json`
+
+**목표 달성: R3/C4 (ft+nofs) = 70% — Python baseline(56%) +14pp**
 
 | 조건 | AIL parse | AIL ans | Py ans | Cat A | Cat B | Cat C | 상태 |
 |---|---|---|---|---|---|---|---|
-| R1/C1 base+nofs | 54% | 42% | 56% | 47% | 53% | 30% | 기준선 |
-| R1/C2 base+tut | 60% | 48% | 56% | 33% | 87% | 30% | |
-| R1/C4 ft+nofs | 58% | 48% | 38% | 40% | 60% | 45% | |
-| R1/C5 ft+tut | 56% | 52% | 38% | 47% | 80% | 35% | |
-| R2/C2 base+tut | 60% | 48% | 56% | 40% | 87% | 25% | 변화 없음 |
-| **R2/C4 ft+nofs** | **72%** | **64%** | 40% | **53%** | **80%** | **60%** | **✅ 목표 달성** |
-| R2/C5 ft+tut | 56% | 44% | 40% | 40% | 67% | 30% | 퇴보 (tutorial 역효과) |
+| R1/C4 ft+nofs | 58% | 48% | 38% | 40% | 60% | 45% | 기준선 |
+| R2/C4 ft+nofs | 72% | 64% | 40% | 53% | 80% | 60% | Python 돌파 |
+| **R3/C4 ft+nofs** | **80%** | **70%** | 40% | **60%** | **80%** | **70%** | **✅ 70% 목표 달성** |
 
 Python honest baseline (R1/C1, 동일 사이즈): **56%**
 
-**최적 구성: fine-tuned (ail-coder:7b-v3) + no few-shot + FORBIDDEN SYNTAX = 64%**
-- tutorial 프롬프트는 fine-tuned 모델에 역효과 (pure fn 과용, 답변 형식 변화)
-- FORBIDDEN SYNTAX는 base 모델에 효과 없음 (fine-tune 필수)
+**최적 구성: fine-tuned (ail-coder:7b-v3) + no few-shot + FORBIDDEN SYNTAX = 70%**
+
+R2→R3 핵심 드라이버:
+- 파서에서 `[Number]`/`[Text]` bare list 타입 어노테이션 지원 → A12/A15/C03/C10/C11/C13/C19 언블록
+- purity registry에 stdlib 함수(sum_list, unique 등) 추가
+- FORBIDDEN 블록에서 `[Number]` 금지 해제, descending sort 대안 명시
+- `pure fn`에서 `intent` 호출 금지 규칙 명시
 
 ### 이번 세션에서 완료한 것
 
-1. ✅ **Round 2 벤치마크 완결** — R2/C2, C4, C5 실행. JSON + 분석 문서 커밋.
-2. ✅ **Python baseline 돌파** — R2/C4 64% > 56%. 첫 번째 마일스톤 달성.
-3. ✅ **퇴보 원인 파악** (R2/C5): `pure fn`+`sum_list` purity error, `reverse(split())` 타입 미스매치, B카테고리 답변 형식 변화.
-4. ✅ **dev/main 브랜치 전략 확립** — LinkedIn 홍보 이후 버전 안정성 필요. `dev`에서 개발, `main`은 stable 릴리즈만.
-5. ✅ **CLAUDE.md Rule 4 (브랜치 전략) 추가** — commit `e1bb49c`.
+1. ✅ **Round 3 벤치마크 완결** — R3/C4 70%. JSON 커밋.
+2. ✅ **70% 목표 달성** — Python baseline +14pp.
+3. ✅ **파서 개선** — `[Type]` bare list annotation 지원 (commit `9821565`).
+4. ✅ **purity registry 확장** — stdlib 함수들 `_PURE_BUILTINS`에 추가.
+5. ✅ **authoring.py FORBIDDEN 블록 업데이트** — `[Number]` 허용으로 전환, sort 대안 추가.
+6. ✅ **dev/main 브랜치 전략** — `main`은 stable, `dev`에서 개발.
 
-### 다음 우선순위 (Round 3)
+### 다음 우선순위
 
-1. **Cat A 잔여 실패 수정**: `sum_list`를 purity registry에 등록 (또는 pure fn에서 stdlib 호출 허용). A10 팰린드롬: `reverse(split(s))` → `join(reverse(split(s, "")), "")`.
-2. **Cat C (hybrid) 개선**: 현재 60% vs Python 80%. fn+intent 인터리빙 few-shot 1개 추가 (base 프롬프트에만).
-3. **Round 3 목표**: R3/C4 ≥ 70% answer rate.
-4. **v4 fine-tune 검토**: R3/C4 ≥ 70% 달성 시 (HANDOFF.md 기준).
+1. **v4 fine-tune 검토** — R3/C4 ≥ 70% 달성. HANDOFF.md 기준 충족. 파인튜닝 데이터 보강 검토.
+   - R3 실패 케이스에서 새 훈련 샘플 추출 (`seed_from_bench.py` 활용)
+   - 직렬화된(공백 최소화) 형식으로 학습 데이터 생성 → 토큰 효율성 향상 아이디어
+2. **잔여 실패 패턴**: `{}` dict 리터럴 (A12, A13, C09), 생성 잘림 (C11, C19)
+3. **base 모델 개선**: FORBIDDEN이 base에 효과 없음 → fine-tune이 유일한 해법임을 확인
 
 ### Environment on homeblack
 
