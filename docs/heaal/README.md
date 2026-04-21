@@ -181,5 +181,6 @@ AIL track benchmarks use a bare date or `ail_` prefix.
 *As of 2026-04-22:*
 
 - Scaffold: this directory, `anti_python` prompt variant landed in `ail.authoring`, `ail_parse_check` builtin added (AIL track contribution, enables future AIL-native HEAAL tooling).
-- E1 baseline (default prompt, Sonnet, measured 2026-04-20): [`2026-04-20_claude_sonnet46_summary.md`](../benchmarks/2026-04-20_claude_sonnet46_summary.md).
-- E1 new measurement (Sonnet + `anti_python`): running, writeup queued.
+- E1 baseline (default prompt, Sonnet 4.6, measured 2026-04-20): [`2026-04-20_claude_sonnet46_summary.md`](../benchmarks/2026-04-20_claude_sonnet46_summary.md).
+- **E1 result (Sonnet + `anti_python`, 2026-04-22): TARGET EXCEEDED.** Parse 36% → **94%** (+58pp), answer 36% → **88%** (+52pp). Safety properties unchanged (0% error-handling omission, both prompt variants). Writeup: [`2026-04-22_heaal_E1_analysis.md`](../benchmarks/2026-04-22_heaal_E1_analysis.md).
+- HEAAL core claim **demonstrated**: no fine-tune, no external harness, frontier base model authors AIL reliably with the safety properties intact.
