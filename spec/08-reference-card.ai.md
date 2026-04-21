@@ -160,6 +160,7 @@ VARIABLE = match EXPR { PATTERN => BODY, ... } // confidence-aware matching
 LITERAL                          // 42, 3.14, "text", true, false, [1,2,3]
 IDENTIFIER                       // variable_name
 EXPR.field                       // field access
+EXPR[INDEX]                      // subscript — sugar for get(EXPR, INDEX)
 FUNC(ARGS)                       // function/intent call
 EXPR + EXPR                      // arithmetic: + - * / %
 EXPR == EXPR                     // comparison: == != < > <= >=

@@ -79,6 +79,13 @@ may change:
 - **Error messages.** Parse-time and runtime error text may be improved
   freely.
 - **Performance.** No guarantees, no freeze.
+- **Additive parser desugarings** that strictly broaden the input
+  language without changing the meaning of any program already
+  parsing under the freeze. These ship as patch releases. Precedent:
+  `List[T]` parametric type annotations accepted as no-op (v1.8.3),
+  `EXPR[INDEX]` accepted as sugar for `get(EXPR, INDEX)` (v1.8.4 —
+  closes issue #1). The reference card §EXPRESSIONS records each
+  sugar; semantics are the existing builtin's, unchanged.
 
 ## 4. How the freeze is enforced
 

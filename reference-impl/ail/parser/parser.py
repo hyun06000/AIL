@@ -738,9 +738,53 @@ class Parser:
                 args, kwargs = self.parse_call_args()
                 self.expect(Tok.RPAREN)
                 expr = Call(callee=expr, args=args, kwargs=kwargs)
+            elif self.check(Tok.LBRACK) and not self._lbrack_starts_branch_arm():
+                # `target[index]` is sugar for `get(target, index)`. The
+                # builtin already exists; this is a parser-only desugar
+                # to accept the Python-shaped pattern AI authors keep
+                # reaching for. Same precedent as the v1.8.3 parametric-
+                # type fix (List[T] etc. accepted as no-op annotations).
+                #
+                # The lookahead guard exists because `branch SUBJ { [COND]
+                # => STMT ... }` re-uses `[` for arm conditions. After the
+                # parser finishes a previous arm's action statement, the
+                # next `[` would otherwise get eaten as a subscript on the
+                # statement's tail. Scan past the matching `]` and only
+                # commit to subscript if `=>` does not follow.
+                self.advance()  # consume `[`
+                index_expr = self.parse_expr()
+                self.expect(Tok.RBRACK)
+                expr = Call(
+                    callee=Identifier(name="get"),
+                    args=[expr, index_expr],
+                    kwargs={},
+                )
             else:
                 break
         return expr
+
+    def _lbrack_starts_branch_arm(self) -> bool:
+        """True if the upcoming `[ ... ]` is a branch arm header rather
+        than a subscript on the just-parsed expression. Detected by
+        scanning to the matching `]` and peeking — `[ ... ] =>` is
+        always a branch arm. Bracket-balanced so nested lists inside
+        the condition (e.g. `[x in [1,2,3]]`) don't fool the scan."""
+        if self.peek().kind != Tok.LBRACK:
+            return False
+        depth = 0
+        i = self.i
+        while i < len(self.tokens):
+            t = self.tokens[i]
+            if t.kind == Tok.LBRACK:
+                depth += 1
+            elif t.kind == Tok.RBRACK:
+                depth -= 1
+                if depth == 0:
+                    nxt = (self.tokens[i + 1] if i + 1 < len(self.tokens)
+                           else None)
+                    return nxt is not None and nxt.kind == Tok.FATARROW
+            i += 1
+        return False
 
     def parse_call_args(self) -> tuple[list[Expr], dict[str, Expr]]:
         args: list[Expr] = []

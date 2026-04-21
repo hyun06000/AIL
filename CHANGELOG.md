@@ -4,6 +4,48 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.8.4 — 2026-04-21
+
+Additive parser sugar within the v1.8 grammar freeze (spec §3 was
+amended to permit additive desugarings; same precedent class as
+the v1.8.3 `List[T]` parser fix). Targeted at the last gap between
+`ail-coder:7b-v3` and the G1 ≥ 80% AIL-parse gate.
+
+### Language (both runtimes)
+
+- **Subscript sugar:** `EXPR[INDEX]` is now accepted as syntactic
+  sugar for `get(EXPR, INDEX)`. Parser-only desugar — the runtime
+  path is the existing `get` builtin, semantics are unchanged.
+  Closes [issue #1](https://github.com/hyun06000/AIL/issues/1) and
+  the three remaining v3 fine-tune parse failures (A04, A12, C18 —
+  all `list[i]` Python-style subscript leaks). Python parser uses a
+  bracket-balanced lookahead to disambiguate from `branch [COND] =>`
+  arm headers; the Go parser doesn't implement `branch` so no guard
+  is needed there.
+- New conformance case `018_subscript_sugar.ail` exercises bare-
+  ident subscript, literal-list subscript, double subscript, and
+  subscript inside a `pure fn` body. Byte-identical on both
+  runtimes.
+
+### Spec
+
+- `spec/08-reference-card.ai.md` §EXPRESSIONS lists the new sugar
+  alongside `EXPR.field`.
+- `spec/09-stability.md` §3 now records "additive parser
+  desugarings" as an explicit class of permitted patch-release
+  changes within the freeze, with the v1.8.3 and v1.8.4 precedents
+  enumerated.
+
+### Tests
+
+- Python: 288 passing (was 284), 2 skipped — same as before plus
+  the 4 new branch-syntax regression guards.
+- Conformance: 52 passing (was 49), 0 added skip — case 018's
+  three test shapes all pass on both runtimes.
+- Go: ok.
+
+---
+
 ## v1.8.3 — 2026-04-21
 
 Additive release within the v1.8 grammar freeze (spec §2.5 permits

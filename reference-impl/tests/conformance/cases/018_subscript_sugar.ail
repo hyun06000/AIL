@@ -1,0 +1,22 @@
+// Conformance: `target[index]` is sugar for `get(target, index)`.
+// Parser-only desugar; the runtime path is the existing get builtin.
+// Demonstrates the sugar on (a) bare list identifier, (b) literal-
+// list expression, (c) chain-after-call, and (d) nested. Same output
+// from both runtimes is the load-bearing assertion — see issue #1.
+
+pure fn second(xs: Text) -> Number {
+    return xs[1]
+}
+
+entry main(x: Text) {
+    xs = [10, 20, 30]
+    direct = xs[0]                              // bare ident subscript
+    canonical = get(xs, 0)                      // same via builtin
+    literal = [100, 200, 300][2]                // literal-list subscript
+    chained = get([1, 2, 3], 1)                 // call result, no subscript
+    nested = [[7, 8], [9, 10]][1][0]            // double subscript
+    via_fn = second([41, 42, 43])               // sugar inside a fn body
+    return join([to_text(direct), to_text(canonical),
+                 to_text(literal), to_text(chained),
+                 to_text(nested), to_text(via_fn)], ",")
+}

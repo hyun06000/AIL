@@ -699,6 +699,24 @@ func (p *Parser) parsePostfix() (Expr, error) {
 			e = &CallExpr{Callee: e, Args: args}
 			continue
 		}
+		if p.match(TokLBrack) {
+			// `target[index]` is sugar for `get(target, index)`. Parser-
+			// only desugar — the get builtin already exists. Parallels
+			// the Python parser change in reference-impl/ail/parser/
+			// parser.py:parse_postfix.
+			idx, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.expect(TokRBrack); err != nil {
+				return nil, err
+			}
+			e = &CallExpr{
+				Callee: &IdentExpr{Name: "get"},
+				Args:   []Expr{e, idx},
+			}
+			continue
+		}
 		return e, nil
 	}
 }
