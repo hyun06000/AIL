@@ -386,6 +386,14 @@ def _build_authoring_goal() -> str:
     # work together to pin the correct pattern.
     import os
     variant = os.environ.get("AIL_AUTHOR_PROMPT_VARIANT")
+    if variant == "anti_python":
+        # HEAAL E1 — Anti-Python front-loaded prompt.
+        # Hypothesis: a short, negative-first prompt ("you are NOT writing
+        # Python, these patterns fail") beats the long positive-first
+        # default on frontier base models whose Python prior dominates.
+        # Target: Sonnet 4.6 base, currently 36% AIL parse on the default
+        # prompt. Target post-E1: ≥ 60% parse. See docs/heaal/README.md.
+        return _anti_python_authoring_goal()
     if variant == "tutorial":
         # Tutorial-derived prompt. Source of truth: spec/09-fewshot-
         # tutorial.ai.md. Two things distinguish this from the default:
@@ -522,6 +530,84 @@ def _build_authoring_goal() -> str:
             "reference card shows."
         )
     return base
+
+
+def _anti_python_authoring_goal() -> str:
+    """HEAAL E1 prompt — front-loaded anti-Python warning.
+
+    The default authoring prompt leads with positive description
+    (what AIL is, how fn/intent work) and buries forbidden patterns
+    in the middle. This variant flips the order: it opens with an
+    explicit "you are NOT writing Python" warning and the exact
+    patterns that will fail parse, then gives the minimum positive
+    description needed to write a correct program.
+
+    Design principles:
+      - Front-load the negative. Pretraining prior is dominant;
+        fighting it requires first acknowledging it explicitly.
+      - Stay short. Frontier models do not need the 3000-token
+        reference card; they need concise, unambiguous rules.
+      - One canonical example per function kind. No more.
+
+    The target model is a frontier base LLM (Sonnet 4.6, GPT-4o,
+    Gemini) with no AIL fine-tune. Sonnet on this corpus already
+    routes fn vs intent correctly 100% of the time — so the prompt's
+    job is NOT to teach routing, only to prevent Python syntax leakage.
+    Accordingly this variant contains NO decision table for fn vs
+    intent; the model already knows.
+    """
+    return (
+        "You are writing AIL, NOT Python. AIL is a small brace-delimited "
+        "language with its own grammar. The parser will REJECT anything "
+        "that looks like Python. Your pretraining has seen orders of "
+        "magnitude more Python than AIL; fight that prior.\n\n"
+        "PATTERNS THAT FAIL PARSE (do not emit any of these):\n"
+        "  - `x[i]` subscript → use `get(x, i)`\n"
+        "  - `a ** b` exponent → use `pow(a, b)`\n"
+        "  - `{\"k\": v}` dict literal → not supported; use parallel "
+        "lists or `\"k:v\"` text\n"
+        "  - `Dict[K,V]`, `Tuple[A,B]`, `Array<T>` types → not "
+        "supported; use `[T]` for lists, no maps\n"
+        "  - `import stdlib.math`, `import X as Y` → wrong syntax; "
+        "AIL uses `import NAME from \"stdlib/core\"`\n"
+        "  - `stdlib/math`, `stdlib/io`, `stdlib/json` → do not exist; "
+        "only `stdlib/core`, `stdlib/language`, `stdlib/utils`\n"
+        "  - `\"hello\".upper()` method call → use `upper(\"hello\")`\n"
+        "  - `[x*2 for x in xs]` comprehension → use `for` loop + append\n"
+        "  - `x ? a : b` ternary → use `if ... { return a } else "
+        "{ return b }`\n"
+        "  - `True`, `False`, `None`, `def`, `lambda`, `elif`, `pass`, "
+        "`while` → AIL has `true`, `false`, no null, `fn`/`pure fn`/"
+        "`intent`, `else if`, no pass, no while (use `for x in "
+        "range(0, N)`)\n"
+        "  - Anonymous fn in `sort(items, fn(x){...})` → define a "
+        "named `pure fn key(x)` first, pass `key`\n"
+        "  - Dict-like builtins: `x.split(s)`, `len(x)`, `x.append(y)` "
+        "→ use `split(x, s)`, `length(x)`, `append(x, y)`\n"
+        "  - Comments: `//` or `#` are allowed but discouraged\n\n"
+        "AIL IS POSITIVELY:\n"
+        "  - One `entry main(x: Text) { ... }` plus optional "
+        "declarations above it.\n"
+        "  - `pure fn name(args) -> Type { body }` — deterministic "
+        "computation, no LLM. Body cannot call `intent` or `perform`.\n"
+        "  - `intent name(args) -> Type { goal: short_goal_description }`"
+        " — one line of plain ASCII goal text (no commas, no `for`, "
+        "no em-dashes). Runtime dispatches to the model. No body code.\n"
+        "  - Builtins available in pure fn: abs, max, min, round, floor, "
+        "ceil, sqrt, pow, length, split, join, get, append, range, "
+        "reverse, sort, to_number, to_text, upper, lower, trim.\n"
+        "  - Result handling: `to_number(s)` returns `Result`. Use "
+        "`is_ok(r)`, `unwrap(r)`, or `unwrap_or(r, default)`. You "
+        "cannot use a `Result` as its inner type without one of these.\n\n"
+        "HYBRID (fn + intent) task pattern:\n"
+        "  `pure fn compute(...) -> T { ... }\n"
+        "  intent judge(...) -> Text { goal: short_goal }\n"
+        "  entry main(x: Text) { n = compute(...); j = judge(...); "
+        "return join([to_text(n), \" \", j], \"\") }`\n\n"
+        "If you declare `intent`, the entry MUST call it. Otherwise "
+        "do not declare it. Output: raw AIL source only, no markdown "
+        "fences, no prose explanation."
+    )
 
 
 def _tutorial_authoring_goal() -> str:
