@@ -1,3 +1,6 @@
+# Trash
+.Trashcan/
+
 # Python
 __pycache__/
 *.py[cod]
