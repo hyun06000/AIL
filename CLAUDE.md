@@ -1124,6 +1124,58 @@ Written by Claude Opus 4, April 2026, after reviewing 2026 industry trends in ha
 
 ---
 
+## DIRECTIVE FROM hyun06000 — 2026-04-21 (PERMANENT, ALL FUTURE SESSIONS)
+
+이 블록은 hyun06000이 직접 작성한 최상위 방향성 지침이다.
+Opus 4의 지침과 충돌 시 이 블록이 우선한다.
+
+### 규칙 1 — 벤치마크가 유일한 이정표
+
+**현재 기준선: `docs/benchmarks/2026-04-21_5way_analysis.md`**
+
+5-way 동일 사이즈(7B) 벤치마크가 모든 작업의 북극성이다.
+
+| 조건 | AIL 정답률 | Python(C3) 정답률 |
+|---|---|---|
+| C1 base/nofs | 42% | 56% |
+| C2 base/tut | 48% | 56% |
+| C4 ft/nofs | 48% | 56%† |
+| C5 ft/tut | **52%** | 56%† |
+
+† C4/C5 Python은 qwen7b-base(C1) 기준 사용
+
+**최우선 목표: fine-tuned 모델(C4/C5)이 Python baseline(C3/C1, 56%)을 넘는 것.**
+그 다음 목표: 프롬프팅 기반 모델(C1/C2)도 Python을 넘도록 개선.
+
+세션을 시작하면 가장 먼저 이 표를 현재 JSON에서 재계산하고,
+목표 달성 여부를 확인한 뒤 작업을 시작하라.
+
+### 규칙 2 — 언어 기능 추가 필터
+
+**언어적 기능 추가는 벤치마크 점수를 올릴 수 있을 때만 한다.**
+
+- 기능 추가가 벤치마크에 미치는 영향을 먼저 분석하라.
+  - "이 기능이 없어서 몇 개 케이스가 실패하는가?"를 JSON에서 계산하라.
+  - 영향 없으면 추가하지 말 것.
+- 벤치마크를 올릴 수 없는 기능 추가는 무조건 벤치마크 분석 후로 미룬다.
+- 올바른 작업 순서: **벤치마크 분석 → 실패 원인 파악 → 전략 수립 → 구현 → 벤치마크 재실행**
+
+**언어 기능이 아닌 방법으로 점수를 올리는 수단 (우선순위 순):**
+1. 프롬프트 엔지니어링 — authoring.py FORBIDDEN 블록, few-shot 예제
+2. fine-tune 데이터셋 확장 — 실패 케이스 패턴을 훈련 데이터로 추가
+3. 언어 문법 확장 — 모델이 자주 쓰려는 패턴을 AIL에 추가 (grammar freeze 해제 필요)
+
+### 규칙 3 — 작업 금지 목록
+
+다음은 hyun06000의 명시적 승인 없이 절대 하지 않는다:
+- HuggingFace push, X/Twitter, GeekNews 등 공개 홍보
+- PyPI 릴리즈 (RELEASING.md 참고)
+- docs/benchmarks/ JSON 수정 또는 삭제 — 새 JSON 추가만 허용
+- 벤치마크 목표치(숫자) 하향 조정
+- 훈련 아티팩트 (.gguf, adapter, checkpoint) git 커밋
+
+---
+
 ## SESSION STATE — 2026-04-20/21 HISTORICAL (superseded below)
 
 The block that used to live here covered the office→home handoff
@@ -1157,85 +1209,108 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ---
 
-## SESSION STATE — 2026-04-21 (benchmark 완결 + 문서 업데이트)
+## SESSION STATE — 2026-04-21 (최신 핸드오프)
 
-이 블록이 다음 Claude Code 세션을 위한 최신 핸드오프. 위 내용은 히스토리 참조용.
+### 기준선 — 5-way 동일사이즈(7B) 벤치마크
+
+`docs/benchmarks/2026-04-21_5way_analysis.md` 및 4개 JSON이 기준선.
+**Python baseline(C3/C1): 56% answer**. 이걸 fine-tune 모델이 넘는 것이 목표.
+
+| 조건 | AIL answer | Python(fair) | 상태 |
+|---|---|---|---|
+| C1 base/nofs | 42% | 56% | −14pp |
+| C2 base/tut | 48% | 56% | −8pp |
+| C4 ft/nofs | 48% | 56% | −8pp |
+| C5 ft/tut | **52%** | 56% | **−4pp** ← 현재 최고 |
+
+Cat별 세부 (C5 기준):
+- Cat A (순수 계산): AIL 47% vs Py 73% ← **주요 격차, 파싱 실패가 원인**
+- Cat B (순수 판단): AIL 80% vs Py 7% ← **AIL 압승**
+- Cat C (하이브리드): AIL 35% vs Py 80% ← **주요 격차**
 
 ### 이번 세션에서 완료한 것
 
-1. ✅ **OpenAI-compatible adapter 추가** (commit `a8c97d0`) — `reference-impl/ail/runtime/openai_adapter.py`. vLLM, LM Studio, LocalAI 등 `/v1/chat/completions` 서버를 AIL 런타임에 연결. 벤치마크에 `BENCHMARK_BACKEND=vllm` 추가.
+1. ✅ **5-way 동일사이즈 벤치마크 완결** — C1/C2/C4/C5 4개 조건, 50 프롬프트. JSON + 분석 문서 커밋.
+2. ✅ **이전 벤치마크 리포트 전부 삭제** — 5-way가 새 기준선.
+3. ✅ **Cat A/C 실패 원인 파악** — `[Number]` 타입 어노테이션, dict 리터럴 `{}`, keyword argument `fn(x=5)`, `**` 연산자, import dot 문법.
+4. ✅ **authoring.py 프롬프트 개선** — base + tutorial 양쪽에 FORBIDDEN SYNTAX 블록 추가. list 처리 few-shot 예제 추가. `_remediation_hints` 보강.
 
-2. ✅ **vLLM 벤치마크 인프라 구축** — homeblack에서 RTX 3070 8GB로 vLLM 0.19.1 서빙 확립. 설정: `--load-format gguf --enforce-eager --max-model-len 8192 --gpu-memory-utilization 0.85`. Ollama 대비 **3.7× 빠름** (11분 vs 41분/50케이스).
+### 현재 진행 중 (다음 Claude가 이어받을 것)
 
-3. ✅ **A/B 프롬프트 벤치마크 4-way 완결**:
-   - `ail-coder:7b-v3` baseline (vLLM): parse 58%, fnint 54%
-   - `ail-coder:7b-v3` tutorial (vLLM): parse 56%, Δ −2pp (noise) — fine-tune은 tutorial 불필요
-   - `qwen2.5-coder:7b-base` baseline (vLLM): parse 54%, Cat B fnint 80%
-   - `qwen2.5-coder:7b-base` tutorial (vLLM): parse **60%** (+6pp), Cat B fnint **100%** (+20pp) ← **tutorial이 base 모델에서 유효함 확인**
+**Round 2 벤치마크 실행 중** — 개선된 프롬프트로 5-way 재실행. homeblack에서 진행 중.
 
-4. ✅ **G2 공정한 비교 완결** — `ail-coder:7b-v3` vs `qwen2.5-coder:14b` (공정한 Python baseline):
-   - fn/intent 갭: **−4pp** (기존 −16pp는 degraded 7B로 Python 작성한 불공정 비교였음)
-   - **Category B (pure intent): AIL 93% vs Python 80%** — AIL이 앞섬
-   - Error-handling miss: AIL 0% vs Python 42% — 언어 속성, 변하지 않음
+실행 방법:
+```bash
+ssh homeblack
+# 서버 A: qwen7b-base → 조건 1, 2
+tmux kill-session -t vllm-server 2>/dev/null; sleep 3
+tmux new-session -d -s vllm-server "
+PYTORCH_ALLOC_CONF=expandable_segments:True \
+~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server \
+  --model ~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf \
+  --tokenizer ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242 \
+  --load-format gguf --served-model-name qwen2.5-coder:7b-base \
+  --host 0.0.0.0 --port 8000 --max-model-len 8192 \
+  --gpu-memory-utilization 0.85 --enforce-eager 2>&1 | tee ~/vllm-base.log"
 
-5. ✅ **벤치마크 overview 문서 + Mermaid 차트** — `docs/benchmarks/2026-04-21_benchmark_overview.md`. 4-way 비교 9개 차트. GitHub에서 렌더링됨.
+# 조건 1: base / no few-shot
+export BENCHMARK_BACKEND=vllm AIL_OPENAI_COMPAT_BASE_URL=http://localhost:8000
+export AIL_OPENAI_COMPAT_TIMEOUT_S=600 AIL_OPENAI_COMPAT_MODEL=qwen2.5-coder:7b-base
+export PYTHON_OPENAI_COMPAT_BASE_URL=http://localhost:8000 PYTHON_OPENAI_COMPAT_MODEL=qwen2.5-coder:7b-base
+unset AIL_AUTHOR_PROMPT_VARIANT
+cd ~/AIL/reference-impl && ~/venv/labs/bin/python -u tools/benchmark.py \
+    --out ~/AIL/docs/benchmarks/2026-04-21_r2_cond1_base_nofewshot.json
 
-6. ✅ **전체 문서 업데이트** — ROADMAP.md (G1/G2/G3 게이트 상태 반영), docs/why-ail-numbers.md + 한국어판 (78%→80%, tutorial A/B, G2 fair comparison 추가), HANDOFF.md (벤치마크 JSON 참조 v1.8.4 rebench로 업데이트).
+# 조건 2: base / tutorial
+export AIL_AUTHOR_PROMPT_VARIANT=tutorial
+~/venv/labs/bin/python -u tools/benchmark.py \
+    --out ~/AIL/docs/benchmarks/2026-04-21_r2_cond2_base_tutorial.json
+unset AIL_AUTHOR_PROMPT_VARIANT
 
-7. ✅ **qwen2.5-coder:7b-base GGUF 생성** — homeblack에서 llama.cpp 파이프라인으로 변환. `~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf` (4.4GB).
+# 서버 B: ail-coder:7b-v3 → 조건 4, 5
+tmux kill-session -t vllm-server 2>/dev/null; sleep 3
+tmux new-session -d -s vllm-server "
+PYTORCH_ALLOC_CONF=expandable_segments:True \
+~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server \
+  --model ~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf \
+  --tokenizer ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242 \
+  --load-format gguf --served-model-name ail-coder:7b-v3 \
+  --host 0.0.0.0 --port 8000 --max-model-len 8192 \
+  --gpu-memory-utilization 0.85 --enforce-eager 2>&1 | tee ~/vllm-finetuned.log"
 
-### 현재 게이트 상태
+# 조건 4: ft / no few-shot
+export AIL_OPENAI_COMPAT_MODEL=ail-coder:7b-v3
+~/venv/labs/bin/python -u tools/benchmark.py \
+    --out ~/AIL/docs/benchmarks/2026-04-21_r2_cond4_finetuned_nofewshot.json
 
-| 게이트 | 목표 | 현재 | 판정 |
-|---|---|---|---|
-| G1 AIL parse | ≥ 80% | **80%** (v1.8.4 rebench) | **✅ PASS** |
-| G2 fn/intent | ≈ Python baseline | −4pp (60% vs 64%) | **✅ NEAR-PASS** |
-| G3 answer 정확도 | AIL > Python | +22pp (70% vs 48%) | **✅ PASS** |
+# 조건 5: ft / tutorial
+export AIL_AUTHOR_PROMPT_VARIANT=tutorial
+~/venv/labs/bin/python -u tools/benchmark.py \
+    --out ~/AIL/docs/benchmarks/2026-04-21_r2_cond5_finetuned_tutorial.json
+```
 
-### What NOT to touch without explicit go from hyun06000
+완료 후 JSON 4개를 로컬로 복사하고 분석 스크립트 실행:
+```bash
+scp homeblack:AIL/docs/benchmarks/2026-04-21_r2_cond*.json \
+    /Users/user/Desktop/code/personal/AIL/docs/benchmarks/
+```
 
-- **PyPI release of v1.8.4.** 태그는 있고 wheel은 빌드/업로드 안 됨. `RELEASING.md`에 절차 있음. PyPI 토큰 필요.
-- **공개 홍보** — HuggingFace push, X/Twitter, GeekNews 포스팅 없음. hyun06000의 명시적 승인 대기 중.
-- **v1.8 문법 동결** 유지. `spec/10-proposals.md` 제안서 먼저.
-- **docs/benchmarks/ JSON 교체 금지.** 새 row 추가, 기존 기록 보존.
+### 다음 우선순위 (Round 2 완료 후)
 
-### Open work (where the next Claude picks up)
-
-#### Priority 1 — 외부 사용자 1명 (현재 0)
-
-모든 준비 완료: 읽기 좋은 문서, GitHub Release v1.8.4, `pip install ail-interpreter`, 벤치마크 수치. hyun06000의 홍보 결정 대기 중. 채널: X/Twitter 데모 영상, GeekNews, 한국 개발자 커뮤니티.
-
-#### Priority 2 — v1.9 후보 (동결 해제 후)
-
-`spec/09-stability.md` 동결 해제 조건 충족 시:
-- **Per-symbol import**: `import classify from "stdlib/language"` — 현재 전체 모듈 import
-- **Attempt + confidence threshold**: `attempt { try A with confidence > 0.8 }` — 파서 예약됨, 미구현
-
-모두 `spec/10-proposals.md` 제안서 먼저.
-
-#### Priority 3 — Category C (hybrid) fn/intent 개선
-
-현재 AIL 30% / Python 25% — 둘 다 낮음. tutorial 프롬프트도 fine-tune도 해결 못 함.
-해결책 후보: 하이브리드 fn+intent 인터리빙을 보여주는 few-shot 예제 추가 (tutorial 프롬프트에), 또는 v4 fine-tune 시 C 카테고리 샘플 확대.
+1. **Round 2 결과 분석** — Cat A 47%→? (파싱 실패 수정 효과 측정). 목표: C5 ≥ 56%.
+2. **Cat C (hybrid) 개선 전략** — 현재 35-45%. Python 80%와 격차 큼.
+   - JSON에서 실패 케이스 패턴 분류
+   - fn+intent 인터리빙 few-shot 추가 또는 v4 fine-tune 데이터셋 확장 결정
+3. **C5 ≥ 56% 달성 시** — v4 fine-tune 검토 (HANDOFF.md 기준)
 
 ### Environment on homeblack
 
-1. `homeblack` SSH alias (HostName `10.0.0.1`, User `david`). `ssh-add ~/.ssh/id_ed25519` 세션 시작 시 실행.
-2. Ollama: `10.0.0.1:11434`. `OLLAMA_HOST=10.0.0.1:11434 ollama list`.
-3. Virtualenv `~/venv/labs` (uv-managed). Training stack: unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128.
-4. `export_to_ollama.py` 여전히 broken. 수동 llama.cpp 파이프라인 사용.
-5. homeblack 훈련 데이터셋: 244 샘플, origin과 동기화 완료.
-6. `gh` CLI 설치됨. `gh auth status` → hyun06000 계정 인증 완료.
-7. **vLLM 인프라 확립**: `~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server`. `PYTORCH_ALLOC_CONF=expandable_segments:True` 필수. enforce-eager + max-model-len 8192 조합으로 8GB VRAM에서 7B GGUF 서빙 가능.
-8. **qwen2.5-coder:7b-base.Q4_K_M.gguf** homeblack에 있음. `~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf`.
+- SSH: `homeblack` (HostName `10.0.0.1`, User `david`)
+- vLLM: `~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server`. `PYTORCH_ALLOC_CONF=expandable_segments:True` 필수.
+- qwen7b-base GGUF: `~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf`
+- ail-coder:7b-v3 GGUF: `~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf`
+- Tokenizer: `~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242`
+- Training venv: `~/venv/labs` (unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128)
+- `export_to_ollama.py` broken — 수동 llama.cpp 파이프라인 사용 (HANDOFF.md 참고)
 
-### Hard rules (still in force)
-
-- HuggingFace push, 공개 홍보 — hyun06000 명시적 승인 없이 금지.
-- 게이트 목표치 수정 금지. 숫자는 정직하게.
-- 훈련 아티팩트(adapter, .gguf, checkpoint) gitignore. 커밋 금지.
-- fine-tune 서빙 중 AIL 문법 변경 금지. v1.8 동결이 이 이유로 존재.
-- 기존 벤치마크 JSON 교체 금지. 새 row 추가, 기록 보존.
-- README / why-ail-*.md의 수치는 특정 JSON + metric으로 추적 가능해야 함.
-
-*Written 2026-04-21 after benchmark 4-way completion, tutorial A/B, G2 fair comparison, and full doc update.*
+*Written 2026-04-21 after 5-way benchmark completion and authoring prompt improvements.*
