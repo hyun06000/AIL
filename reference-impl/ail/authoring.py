@@ -370,6 +370,21 @@ def _build_authoring_goal() -> str:
     # The explicit rules and the hybrid example in `_authoring_examples`
     # work together to pin the correct pattern.
     import os
+    variant = os.environ.get("AIL_AUTHOR_PROMPT_VARIANT")
+    if variant == "tutorial":
+        # Tutorial-derived prompt. Source of truth: spec/09-fewshot-
+        # tutorial.ai.md. Two things distinguish this from the default:
+        #   (a) decision rules in table form (more compact than the
+        #       default prose lists)
+        #   (b) explicit intent-goal text constraints — the default
+        #       prompt does not warn the model that the parser reads
+        #       goal text as expressions, so commas / em-dashes / the
+        #       word `for` inside a goal break parsing. C16 in the
+        #       Opus 50 corpus is a documented case
+        #       ("for a teenager" → ParseError "expected `in`").
+        # Used by the v1.8.4 A/B benchmark to measure prompt-only lift
+        # on a base model.
+        return _tutorial_authoring_goal()
     base = (
         "You are an AIL source-code author. Your output is source code, "
         "not an answer. The 'value' field of your response MUST be a "
@@ -427,7 +442,7 @@ def _build_authoring_goal() -> str:
     # flag makes the A/B measurable: same model, same corpus, only
     # the prompt differs.
     # ────────────────────────────────────────────────────────────────
-    if os.environ.get("AIL_AUTHOR_PROMPT_VARIANT") == "v2":
+    if variant == "v2":
         base += (
             "\n\n"
             "FORBIDDEN SYNTAX — the AIL parser will reject every item "
@@ -459,6 +474,93 @@ def _build_authoring_goal() -> str:
             "reference card shows."
         )
     return base
+
+
+def _tutorial_authoring_goal() -> str:
+    """Prompt body derived from spec/09-fewshot-tutorial.ai.md.
+
+    Differences from the default prompt:
+      - Decision rules in table form (table parses faster for AI
+        readers than prose bullet lists).
+      - Adds INTENT GOAL TEXT constraints (lexer/parser limits on
+        `goal:` body) — not present in any other variant. Closes the
+        documented C16-class failure where goal prose contains
+        commas, em-dashes, or AIL keywords.
+      - Reuses the existing FORBIDDEN-SYNTAX content from v2 in a
+        compressed form so the variant is self-contained.
+      - The 3 demonstration examples paired with this prompt come
+        from `_tutorial_examples()` (see `_authoring_examples`).
+    """
+    return (
+        "You are an AIL source-code author. Your output is source code, "
+        "not an answer. The 'value' field of your response MUST be a "
+        "complete AIL program that, when executed, produces the answer "
+        "the user asked for. When the user says 'factorial of 7' you "
+        "write AIL that computes 5040 — you do NOT put 5040 in value. "
+        "Read the EXAMPLES carefully — they show what the value field "
+        "looks like for each kind of prompt.\n\n"
+        "DECISION TABLE — fn vs intent.\n\n"
+        "| Task | Use | Why |\n"
+        "|------|-----|-----|\n"
+        "| Add 7 + 5 | pure fn | Computable. |\n"
+        "| Sort [3,1,2] | pure fn | Algorithm. |\n"
+        "| Count vowels | pure fn | Iterate + compare. |\n"
+        "| Parse \"Alice:85\" | pure fn | Split structured data. |\n"
+        "| Classify \"I love this\" | intent | Requires meaning. |\n"
+        "| Translate to Korean | intent | Cross-language meaning. |\n"
+        "| Summarise paragraph | intent | Judgment. |\n"
+        "| Spam detection | intent | Subjective. |\n"
+        "| Generate creative title | intent | New language. |\n\n"
+        "Rule of thumb: write the algorithm if you can. Use intent "
+        "only when you need to know what words MEAN. When unsure, "
+        "default to pure fn. Hybrid programs declare BOTH.\n\n"
+        "EVERY DECLARED `intent` MUST BE INVOKED in the entry. An "
+        "intent that is declared and never called is an authoring "
+        "error.\n\n"
+        "INTENT GOAL TEXT — non-obvious constraint. The parser reads "
+        "the text after `goal:` as AIL expressions, so the body must "
+        "be syntactically clean:\n"
+        "  * ASCII only — no unicode dashes (`-` not `\\u2014`), no "
+        "ellipsis (`...` not `\\u2026`).\n"
+        "  * No commas in goal text. Commas are only valid inside "
+        "list literals and argument lists.\n"
+        "  * No colons — the leading `goal:` already used the colon.\n"
+        "  * Avoid AIL keywords as words inside the goal: for, in, "
+        "if, else, return, true, false, attempt, try, match, branch, "
+        "with, evolve, effect, entry, import, pure, fn, intent, "
+        "perform. The boolean operators and / or / not are tolerated.\n"
+        "  * Keep it terse — usually under 12 words. Long prose goals "
+        "are NOT better than short ones.\n"
+        "  * Good: `goal: positive_or_negative`. Good: `goal: the "
+        "single most salient topic word`. BAD: `goal: classify, "
+        "for example, as positive or negative`.\n\n"
+        "FORBIDDEN SYNTAX — the parser will reject every item below. "
+        "The model's Python prior makes these tempting; suppress them.\n"
+        "  * Generic / parameterised types: `List[Text]`, "
+        "`Tuple[Number, Text]`, `Array<Text>`. AIL types are bare "
+        "identifiers: `Text`, `Number`, `Boolean`.\n"
+        "  * Ternary: `a ? b : c`. Use explicit `if a { return b } "
+        "else { return c }`.\n"
+        "  * Slice subscript: `xs[a:b]`. Use `slice(xs, a, b)`. "
+        "(`xs[i]` is fine — it desugars to `get(xs, i)`.)\n"
+        "  * Method calls on builtins: `\"hello\".upper()` → "
+        "`upper(\"hello\")`. `xs.append(x)` → `xs = append(xs, x)`.\n"
+        "  * List comprehensions: `[x*2 for x in xs]`. Write a `for` "
+        "loop with `append`.\n"
+        "  * Python keywords: `def`, `lambda`, `None`, `elif`, "
+        "`pass`. AIL has none of these.\n"
+        "  * Capitalised booleans: `True`, `False`. AIL uses "
+        "lowercase `true`, `false`.\n"
+        "  * `while`. AIL has no while loop. Use `for x in range(...)`.\n"
+        "  * f-strings `f\"{x}\"`. Use `join([\"text \", to_text(x)], "
+        "\"\")`.\n\n"
+        "STDLIB — only `stdlib/core`, `stdlib/language`, `stdlib/utils` "
+        "exist. NEVER import `stdlib/math`, `stdlib/io`, `stdlib/json`, "
+        "`stdlib/datetime`, `stdlib/re` — those exist in Python but NOT "
+        "in AIL. For math beyond `+ - * / %`, use the trusted-pure "
+        "builtins `abs`, `max`, `min`, `round`, `floor`, `ceil`, "
+        "`sqrt`, `pow` directly — no import needed."
+    )
 
 
 def _build_authoring_constraints(prior_errors: list[str]) -> list[str]:
@@ -808,6 +910,11 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
     edge cases (e.g. unsupported `[Number]` type syntax in fn
     signatures). Fewer, simpler examples win.
     """
+    import os as _os
+    if _os.environ.get("AIL_AUTHOR_PROMPT_VARIANT") == "tutorial":
+        # Override with the 3 examples paired with the tutorial prompt.
+        # Source: spec/09-fewshot-tutorial.ai.md steps 5, 9, 12.
+        return _tutorial_examples()
     return [
         # Simple arithmetic — pins the shape small models need for
         # "factorial of N", "sum 1 to N", "N squared" prompts. Replaces
@@ -872,6 +979,55 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
             ),
         ),
     ] + _v3_extra_examples()
+
+
+def _tutorial_examples() -> list[tuple[list[Any], Any]]:
+    """Three examples that pair with the tutorial-style prompt.
+
+    Drawn directly from spec/09-fewshot-tutorial.ai.md to keep the
+    in-context demonstration aligned with the prose tutorial: pure fn
+    (step 5 factorial), pure intent (step 9 sentiment), hybrid (step
+    12 word_count + sentiment composition).
+    """
+    return [
+        # Step 5 — pure fn computation.
+        (
+            [{"prompt": "factorial of 7"}],
+            (
+                'pure fn factorial(n: Number) -> Number {\n'
+                '    if n <= 1 { return 1 }\n'
+                '    return n * factorial(n - 1)\n'
+                '}\n'
+                'entry main(x: Text) { return factorial(7) }'
+            ),
+        ),
+        # Step 9 — pure intent (LLM-only).
+        (
+            [{"prompt": "Is 'great!' positive or negative sentiment?"}],
+            (
+                'intent classify_sentiment(text: Text) -> Text {\n'
+                '    goal: positive_or_negative\n'
+                '}\n'
+                'entry main(x: Text) { return classify_sentiment("great!") }'
+            ),
+        ),
+        # Step 12 — hybrid: pure fn + intent in the same program.
+        (
+            [{"prompt": "Count the words in 'I love this' and classify its sentiment"}],
+            (
+                'intent classify_sentiment(text: Text) -> Text {\n'
+                '    goal: positive_or_negative\n'
+                '}\n'
+                'pure fn word_count(s: Text) -> Number {\n'
+                '    return length(split(trim(s), " "))\n'
+                '}\n'
+                'entry main(x: Text) {\n'
+                '    text = "I love this"\n'
+                '    return join([to_text(word_count(text)), " ", classify_sentiment(text)], "")\n'
+                '}'
+            ),
+        ),
+    ]
 
 
 def _v3_extra_examples() -> list[tuple[list[Any], Any]]:
