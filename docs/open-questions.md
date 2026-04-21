@@ -196,6 +196,58 @@ This is a sociotechnical question more than a purely technical one, and
 is probably best answered by watching what happens when real communities
 form around AIL programs.
 
+### Q16. Do comments belong in an AI-authored language? — *open*
+
+AIL's core philosophy says: "indentation is not significant — humans
+needed it, you don't." The same logic probably applies to comments.
+
+Comments exist to:
+1. Document code for future human readers
+2. Temporarily disable code
+3. Carry pragma-style metadata
+
+If the primary author and reader are both AI, (1) drops out — humans
+aren't in the read path. (2) is dominated by regenerate-and-replace.
+(3) doesn't apply because AIL has no pragma surface.
+
+The v5 training experiment (2026-04-22) empirically removed `//` and
+`#` line comments from the single-line flatten mode, because joining
+lines with spaces would otherwise turn the remainder of each program
+into a comment. The author model does not appear to need comments in
+its training signal — the training samples that originally contained
+comments were documentation prose, not algorithmic structure.
+
+The unresolved question: should the language grammar drop comment
+support entirely in a future version? Benefits: smaller grammar,
+smaller parser, one less way for an AI to produce tokens that add
+nothing. Costs: can't carry TODO notes between sessions, can't leave
+"why we chose this algorithm" annotations. Neither cost applies if the
+AI's reasoning trace lives outside the source file (prompts, `evolve`
+history, trace records).
+
+Possible directions:
+- Keep comments, discourage them in training data
+- Drop comment support in v2.0 as a breaking change
+- Add an `/** @reason */` block reserved for trace-exported annotations,
+  if the grammar wants a structured channel for rationale
+
+### Q17. Is "humans don't read AIL" too absolute? — *open*
+
+AIL's design premise assumes humans never read `.ail` files. But in
+practice, the person running `ail ask --show-source` does read the
+generated code — at least to sanity-check during initial adoption or
+when debugging a surprising result.
+
+The question: does the language need a "human-friendly display" mode
+that re-indents and re-comments on demand? The runtime already has
+the parse tree; a pretty-printer is cheap. But if that mode exists,
+does its existence pull the language back toward "Python with braces"?
+
+This is especially sharp in the context of Q16 — if comments are
+dropped, how do humans understand a 500-line program when they do
+need to? Or is 500-line `.ail` source already a design smell (should
+be multiple programs orchestrated via natural language)?
+
 ---
 
 ## How to help
@@ -208,7 +260,8 @@ If you're looking for a place to start, **Q13** (program portability —
 a manifest describing a program's minimum runtime requirements) or
 **Q14** (debugging tools for traces) are good small-to-medium entry
 points. **Q2** (formal semantics) is the largest and probably a
-multi-month effort.
+multi-month effort. **Q16** (comments in AI-authored code) and **Q17**
+(human-display mode) are close to decidable once v5 benchmark lands.
 
 Recently resolved: **Q4** (membership operator) — see commits
 `1c34eb4`, `6702e90`, `8e46bee`.

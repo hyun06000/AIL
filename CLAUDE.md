@@ -1305,16 +1305,28 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 2. ✅ **R4 결과 분석** — `docs/benchmarks/2026-04-22_r4_analysis.md` 작성. v4는 Cat A +20pp 개선이지만 Cat B −27pp 퇴보. **Silent LLM skip 2건 발생** (B03 summary, B08 topic) — AIL의 핵심 주장을 v4가 깼음.
 3. ✅ **원인 규명** — `08_compound_ko.jsonl`의 16개 한국어 샘플이 전부 pure_fn이어서 분포가 fn 쪽으로 편향. `09_r3_fixes.jsonl`의 11개는 validator allowlist에 막혀 훈련 제외됨.
 4. ✅ **규칙 6 추가** — PyPI 배포 권한을 Claude Code에게 부여. `~/.pypirc` 자격증명은 읽지 말 것, `twine`이 참조함.
+5. ✅ **v5 데이터 준비** — validator allowlist 확장 (`r3_fixes`, `cat_b_reinforcement`), `10_cat_b_reinforcement.jsonl` 20개 (pure_intent 16 + hybrid 4) 추가. Validated total: 291 (v4: 260).
+6. ✅ **`to_chatml.py --flatten={none,strip-indent,single-line}` 추가** — 인덴테이션 실험. `single-line` 모드는 AIL 코드를 완전직렬화(주석 제거 + 모든 공백을 단일 스페이스로). 291개 샘플 전부 flatten 후에도 파싱 통과 검증.
+7. ⏳ **v5 훈련 진행 중** — homeblack tmux `ail-train-v5`. single-line chatml로 학습. 111 steps 예상 ~12분.
+8. ✅ **Q16/Q17 open-questions 추가** — AI-authored 언어에서 주석의 필요성, 사람 디스플레이 모드 필요성. v5 결과 이후 결정 가능.
 
 ### 다음 우선순위
 
-1. **v5 훈련 데이터 준비** (우선순위 높음)
-   - `reference-impl/training/validate.py`의 allowlist에 `r3_fixes` 추가 → `09_r3_fixes.jsonl` 11개 샘플이 들어갈 수 있게
-   - `08_compound_ko.jsonl`와 균형 맞추도록 pure_intent/hybrid 16개 이상 추가 (새 seed 파일, 예: `seed_cat_b_reinforcement.py`)
-   - 목표 크기: 280+ 샘플, 카테고리별 분포가 A/B/C에 비례하도록
-2. **R5 벤치마크** — v5 훈련 후 R3 기준 넘는지 확인. 특히 Cat B가 80% 이상 유지되는지.
-3. **외부 사용자 1명** — 숫자가 정리됐으니 이제 공개 단계. hyun06000 결정.
-4. **dev → main 머지** — R4 분석 + Rule 6 추가를 main으로 옮기기 (이번 세션 commit 후 hyun06000 승인 필요)
+1. **v5 GGUF 변환** (훈련 완료 시)
+   - `~/llama.cpp/convert_hf_to_gguf.py` + `~/llama.cpp/build/bin/llama-quantize Q4_K_M`
+   - 출력: `~/AIL/reference-impl/training/ail-coder-7b-v5.Q4_K_M.gguf`
+   - Modelfile 템플릿 이미 준비됨: `~/AIL/reference-impl/training/Modelfile.ail-coder-7b-v5`
+   - `ollama create ail-coder:7b-v5 -f Modelfile.ail-coder-7b-v5`
+2. **R5 벤치마크** — vLLM으로 `ail-coder:7b-v5` 로드 후 C4 조건. R3 대비 개선/퇴보 판정.
+3. **R5 분석 문서** — `docs/benchmarks/2026-04-22_r5_analysis.md` 작성. 특히 평가해야 할 것:
+   - Cat B 80% 회복 여부 (v4가 53%로 regression)
+   - 토큰 효율: `avg_prompt_tokens`이 v4의 6125에서 얼마나 줄었는지
+   - 생성 품질: single-line 출력의 정확도
+4. **결과에 따른 결정:**
+   - v5 > v3: 서빙 모델 교체, `docs/ko/README.ko.md`와 README.md 숫자 갱신, dev→main 머지
+   - v5 ~= v3: 실험 기록하고 v3 유지
+   - v5 < v3: 원인 분석 후 v6 계획
+5. **외부 사용자 1명** — hyun06000 결정 영역
 
 ### Environment on homeblack (현재 상태)
 
