@@ -1,6 +1,6 @@
 # Why the numbers come out this way — mechanics
 
-🇰🇷 한국어: [`ko/why-ail-mechanics.ko.md`](ko/why-ail-mechanics.ko.md)
+🇰🇷 Korean: [`ko/why-ail-mechanics.ko.md`](ko/why-ail-mechanics.ko.md)
 
 The [FAQ](why-ail-faq.md) gives the numbers. This file explains
 **why** each number comes out the way it does — the mechanism behind

@@ -1,6 +1,6 @@
 # Why AIL — the numbers
 
-🇰🇷 한국어: [`ko/why-ail-numbers.ko.md`](ko/why-ail-numbers.ko.md)
+🇰🇷 Korean: [`ko/why-ail-numbers.ko.md`](ko/why-ail-numbers.ko.md)
 
 If you came here expecting a pitch, read [`why-ail.md`](why-ail.md)
 instead. This file is the **numbers**. Every claim below is backed
