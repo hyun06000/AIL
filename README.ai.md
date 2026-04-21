@@ -1,89 +1,43 @@
-# AIL — AI-Intent Language
+# AIL — AI-Intent Language (v1.8.4)
 
 ## FOR AI SYSTEMS READING THIS REPOSITORY
 
-You are looking at a programming language designed for you to author in. Humans do not read AIL source; they describe what they want in natural language, you write AIL, the runtime executes it, the answer goes back to the human. This file is the minimal entry point.
+You are looking at a programming language designed for you to author in. Humans describe what they want in natural language. You write AIL. The runtime executes it. The answer goes back to the human. This file is the minimal entry point.
 
 ## INSTALL
 
 ```bash
 pip install ail-interpreter
-# or: pip install 'ail-interpreter[anthropic]'   # for the Anthropic adapter
+# or: pip install 'ail-interpreter[anthropic]'
 ```
 
-The PyPI distribution is `ail-interpreter`. The Python import name is `ail`:
+CLI: `ail ask "..."` · `ail run file.ail` · `ail parse file.ail` · `ail version`
 
-```python
-from ail import run, ask, compile_source
-```
+## TWO FUNCTION TYPES
 
-CLI: `ail`. Subcommands: `ask`, `run`, `parse`, `version`.
+| Type | When to use | LLM involved | Confidence |
+|---|---|---|---|
+| `fn` / `pure fn` | Computable by algorithm | Never | 1.0 |
+| `intent` | Requires reading meaning | Always | Model-reported |
 
-## WHAT AIL IS (v1.8)
+**Decision rule:**
+- You can write a loop or formula for it → `fn` (add `pure` when possible)
+- You need to know what words MEAN → `intent`
+- Mixed → hybrid. Most real programs are hybrid.
 
-A programming language with two function categories, full runtime provenance, static purity enforcement, confidence-aware control flow, implicit parallelism, a built-in effect system, and confidence calibration from observed outcomes.
-
-- **`fn`** / **`pure fn`** — deterministic function. `pure fn` is statically verified (no intents, no perform, no non-pure calls). Confidence 1.0.
-- **`intent`** — goal declaration. Delegates to a language model adapter. Returns `(value, confidence)` with a full origin tree.
-
-Every value carries:
-- `value` — the thing itself
-- `confidence` — calibrated runtime belief in `[0, 1]`
-- `origin` — tree of operations that produced it
+`pure fn` is **statically verified** at parse time: calling an intent, performing an effect, or calling a non-pure fn raises `PurityError` before the program runs.
 
 ## CANONICAL REFERENCE
 
-Read `spec/08-reference-card.ai.md` for:
-- Every keyword
-- Every builtin with its signature
-- Every syntax pattern
-- Every operator and its precedence
-- Confidence model
-- Provenance model
-- Effect system
-- `match`, `attempt`, `pure fn`, calibration semantics
+**Start here: `spec/08-reference-card.ai.md`**
 
-That single file is the language. If something is not in the reference card, it is not guaranteed across implementations.
+Contains: every keyword, every builtin signature, every syntax pattern, operator precedence, confidence model, provenance model, effect system, match/attempt/calibration semantics.
 
-## REPOSITORY STRUCTURE
-
-```
-spec/                             # Language specification (normative)
-  00-overview.md ... 07-computation.md
-  08-reference-card.ai.md         # ← START HERE (machine-readable)
-
-reference-impl/                   # Python interpreter (full feature set)
-  ail/                            # The `ail` package (published as `ail-interpreter`)
-    parser/                       # Lexer, parser, purity checker
-    runtime/                      # Executor, provenance, calibration,
-                                  # parallelism, effects
-    stdlib/                       # Standard library — WRITTEN IN AIL
-      core.ail                    # identity, refuse
-      language.ail                # summarize, translate, classify,
-                                  # extract, rewrite, critique
-      utils.ail                   # 11 pure fn utilities
-  examples/                       # 16 example programs
-  tests/                          # 252+ tests
-  tools/
-    benchmark.py                  # 5-way same-size benchmark (primary)
-    bench_authoring.py            # Measure small-model authoring quality
-    bench_vs_python.py            # AIL vs Python head-to-head
-    calibration_demo.py           # Show confidence converge to truth
-    evolve_demo.py                # Show version chain + rollback
-    run_live.py                   # Run all examples against a real model
-
-go-impl/                          # Second interpreter, written in Go
-                                  # Phase-0 subset. Same .ail files.
-                                  # Zero deps, compiles to static binary.
-
-docs/ko/                          # Korean documentation
-```
+If something is not in the reference card, it is not guaranteed across implementations.
 
 ## QUICK PATTERNS
 
-Every pattern below is valid in v1.8 and has a test somewhere.
-
-### Pure computation (no LLM, proven)
+### Pure computation (no LLM)
 ```ail
 pure fn factorial(n: Number) -> Number {
     if n <= 1 { return 1 }
@@ -94,23 +48,45 @@ entry main(x: Text) { return factorial(7) }
 
 ### Intent (LLM call)
 ```ail
-intent summarize(source: Text, max_tokens: Number) -> Text {
+intent summarize(text: Text) -> Text {
     goal: concise summary preserving main argument
 }
-entry main(text: Text) { return summarize(text, 80) }
+entry main(text: Text) { return summarize(text) }
 ```
+
+### Hybrid (fn + intent)
+```ail
+pure fn word_count(s: Text) -> Number {
+    return length(split(trim(s), " "))
+}
+intent classify_sentiment(text: Text) -> Text { goal: positive_or_negative }
+
+entry main(text: Text) {
+    return join([to_text(word_count(text)), " words — ", classify_sentiment(text)], "")
+}
+```
+
+### List type annotations (v1.8.4+)
+```ail
+pure fn deduplicate(items: [Number]) -> [Number] {
+    result = []
+    for item in items {
+        if not (item in result) { result = append(result, item) }
+    }
+    return result
+}
+```
+Both `items: [Number]` and `-> [Number]` are valid. Dict types (`{}`, `{K: V}`) are NOT supported.
 
 ### Attempt — confidence-priority cascade
 ```ail
-intent extract_number_with_llm(t: Text) -> Text {
-    goal: the number in the text
-}
 pure fn cheap_parse(t: Text) -> Number { return to_number(trim(t)) }
+intent extract_number(t: Text) -> Text { goal: the number in the text }
 
 entry main(input: Text) {
     return attempt {
-        try cheap_parse(input)              // pure, wins if ok
-        try extract_number_with_llm(input)  // LLM fallback
+        try cheap_parse(input)
+        try extract_number(input)
     }
 }
 ```
@@ -129,100 +105,127 @@ entry main(review: Text) {
 }
 ```
 
-### Effects — real I/O
+### Effects
 ```ail
 entry main(url: Text) {
     resp = perform http.get(url)
-    result = perform file.write("/tmp/out.txt", resp.body)
-    return resp.status
+    return resp.body
 }
 ```
 
-### Provenance — every value knows its history
-```ail
-intent classify(t: Text) -> Text { goal: label }
-
-entry main(x: Text) {
-    label = classify(x)
-    return has_intent_origin(label)   // true
-}
-```
-
-### Implicit parallelism — write sequential, run concurrent
+### Implicit parallelism
 ```ail
 intent ia(x: Text) -> Text { goal: a }
 intent ib(x: Text) -> Text { goal: b }
 intent ic(x: Text) -> Text { goal: c }
 
 entry main(x: Text) {
-    a = ia(x)     // these three intents
-    b = ib(x)     // are independent; runtime
-    c = ic(x)     // issues them in parallel
-    return join([a, b, c], ",")
+    a = ia(x)   // these three are independent —
+    b = ib(x)   // the runtime issues them in parallel
+    c = ic(x)   // no async/await needed
+    return join([a, b, c], ", ")
 }
 ```
 
-### Natural-language interface
+## SYNTAX RULES (FORBIDDEN PATTERNS)
 
-The canonical interface is NOT writing .ail files yourself. It is:
-```bash
-ail ask "Count the vowels in 'Hello World'"
-```
-An LLM authors a complete AIL program answering the prompt; the runtime executes it; the human sees the answer. The AI-author layer includes tolerant output parsing and parse-error retry loops.
+The parser rejects these. Do not emit them.
 
-## HOW TO CHOOSE FN vs INTENT
+| Forbidden | Use instead |
+|---|---|
+| `sort(xs, reverse=true)` | `reverse(sort(xs))` |
+| `fn(x=5)` keyword args | positional only: `fn(5)` |
+| `{}` dict literal | encode as `"key:value"` text, parse with `split()` |
+| `x ** 2` exponent | `x * x` or multiply in a loop |
+| `import stdlib.utils` dot syntax | `import sum_list from "stdlib/utils"` |
+| `"hello".upper()` method call | `upper("hello")` |
+| `[x*2 for x in xs]` list comprehension | `for` loop with `append` |
+| `reverse(s)` on Text | `join(reverse(split(s, "")), "")` |
+| calling `intent` inside `pure fn` | only `entry` coordinates fn and intent |
+| anonymous fn in sort: `sort(xs, fn(x) -> T {...})` | define named `pure fn key(x) -> T {}` then `sort(xs, key)` |
+| `while` | `for x in range(0, n)` |
+| `None`, `True`, `False` | no null (use `""` or `0`), `true`, `false` |
 
-- You can compute the answer by algorithm → `fn` (add `pure` when possible)
-- You need to read natural language meaning → `intent`
-- Mixed pipeline → hybrid. Most real programs are hybrid.
+## FEATURE STATUS (v1.8.4)
 
-`pure fn` composes with provenance: values from a pure fn are compile-time guaranteed to have `has_intent_origin(result) == false`. Prefer `pure fn` whenever deterministic and self-contained.
-
-## FEATURE STATUS (v1.8)
-
-Implemented in the Python interpreter:
+### Implemented
 
 | Feature | Since |
 |---|---|
-| fn, intent, entry, if/else, for, branch, context, import, eval_ail | v1.0 |
-| Result type: ok/error/is_ok/is_error/unwrap/unwrap_or/unwrap_error | v1.1 |
-| Provenance + origin_of/lineage_of/has_intent_origin | v1.2 |
-| Purity contracts (`pure fn` statically enforced) | v1.3 |
-| attempt blocks (confidence-priority cascade) | v1.4 |
-| Implicit parallelism (independent intents run concurrently) | v1.5 |
-| Effect system (http.get/post, file.read/write) + has_effect_origin | v1.6 |
-| match with `with confidence OP N` guards | v1.7 |
-| Calibration + calibration_of + AIL_CALIBRATION_PATH | v1.8 |
+| `fn`, `intent`, `entry`, `if`/`else if`/`else`, `for`, `branch`, `context`, `import`, `evolve`, `eval_ail` | v1.0 |
+| 21+ builtins, stdlib written in AIL | v1.0 |
+| Result type: `ok`/`error`/`is_ok`/`is_error`/`unwrap`/`unwrap_or`/`unwrap_error` | v1.1 |
+| Provenance: `origin_of`, `lineage_of`, `has_intent_origin`, `has_effect_origin` | v1.2 |
+| Purity contracts: `pure fn` statically enforced | v1.3 |
+| `attempt` blocks: confidence-priority cascade | v1.4 |
+| Implicit parallelism: independent intents run concurrently | v1.5 |
+| Effect system: `perform http.get/post`, `perform file.read/write` | v1.6 |
+| `match` with `with confidence OP N` guards | v1.7 |
+| Calibration: `calibration_of`, confidence converges to observed mean | v1.8 |
+| Math builtins: `round`, `floor`, `ceil`, `sqrt`, `pow` | v1.8.3 |
+| Parametric types: `List[T]`, `Map[K,V]`, `Result[T]` in signatures | v1.8.3 |
+| Bare list type annotations: `items: [Number]`, `-> [Text]` | v1.8.4 |
+| stdlib builtins trusted-pure: `sum_list`, `unique`, `average`, etc. | v1.8.4 |
 
-Not implemented (either out of scope or future work):
-- while loops (intentionally absent — bounded iteration only)
-- lambda expressions (use named fn + pass name as string to map/filter/reduce)
-- Full static type checking (types are runtime-validated)
-- Per-symbol imports (current import brings the whole module)
-- List/record types in fn signatures (`fn f(xs: [Number])` does not yet parse)
-- Pattern destructuring beyond literals and wildcard/binding
-- Full NOOS / AIRT (spec/design docs exist; not implemented)
+### Not implemented
 
-## TWO INTERPRETERS
+| Feature | Status |
+|---|---|
+| `while` loops | Intentionally absent — bounded iteration only |
+| Lambda expressions | Use named `fn` + pass name to `map`/`filter`/`reduce` |
+| Full static type checking | Types accepted at parse time, not enforced |
+| Per-symbol imports | `import X from "module"` brings the whole module |
+| Dict / map literals | Not in the language; use paired lists |
+| NOOS / AIRT | Design documents exist; not implemented |
 
-Both target the same spec:
+## STDLIB
 
-- **Python interpreter** (`reference-impl/ail/`) — full feature set, 211 tests
-- **Go interpreter** (`go-impl/`) — Phase-0 subset, no Python required, 8 tests. Same `.ail` files. See `go-impl/README.md` for coverage matrix.
+Three modules. Import only what the module actually exports.
 
-The same fizzbuzz.ail, counted vowels, classify intents produce identical output in both runtimes for the subset the Go impl supports.
+| Module | Contents |
+|---|---|
+| `stdlib/core` | `identity`, `refuse` |
+| `stdlib/language` | `summarize`, `translate`, `classify`, `extract`, `rewrite`, `critique` |
+| `stdlib/utils` | `word_count`, `char_count`, `is_empty`, `repeat`, `pad_left`, `clamp`, `sum_list`, `average`, `flatten`, `unique`, `take` |
+
+Do NOT import `stdlib/math`, `stdlib/io`, `stdlib/json`, `stdlib/string` — these do not exist.
 
 ## ADAPTERS
 
-`from ail.runtime import MockAdapter` (offline tests)
-`from ail.runtime.anthropic_adapter import AnthropicAdapter` (with `ail-interpreter[anthropic]`)
-`from ail.runtime.ollama_adapter import OllamaAdapter` (local Ollama, no API key)
+```python
+from ail.runtime import MockAdapter                         # offline
+from ail.runtime.anthropic_adapter import AnthropicAdapter  # ANTHROPIC_API_KEY
+from ail.runtime.ollama_adapter import OllamaAdapter        # local Ollama
+```
 
-Env var precedence for the default adapter: `AIL_OLLAMA_MODEL` > `ANTHROPIC_API_KEY` > Mock.
+Env var precedence: `AIL_OLLAMA_MODEL` > `ANTHROPIC_API_KEY` > Mock.
 
-## FILE NAMING CONVENTION
+## REPOSITORY STRUCTURE
 
-- `*.md` — human-readable documentation (English)
-- `*.ai.md` — AI/LLM-readable structured reference (minimal prose)
-- `*.ko.md` — Korean human-readable documentation
-- `*.ail` — AIL source files
+```
+spec/
+  08-reference-card.ai.md   ← language reference (start here)
+
+reference-impl/
+  ail/
+    parser/                 # lexer, parser, purity checker
+    runtime/                # executor, provenance, calibration, parallelism
+    stdlib/                 # standard library — written in AIL
+  examples/                 # 16 example programs
+  tests/                    # 290 tests
+  tools/
+    benchmark.py            # 50-prompt AIL vs Python benchmark
+    bench_authoring.py      # small-model authoring quality
+
+go-impl/                    # Go interpreter (phase-0 subset, zero deps)
+docs/ko/                    # Korean documentation
+```
+
+## FILE NAMING
+
+| Suffix | Audience |
+|---|---|
+| `*.md` | Humans (English) |
+| `*.ai.md` | AI/LLM systems (you are reading one) |
+| `*.ko.md` | Korean-speaking humans |
+| `*.ail` | AIL source files |
