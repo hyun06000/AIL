@@ -1283,50 +1283,64 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ---
 
-## SESSION STATE — 2026-04-22 (R4 완료, v4는 regression으로 판정)
+## SESSION STATE — 2026-04-22 (R4 완료, v4는 regression으로 판정) [HISTORICAL — superseded below]
 
-### 기준선 — 현재 최고 벤치마크 결과 (변화 없음)
+이전 세션 기록. 최신 SESSION STATE는 아래 참조.
+요약: R4 완료, v4 regression 판정, v3 유지. 규칙 6 (PyPI 권한) 추가.
+전체 내용: `git show 839bf1b:CLAUDE.md` 로 복원 가능.
 
-**여전히 R3가 최고.** v4는 overall −2pp로 퇴보 판정, 서빙 모델은 v3 유지.
+---
 
-| 조건 | AIL parse | AIL ans | Py ans | Cat A | Cat B | Cat C | 상태 |
-|---|---|---|---|---|---|---|---|
-| R1/C4 ft+nofs (v3) | 58% | 48% | 38% | 40% | 60% | 45% | 기준선 |
-| R2/C4 ft+nofs (v3) | 72% | 64% | 40% | 53% | 80% | 60% | Python 돌파 |
-| **R3/C4 ft+nofs (v3)** | **80%** | **70%** | 40% | **60%** | **80%** | **70%** | **✅ 서빙 모델** |
-| R4/C4 ft+nofs (v4) | 80% | 68% | 32% | **80%** | **53%** | 70% | ⚠️ Cat B regression |
+## SESSION STATE — 2026-04-22 (R5 완료, single-line 실험 실패)
+
+### 기준선 — 여전히 R3가 최고 (변화 없음)
+
+| 조건 | AIL parse | AIL ans | Cat A | Cat B | Cat C | 상태 |
+|---|---|---|---|---|---|---|
+| R1/C4 ft+nofs (v3) | 58% | 48% | 40% | 60% | 45% | 기준선 |
+| R2/C4 ft+nofs (v3) | 72% | 64% | 53% | 80% | 60% | Python 돌파 |
+| **R3/C4 ft+nofs (v3)** | **80%** | **70%** | **60%** | **80%** | **70%** | **✅ 서빙 모델** |
+| R4/C4 ft+nofs (v4) | 80% | 68% | 80% | 53% | 70% | ⚠️ Cat B regression |
+| **R5/C4 ft+nofs (v5)** | **50%** | **42%** | 60% | 53% | **20%** | 💀 severe regression |
 
 **현재 버전: v1.8.4 (main 브랜치, PyPI 업로드 완료)**
 **서빙 모델: ail-coder:7b-v3** (homeblack Ollama에 등록됨)
 
 ### 이번 세션에서 완료한 것
 
-1. ✅ **R4 벤치마크 실행** — vLLM on homeblack, v4 GGUF는 Ollama blob path (`/usr/share/ollama/.ollama/models/blobs/sha256-715a076f...`) 직접 로드. 별도 GGUF 파일 없음.
-2. ✅ **R4 결과 분석** — `docs/benchmarks/2026-04-22_r4_analysis.md` 작성. v4는 Cat A +20pp 개선이지만 Cat B −27pp 퇴보. **Silent LLM skip 2건 발생** (B03 summary, B08 topic) — AIL의 핵심 주장을 v4가 깼음.
-3. ✅ **원인 규명** — `08_compound_ko.jsonl`의 16개 한국어 샘플이 전부 pure_fn이어서 분포가 fn 쪽으로 편향. `09_r3_fixes.jsonl`의 11개는 validator allowlist에 막혀 훈련 제외됨.
-4. ✅ **규칙 6 추가** — PyPI 배포 권한을 Claude Code에게 부여. `~/.pypirc` 자격증명은 읽지 말 것, `twine`이 참조함.
-5. ✅ **v5 데이터 준비** — validator allowlist 확장 (`r3_fixes`, `cat_b_reinforcement`), `10_cat_b_reinforcement.jsonl` 20개 (pure_intent 16 + hybrid 4) 추가. Validated total: 291 (v4: 260).
-6. ✅ **`to_chatml.py --flatten={none,strip-indent,single-line}` 추가** — 인덴테이션 실험. `single-line` 모드는 AIL 코드를 완전직렬화(주석 제거 + 모든 공백을 단일 스페이스로). 291개 샘플 전부 flatten 후에도 파싱 통과 검증.
-7. ⏳ **v5 훈련 진행 중** — homeblack tmux `ail-train-v5`. single-line chatml로 학습. 111 steps 예상 ~12분.
-8. ✅ **Q16/Q17 open-questions 추가** — AI-authored 언어에서 주석의 필요성, 사람 디스플레이 모드 필요성. v5 결과 이후 결정 가능.
+**R4 → v4 regression 기록:**
+1. ✅ **R4 벤치마크 + 분석** — v4는 Cat A +20pp / Cat B −27pp. Silent LLM skip 2건. v3 서빙 유지 결정.
+
+**HEAAL 프로젝트 분리 (2026-04-22):**
+2. 💡 **HEAAL (Harness Engineering As A Language)** — AIL 트랙과 독립 운영. AIL 트랙은 "언어 자체가 안전한가", HEAAL 트랙은 "frontier 모델이 훈련 없이 AIL을 쓸 수 있게 하는가". 조직 구조는 R5 결과 반영 후 도입.
+
+**v5 훈련 파이프라인 (single-line 실험):**
+3. ✅ **데이터 준비** — validator allowlist 확장 (`r3_fixes`, `cat_b_reinforcement`), `10_cat_b_reinforcement.jsonl` 20개 추가. Validated total: 291 (v4: 260).
+4. ✅ **`to_chatml.py --flatten` 추가** — none/strip-indent/single-line 세 모드. single-line은 주석 제거 포함. 291개 전부 flatten 후 파싱 통과 검증.
+5. ✅ **peft 기반 GGUF 변환 파이프라인 확립** — unsloth 경로가 base 재다운로드로 무한 대기. peft 직접 merge → 2.5분 (v3/v4 때 15분 대비 6배 빠름). canonical 변환 경로로 승급, CLAUDE.md에 템플릿 기록.
+6. ✅ **tmux heredoc 교훈 기록** — 스크립트를 파일로 먼저 쓰기. tee는 pane 안에서.
+7. ✅ **v5 훈련 + GGUF + Ollama 등록 완료** — `ail-coder:7b-v5` (4.7GB).
+
+**R5 벤치마크 (가설 기각):**
+8. ❌ **R5 결과: v5는 심각한 regression** — AIL answer 70% → 42% (−28pp), Cat C 70% → 20% (−50pp).
+9. ✅ **원인 규명** — 모델이 AIL 코드를 `"..."`로 감싼 **leading-quote artifact**. single-line 포맷이 Qwen의 Python pretraining prior("one-line code = string literal")를 활성화. 특히 복잡한 다-함수 프로그램(Cat C)에서 두드러짐.
+10. ✅ **R5 분석 문서** — `docs/benchmarks/2026-04-22_r5_analysis.md`. v3 유지 결정 재확인.
+
+**기타:**
+11. ✅ **Q16/Q17 open-questions** — AIL 주석 필요성, human-display 모드. v5 결과로 Q16은 여전히 open (single-line에 혼재된 변수 때문에 주석-only 효과 격리 불가).
+12. ✅ **SECURITY.md 생성** — Google 검색 노출 이슈 해소. 비공개 채널(GitHub Security Advisory + 이메일), scope 명확화, by-design 보안 민감 영역(perform, eval_ail, evolve) 문서화.
+13. ✅ **Rule 6 (PyPI 권한)** — Claude Code가 `twine upload`로 직접 배포 가능. 자격증명은 읽지 말 것.
 
 ### 다음 우선순위
 
-1. **v5 GGUF 변환** (훈련 완료 시)
-   - `~/llama.cpp/convert_hf_to_gguf.py` + `~/llama.cpp/build/bin/llama-quantize Q4_K_M`
-   - 출력: `~/AIL/reference-impl/training/ail-coder-7b-v5.Q4_K_M.gguf`
-   - Modelfile 템플릿 이미 준비됨: `~/AIL/reference-impl/training/Modelfile.ail-coder-7b-v5`
-   - `ollama create ail-coder:7b-v5 -f Modelfile.ail-coder-7b-v5`
-2. **R5 벤치마크** — vLLM으로 `ail-coder:7b-v5` 로드 후 C4 조건. R3 대비 개선/퇴보 판정.
-3. **R5 분석 문서** — `docs/benchmarks/2026-04-22_r5_analysis.md` 작성. 특히 평가해야 할 것:
-   - Cat B 80% 회복 여부 (v4가 53%로 regression)
-   - 토큰 효율: `avg_prompt_tokens`이 v4의 6125에서 얼마나 줄었는지
-   - 생성 품질: single-line 출력의 정확도
-4. **결과에 따른 결정:**
-   - v5 > v3: 서빙 모델 교체, `docs/ko/README.ko.md`와 README.md 숫자 갱신, dev→main 머지
-   - v5 ~= v3: 실험 기록하고 v3 유지
-   - v5 < v3: 원인 분석 후 v6 계획
-5. **외부 사용자 1명** — hyun06000 결정 영역
+1. **HEAAL 트랙 스캐폴딩** — R5 결과가 완결됐으니 이제 조직화 단계.
+   - `docs/heaal/` 디렉토리 신설, 첫 문서 (README + 실험 설계)
+   - CLAUDE.md를 "AIL 트랙" / "HEAAL 트랙" 두 섹션으로 분리
+   - 벤치마크 JSON 파일명에 `ail_` / `heaal_` prefix 규칙 도입
+2. **HEAAL E1 실험 (Anti-Python 프롬프트)** — Sonnet 4.6 base에 대해 프롬프트만 변경 후 50개 프롬프트 측정. 목표: 현재 36% parse를 60%+로 올리기. 비용 ~$2.
+3. **v6 선택지 (conditional)** — strip-indent 경로로 재실험할지, 아니면 indented 원본으로 돌아가 콘텐츠 품질에 집중할지. v5 실패 원인이 명확하므로 strip-indent v6는 **의미 있는 후속 실험**이지만 우선순위는 낮음.
+4. **dev → main 머지 시점 결정** — R4/R5 분석, SECURITY.md, Rule 5/6, peft 파이프라인이 dev에 쌓임. hyun06000 승인 후 머지.
+5. **외부 사용자 1명** — HEAAL E1 결과까지 나오면 "fine-tune 없이도 Sonnet이 안전한 AIL을 쓴다" 스토리로 홍보 가능.
 
 ### Environment on homeblack (현재 상태)
 
