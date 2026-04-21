@@ -119,7 +119,20 @@ ail ask "Sum 1 to 100" --show-source
 # --- confidence=1.000 retries=0 author=anthropic ---
 ```
 
-You don't have to read it. The point of HEAAL is that you shouldn't need to — the grammar already guarantees the safety properties. But `--show-source` is there when you want to verify, save the program to a file, or debug a surprising answer.
+You don't have to read it. The point of HEAAL is that you shouldn't need to — the grammar already guarantees the safety properties. But `--show-source` is there when you want to verify or debug a surprising answer.
+
+If you want the generated AIL in a file instead of stderr, use `--save-source PATH`. The answer still goes to stdout; only the program gets written to the file:
+
+```bash
+ail ask "Sum 1 to 100" --save-source sum.ail
+# 5050
+# --- AIL saved to sum.ail ---
+
+ail run sum.ail --input ""     # replay exactly what the author wrote
+# 5050
+```
+
+Pass `--save-source -` to write the source to stdout after the answer instead of to a file.
 
 ### Troubleshooting
 

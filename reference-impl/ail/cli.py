@@ -22,6 +22,23 @@ from . import run, compile_source, ask, AuthoringError, __version__
 from .runtime import MockAdapter
 
 
+def _write_source(dest: str, source: str) -> None:
+    """Write AIL source text to `dest`. `-` writes to stdout.
+
+    Parent directories are created if missing. Contents are written with a
+    trailing newline so the file is friendly to line-counting tools. Prints
+    a one-line confirmation to stderr when the destination is a real file.
+    """
+    if dest == "-":
+        print(source, end="\n" if not source.endswith("\n") else "")
+        return
+    path = Path(dest).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = source if source.endswith("\n") else source + "\n"
+    path.write_text(text, encoding="utf-8")
+    print(f"--- AIL saved to {path} ---", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ail", description="AIL MVP interpreter")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -31,6 +48,10 @@ def main(argv: list[str] | None = None) -> int:
     p_ask.add_argument("prompt", help="Natural-language request")
     p_ask.add_argument("--show-source", action="store_true",
                        help="Also print the AIL source the author produced (stderr)")
+    p_ask.add_argument("--save-source", metavar="PATH", default=None,
+                       help="Save the AIL source the author produced to the "
+                            "given file path (answer still goes to stdout). "
+                            "Use '-' to write to stdout instead.")
     p_ask.add_argument("--retries", type=int, default=3,
                        help="Max retries if the author emits invalid AIL (default 3)")
 
@@ -63,18 +84,24 @@ def main(argv: list[str] | None = None) -> int:
             result = ask(args.prompt, max_retries=args.retries)
         except AuthoringError as e:
             print(f"AuthoringError: {e}", file=sys.stderr)
-            if e.partial is not None and args.show_source:
-                print("--- last attempt ---", file=sys.stderr)
-                print(e.partial.ail_source, file=sys.stderr)
-                print("--- errors ---", file=sys.stderr)
-                for err in e.partial.errors:
-                    print(f"  {err}", file=sys.stderr)
+            if e.partial is not None and (args.show_source or args.save_source):
+                src = e.partial.ail_source or ""
+                if args.save_source:
+                    _write_source(args.save_source, src)
+                if args.show_source:
+                    print("--- last attempt ---", file=sys.stderr)
+                    print(src, file=sys.stderr)
+                    print("--- errors ---", file=sys.stderr)
+                    for err in e.partial.errors:
+                        print(f"  {err}", file=sys.stderr)
             return 1
         except Exception as e:
             print(f"Error: {type(e).__name__}: {e}", file=sys.stderr)
             return 1
         # The human sees only the answer by default.
         print(result.value)
+        if args.save_source:
+            _write_source(args.save_source, result.ail_source)
         if args.show_source:
             print("--- AIL ---", file=sys.stderr)
             print(result.ail_source, file=sys.stderr)

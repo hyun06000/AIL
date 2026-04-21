@@ -119,7 +119,20 @@ ail ask "1부터 100까지 합" --show-source
 # --- confidence=1.000 retries=0 author=anthropic ---
 ```
 
-읽을 필요는 없습니다. HEAAL의 요지는 그걸 안 읽어도 된다는 것이니까요 — 문법이 이미 안전 속성을 보장합니다. 하지만 검증하고 싶을 때, 프로그램을 파일로 저장하고 싶을 때, 놀라운 답을 디버깅할 때 `--show-source`가 있습니다.
+읽을 필요는 없습니다. HEAAL의 요지는 그걸 안 읽어도 된다는 것이니까요 — 문법이 이미 안전 속성을 보장합니다. 하지만 검증하고 싶을 때, 놀라운 답을 디버깅할 때 `--show-source`가 있습니다.
+
+생성된 AIL을 stderr가 아니라 **파일로** 저장하고 싶으면 `--save-source PATH`를 쓰세요. 답은 여전히 stdout으로 가고, 프로그램만 파일에 저장됩니다:
+
+```bash
+ail ask "1부터 100까지 합" --save-source sum.ail
+# 5050
+# --- AIL saved to sum.ail ---
+
+ail run sum.ail --input ""     # 저자가 쓴 코드를 그대로 재실행
+# 5050
+```
+
+파일 대신 stdout으로 보내려면 `--save-source -` (대시).
 
 ### 문제 해결
 
