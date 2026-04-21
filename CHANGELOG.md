@@ -4,6 +4,109 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.8.5 — 2026-04-22
+
+Additive release within the v1.8 grammar freeze (spec §2.5 permits
+builtin additions; §3 permits additive prompt variants). The headline
+is the HEAAL demonstration: a frontier author model (Claude Sonnet)
+writes AIL through `ail ask` with grammar-level safety properties
+intact, with no fine-tune and no external harness. Three small
+language additions and a scoring tool make that demonstration
+reproducible.
+
+### Language additions
+
+- **`parse_json(source: Text) -> Result[Any]`** — pure builtin that
+  parses JSON text and returns a Result. AIL programs no longer
+  need to line-scan HTTP response bodies; `parse_json(resp.body)`
+  then `get(data, "language")` is the idiomatic path. Registered in
+  the purity allowlist; callable from `pure fn` bodies. Five unit
+  tests covering object / array / nested / error / purity. Reference
+  card updated under a new "JSON" section.
+- **`ail_parse_check(source: Text) -> Result[Text]`** — pure
+  self-reflection primitive. Parses a string as AIL and returns
+  ok(source) if it parses, error(msg) otherwise. Does NOT execute
+  — distinct from `eval_ail`, which runs the inner program. Six
+  unit tests, including one that verifies an inner program
+  declaring unresolvable intents still validates because only the
+  parser runs. Reference card updated under a new "Self-reflection"
+  section.
+- **`AIL_AUTHOR_PROMPT_VARIANT=anti_python`** — new authoring prompt
+  variant available to `ail ask`. Front-loads a "these patterns
+  fail parse" block before any positive description, fights the
+  author model's Python pretraining prior directly, and cuts
+  overall prompt size 43% (4441 → 2526 chars) versus the default.
+  On Claude Sonnet with no AIL fine-tune, this variant lifts AIL
+  parse from 36% to 94% and AIL answer from 36% to 88% on the
+  50-prompt corpus.
+
+### New tool — HEAAL Score dashboard
+
+- **`reference-impl/tools/heaal_score.py`** — standalone scorer that
+  reduces a benchmark JSON to a single HEAAL Score plus an HTML
+  dashboard. Weighted average of seven metrics:
+    error explicitness (25%), execution success (20%),
+    no-silent-skip rate (20%), parse success (15%),
+    structural safety (10%), loop safety (5%), observability (5%).
+  65% of the weight lives on measurements that move per run.
+- **`tools/benchmark.py --report[=path.html]` and `--no-run`** —
+  the existing benchmark runner now calls into `heaal_score` at
+  the end. `--no-run --report=<file.html>` rescores an existing
+  result JSON without re-running the benchmark.
+- Three canonical dashboards committed under
+  `docs/benchmarks/dashboards/`:
+    AIL track, fine-tuned 7B:   AIL 87.7 vs Python 48.5
+    HEAAL baseline (Sonnet):    AIL 77.6 vs Python 75.3
+    HEAAL E1 (anti_python):     AIL 96.1 vs Python 75.9
+
+### HEAAL documentation
+
+- **`docs/heaal.md`** — paradigm-level manifesto written by Claude
+  Opus 4 after reviewing the 2026 harness-engineering literature.
+  Positions HEAAL (Harness Engineering As A Language) as the third
+  layer of AI code safety after vibe coding and bolt-on harnesses,
+  with the Rust borrow-checker analogy carrying the core claim
+  (convention → compiler guarantee). Also in Korean
+  (`docs/ko/heaal.ko.md`) and AI-readable (`docs/heaal.ai.md`).
+- **`docs/heaal/`** — HEAAL track inside the repo: terminology
+  (author model vs intent model), experiments E1–E2, prompt
+  variants, benchmark runners.
+- **E1 writeup** — `docs/benchmarks/2026-04-22_heaal_E1_analysis.md`.
+- **E2 writeup** — `docs/benchmarks/2026-04-22_heaal_E2_analysis.md`,
+  including the concrete E2-10 case where a Python program crashed
+  on an unhandled `urllib.error.HTTPError 403` while the AIL program
+  ran cleanly on the same URL because `perform http.get` returns a
+  `Result` the grammar will not let the author skip.
+- **`benchmarks/heaal_e2/`** — long-task corpus, fixture setup
+  script, and runner with AIL + Python side-by-side scoring.
+
+### AIL-track experiments (R4–R6)
+
+- **R4 (v4 fine-tune)** — Cat A +20pp but Cat B −27pp vs R3.
+  Archived; v3 remains the serving model.
+- **R5 (v5 single-line format)** — severe regression (Cat C 20%)
+  caused by a "leading-quote artifact" when the coder base model
+  treats single-line AIL as a Python string literal. Hypothesis
+  rejected for coder bases.
+- **R6 (v6 same single-line format, non-coder base)** — recovers
+  to 80% parse / 62% answer with zero leading-quote artifacts,
+  confirming the R5 failure was coder pretraining prior, not the
+  single-line format itself.
+
+### Other
+
+- **SECURITY.md** added at repo root (private reporting channel
+  for vulnerabilities, scope definition, by-design primitives
+  explained).
+- **Governance Rules 5 and 6** in `CLAUDE.md`: SESSION STATE must
+  be updated on every commit; Claude Code sessions have PyPI
+  publish authority via `~/.pypirc`.
+- **Open questions Q16 and Q17** added to `docs/open-questions.md`:
+  are comments useful in an AI-authored language; should AIL grow
+  a human-readable display mode.
+
+---
+
 ## v1.8.4 — 2026-04-21
 
 Additive parser sugar within the v1.8 grammar freeze (spec §3 was
