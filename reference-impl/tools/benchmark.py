@@ -69,6 +69,7 @@ from typing import Any, Optional
 
 from ail import ask, AuthoringError, compile_source
 from ail.parser.ast import FnDecl, IntentDecl, ImportDecl
+from ail.runtime.openai_adapter import OpenAICompatibleAdapter
 
 
 HERE = Path(__file__).resolve().parent
@@ -89,6 +90,10 @@ _load_dotenv()
 OLLAMA_HOST = os.environ.get("AIL_OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("AIL_OLLAMA_MODEL", "llama3.1:latest")
 OLLAMA_TIMEOUT = int(os.environ.get("AIL_OLLAMA_TIMEOUT_S", "600"))
+
+OPENAI_COMPAT_BASE_URL = os.environ.get("AIL_OPENAI_COMPAT_BASE_URL", "http://localhost:8000")
+OPENAI_COMPAT_MODEL = os.environ.get("AIL_OPENAI_COMPAT_MODEL", "")
+OPENAI_COMPAT_TIMEOUT = int(os.environ.get("AIL_OPENAI_COMPAT_TIMEOUT_S", "300"))
 
 # Backend selection:
 #   ollama    (default)  — existing Python-authoring path, POSTs to
@@ -205,10 +210,37 @@ def _ask_anthropic_for_python(task: str) -> tuple[str, dict]:
     }
 
 
+def _ask_openai_compat_for_python(task: str) -> tuple[str, dict]:
+    """OpenAI-compatible (vLLM / LocalAI / etc.) Python-authoring path."""
+    body = json.dumps({
+        "model": OPENAI_COMPAT_MODEL,
+        "messages": [{"role": "user",
+                      "content": _PY_PROMPT_OLLAMA % {
+                          "host": OPENAI_COMPAT_BASE_URL,
+                          "model": OPENAI_COMPAT_MODEL,
+                          "task": task}}],
+        "temperature": 0.0,
+        "stream": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{OPENAI_COMPAT_BASE_URL}/v1/chat/completions", data=body,
+        headers={"Content-Type": "application/json",
+                 "Authorization": "Bearer EMPTY"}, method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=OPENAI_COMPAT_TIMEOUT) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    usage = data.get("usage", {})
+    return content, {"prompt_tokens": usage.get("prompt_tokens"),
+                     "completion_tokens": usage.get("completion_tokens")}
+
+
 def _ask_model_for_python(task: str) -> tuple[str, dict]:
     """Dispatch to the configured backend."""
     if BENCHMARK_BACKEND == "anthropic":
         return _ask_anthropic_for_python(task)
+    if BENCHMARK_BACKEND == "vllm":
+        return _ask_openai_compat_for_python(task)
     return _ask_ollama_for_python(task)
 
 
@@ -413,10 +445,20 @@ class CaseReport:
     python: SideReport
 
 
+def _make_ail_adapter():
+    if BENCHMARK_BACKEND == "vllm":
+        return OpenAICompatibleAdapter(
+            model=OPENAI_COMPAT_MODEL,
+            base_url=OPENAI_COMPAT_BASE_URL,
+            timeout=OPENAI_COMPAT_TIMEOUT,
+        )
+    return None  # ask() uses its default adapter (Ollama or Anthropic)
+
+
 def _run_ail(prompt: dict) -> SideReport:
     t0 = time.perf_counter()
     try:
-        r = ask(prompt["text"], max_retries=2)
+        r = ask(prompt["text"], max_retries=2, adapter=_make_ail_adapter())
     except AuthoringError as e:
         partial = e.partial
         return SideReport(
@@ -620,12 +662,16 @@ def _print_line(c: CaseReport) -> None:
 def _active_model_label() -> str:
     if BENCHMARK_BACKEND == "anthropic":
         return f"anthropic:{ANTHROPIC_MODEL}"
+    if BENCHMARK_BACKEND == "vllm":
+        return f"vllm:{OPENAI_COMPAT_MODEL}"
     return OLLAMA_MODEL
 
 
 def _active_host_label() -> str:
     if BENCHMARK_BACKEND == "anthropic":
         return "api.anthropic.com"
+    if BENCHMARK_BACKEND == "vllm":
+        return OPENAI_COMPAT_BASE_URL
     return OLLAMA_HOST
 
 
