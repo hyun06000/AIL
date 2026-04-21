@@ -68,6 +68,13 @@ _PURE_BUILTINS: frozenset[str] = frozenset({
     # (they read metadata, never execute an intent or effect)
     "origin_of", "lineage_of", "has_intent_origin", "has_effect_origin",
     "calibration_of",
+    # stdlib/utils.ail — deterministic, no side effects, no LLM
+    "sum_list", "average", "unique", "flatten", "take",
+    "word_count", "char_count", "is_empty", "repeat", "pad_left", "clamp",
+    # stdlib/core.ail
+    "identity",
+    # common dict/map operations (executor handles these as builtins)
+    "has_key", "keys", "values", "has",
 })
 
 _BANNED_FROM_PURE: frozenset[str] = frozenset({
