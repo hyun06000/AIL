@@ -62,6 +62,51 @@ other name.
 Output: raw AIL source only, no markdown fences, no explanation."""
 
 
+def _strip_line_comments(source: str) -> str:
+    """Remove `//` and `#` line comments from AIL source.
+
+    Careful: `//` and `#` must be OUTSIDE string literals to count as
+    comments. A naive regex would corrupt strings like "hash: #...".
+    We walk the source char-by-char with a tiny lexer.
+    """
+    out = []
+    i = 0
+    in_str = False
+    while i < len(source):
+        ch = source[i]
+        if in_str:
+            out.append(ch)
+            if ch == "\\" and i + 1 < len(source):
+                out.append(source[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                in_str = False
+            i += 1
+            continue
+        if ch == '"':
+            in_str = True
+            out.append(ch)
+            i += 1
+            continue
+        # Line comment?
+        if (ch == "/" and i + 1 < len(source) and source[i + 1] == "/") or ch == "#":
+            # Skip to end of line (but keep the newline as a separator)
+            while i < len(source) and source[i] != "\n":
+                i += 1
+            continue
+        # Block comment? /* ... */
+        if ch == "/" and i + 1 < len(source) and source[i + 1] == "*":
+            i += 2
+            while i + 1 < len(source) and not (source[i] == "*" and source[i + 1] == "/"):
+                i += 1
+            i += 2  # consume */
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def _flatten_ail(source: str, mode: str) -> str:
     """Re-emit AIL source in one of three formats.
 
@@ -70,20 +115,23 @@ def _flatten_ail(source: str, mode: str) -> str:
                          Kills indentation tokens but keeps statement
                          separators a whitespace-sensitive tokenizer might
                          prefer.
-    mode="single-line" : newlines and indentation both collapsed into single
-                         spaces. Maximally serialized. AIL's grammar is
-                         brace-delimited, so this is semantically identical —
+    mode="single-line" : line comments stripped, then newlines and
+                         indentation collapsed into single spaces. Maximally
+                         serialized. AIL's grammar is brace-delimited, so
+                         this is semantically identical to the original —
                          verified against the parser on 2026-04-22.
+                         Comments are removed because (a) they'd be read
+                         as swallowing the whole joined line, and (b) they
+                         are human documentation with no semantic content
+                         that the author model needs to learn.
     """
     if mode == "none":
         return source
     if mode == "strip-indent":
         return "\n".join(line.lstrip() for line in source.split("\n"))
     if mode == "single-line":
-        # Split on any whitespace, rejoin with single spaces.
-        # AIL has no newline-sensitive statements, and all string literals
-        # in the training set are single-line, so this is safe.
-        return " ".join(source.split())
+        stripped = _strip_line_comments(source)
+        return " ".join(stripped.split())
     raise ValueError(f"unknown flatten mode: {mode!r}")
 
 
