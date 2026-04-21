@@ -1285,5 +1285,6 @@ Python honest baseline (R1/C1, 동일 사이즈): **56%**
 - ail-coder:7b-v4 LoRA: `~/AIL/reference-impl/training/outputs/` (훈련 완료, GGUF 변환 대기)
 - Tokenizer: `~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242`
 - Training venv: `~/venv/labs` (unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128)
+- **벤치마크는 Ollama가 아닌 vLLM으로 돌린다.** `PYTORCH_ALLOC_CONF=expandable_segments:True ~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server --model ~/AIL/reference-impl/training/outputs/ ...` 로 서버 띄운 뒤 `AIL_OLLAMA_HOST=http://localhost:8000 AIL_OLLAMA_MODEL=ail-coder:7b-v4` 환경변수로 벤치마크 실행.
 
-*Updated 2026-04-21. v4 trained, README rewritten, merged to main as v1.8.4.*
+*Updated 2026-04-22. Added vLLM note — benchmark must use vLLM, not Ollama.*
