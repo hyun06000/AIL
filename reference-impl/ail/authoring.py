@@ -77,6 +77,8 @@ class AskResult:
     trace: Trace
     author_model: str
     errors: list[str] = field(default_factory=list)
+    author_prompt_tokens: int = 0
+    author_completion_tokens: int = 0
 
 
 class AuthoringError(RuntimeError):
@@ -143,13 +145,17 @@ def ask(
 
     result = None
     trace = Trace()
+    total_author_prompt_tokens = 0
+    total_author_completion_tokens = 0
     for attempt in range(max_retries + 1):
-        ail_source = _author_write_ail(
+        ail_source, author_tokens = _author_write_ail(
             prompt=prompt,
             reference_card=reference_card,
             adapter=adapter,
             prior_errors=errors,
         )
+        total_author_prompt_tokens += author_tokens["prompt_tokens"]
+        total_author_completion_tokens += author_tokens["completion_tokens"]
         try:
             compile_source(ail_source)   # parse + purity
             result, trace = run(ail_source, input=input_text, adapter=adapter)
@@ -161,6 +167,8 @@ def ask(
                     ail_source=ail_source, retries=attempt,
                     trace=Trace(), author_model=author_model,
                     errors=list(errors),
+                    author_prompt_tokens=total_author_prompt_tokens,
+                    author_completion_tokens=total_author_completion_tokens,
                 )
                 raise AuthoringError(
                     f"author failed to produce valid AIL after {attempt + 1} tries; "
@@ -182,6 +190,8 @@ def ask(
         trace=trace,
         author_model=author_model,
         errors=list(errors),
+        author_prompt_tokens=total_author_prompt_tokens,
+        author_completion_tokens=total_author_completion_tokens,
     )
 
 
@@ -221,7 +231,12 @@ def _author_write_ail(
         expected_type="Text (AIL source)",
         examples=_authoring_examples(),
     )
-    return _coerce_to_ail_source(response.value)
+    raw = response.raw or {}
+    tokens = {
+        "prompt_tokens": raw.get("prompt_tokens") or raw.get("input_tokens") or 0,
+        "completion_tokens": raw.get("completion_tokens") or raw.get("output_tokens") or 0,
+    }
+    return _coerce_to_ail_source(response.value), tokens
 
 
 def _coerce_to_ail_source(raw: Any) -> str:

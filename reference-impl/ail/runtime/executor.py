@@ -1190,10 +1190,13 @@ class Executor:
                 examples=example_pairs or None,
             )
 
+            raw = response.raw or {}
             self.trace.record("model_response",
                               model=response.model_id,
                               value=_truncate(response.value),
-                              confidence=response.confidence)
+                              confidence=response.confidence,
+                              prompt_tokens=raw.get("prompt_tokens") or raw.get("input_tokens") or 0,
+                              completion_tokens=raw.get("completion_tokens") or raw.get("output_tokens") or 0)
 
             # Apply calibration: replace the model-reported confidence
             # with whatever past observations of this intent say the

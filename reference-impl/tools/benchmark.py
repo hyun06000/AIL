@@ -95,6 +95,14 @@ OPENAI_COMPAT_BASE_URL = os.environ.get("AIL_OPENAI_COMPAT_BASE_URL", "http://lo
 OPENAI_COMPAT_MODEL = os.environ.get("AIL_OPENAI_COMPAT_MODEL", "")
 OPENAI_COMPAT_TIMEOUT = int(os.environ.get("AIL_OPENAI_COMPAT_TIMEOUT_S", "300"))
 
+# Separate Python-side backend. If not set, falls back to the same
+# backend as the AIL side. Set these to use a different model for Python
+# generation (e.g. qwen7b-base for Python while ail-coder:7b-v3 does AIL).
+PYTHON_OPENAI_COMPAT_BASE_URL = os.environ.get(
+    "PYTHON_OPENAI_COMPAT_BASE_URL", OPENAI_COMPAT_BASE_URL)
+PYTHON_OPENAI_COMPAT_MODEL = os.environ.get(
+    "PYTHON_OPENAI_COMPAT_MODEL", OPENAI_COMPAT_MODEL)
+
 # Backend selection:
 #   ollama    (default)  — existing Python-authoring path, POSTs to
 #                          localhost:11434
@@ -103,6 +111,8 @@ OPENAI_COMPAT_TIMEOUT = int(os.environ.get("AIL_OPENAI_COMPAT_TIMEOUT_S", "300")
 #                          already auto-routes to Anthropic when
 #                          ANTHROPIC_API_KEY is set and no
 #                          AIL_OLLAMA_MODEL is set.
+#   vllm                 — OpenAI-compatible server for both AIL and Python.
+#                          Python side uses PYTHON_OPENAI_COMPAT_* if set.
 BENCHMARK_BACKEND = os.environ.get("BENCHMARK_BACKEND", "ollama").lower()
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 
@@ -211,19 +221,26 @@ def _ask_anthropic_for_python(task: str) -> tuple[str, dict]:
 
 
 def _ask_openai_compat_for_python(task: str) -> tuple[str, dict]:
-    """OpenAI-compatible (vLLM / LocalAI / etc.) Python-authoring path."""
+    """OpenAI-compatible (vLLM / LocalAI / etc.) Python-authoring path.
+
+    Uses PYTHON_OPENAI_COMPAT_* vars if set, otherwise falls back to the
+    same AIL backend. This lets conditions 4/5 (fine-tuned AIL) still use
+    qwen7b-base for the Python side for a fair same-size comparison.
+    """
+    py_url = PYTHON_OPENAI_COMPAT_BASE_URL
+    py_model = PYTHON_OPENAI_COMPAT_MODEL or OPENAI_COMPAT_MODEL
     body = json.dumps({
-        "model": OPENAI_COMPAT_MODEL,
+        "model": py_model,
         "messages": [{"role": "user",
                       "content": _PY_PROMPT_OLLAMA % {
-                          "host": OPENAI_COMPAT_BASE_URL,
-                          "model": OPENAI_COMPAT_MODEL,
+                          "host": py_url,
+                          "model": py_model,
                           "task": task}}],
         "temperature": 0.0,
         "stream": False,
     }).encode("utf-8")
     req = urllib.request.Request(
-        f"{OPENAI_COMPAT_BASE_URL}/v1/chat/completions", data=body,
+        f"{py_url}/v1/chat/completions", data=body,
         headers={"Content-Type": "application/json",
                  "Authorization": "Bearer EMPTY"}, method="POST",
     )
@@ -231,8 +248,8 @@ def _ask_openai_compat_for_python(task: str) -> tuple[str, dict]:
         data = json.loads(r.read().decode("utf-8"))
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
     usage = data.get("usage", {})
-    return content, {"prompt_tokens": usage.get("prompt_tokens"),
-                     "completion_tokens": usage.get("completion_tokens")}
+    return content, {"prompt_tokens": usage.get("prompt_tokens") or 0,
+                     "completion_tokens": usage.get("completion_tokens") or 0}
 
 
 def _ask_model_for_python(task: str) -> tuple[str, dict]:
@@ -433,6 +450,8 @@ class SideReport:
     source: str = ""
     elapsed_ms: int = 0
     error: Optional[str] = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 @dataclass
@@ -481,6 +500,15 @@ def _run_ail(prompt: dict) -> SideReport:
     used_llm = ail_uses_llm(r.ail_source, r.trace.entries)
     used_fn = ail_uses_fn(r.ail_source)
     value_str = str(r.value)
+    # Sum execution-time intent tokens from trace
+    exec_prompt_tok = sum(
+        e.payload.get("prompt_tokens", 0) or 0
+        for e in r.trace.entries if e.kind == "model_response"
+    )
+    exec_completion_tok = sum(
+        e.payload.get("completion_tokens", 0) or 0
+        for e in r.trace.entries if e.kind == "model_response"
+    )
     return SideReport(
         parsed=True, exec_success=True,
         answer_ok=answer_ok(prompt.get("expected"), r.value),
@@ -491,6 +519,8 @@ def _run_ail(prompt: dict) -> SideReport:
         retries=r.retries,
         value=value_str[:500], source=r.ail_source,
         elapsed_ms=int((time.perf_counter() - t0) * 1000),
+        prompt_tokens=r.author_prompt_tokens + exec_prompt_tok,
+        completion_tokens=r.author_completion_tokens + exec_completion_tok,
         # AIL infinite_loop_rate and side_effect_violation_rate are
         # 0% by language design — no `while`, `pure fn` statically
         # enforced. No analysis needed.
@@ -502,7 +532,7 @@ def _run_ail(prompt: dict) -> SideReport:
 def _run_python_side(prompt: dict) -> SideReport:
     t0 = time.perf_counter()
     try:
-        raw, _meta = _ask_model_for_python(prompt["text"])
+        raw, meta = _ask_model_for_python(prompt["text"])
     except Exception as e:
         return SideReport(
             parsed=False, exec_success=False, answer_ok=False, routing_ok=False,
@@ -518,6 +548,9 @@ def _run_python_side(prompt: dict) -> SideReport:
         len(re.findall(p, code)) for p in (r"/api/chat", r"/api/generate")
     )
     stdout = exec_report["stdout"].strip()
+    # Normalise token key names (Anthropic uses input_tokens/output_tokens)
+    py_prompt_tok = (meta.get("prompt_tokens") or meta.get("input_tokens") or 0)
+    py_completion_tok = (meta.get("completion_tokens") or meta.get("output_tokens") or 0)
     return SideReport(
         parsed=parsed, exec_success=parsed,
         answer_ok=(answer_ok(prompt.get("expected"), stdout) if parsed else False),
@@ -532,6 +565,8 @@ def _run_python_side(prompt: dict) -> SideReport:
         retries=0,
         value=stdout[:500], source=code,
         elapsed_ms=int((time.perf_counter() - t0) * 1000),
+        prompt_tokens=py_prompt_tok,
+        completion_tokens=py_completion_tok,
         error=(exec_report["stderr"][:500] if not parsed else None),
     )
 
@@ -597,6 +632,20 @@ def _dimension_summary(cases: list[CaseReport]) -> dict:
         "avg_wall_clock_ms": {
             "ail": round(sum(c.ail.elapsed_ms for c in cases) / n),
             "python": round(sum(c.python.elapsed_ms for c in cases) / n),
+        },
+        "avg_prompt_tokens": {
+            "ail": round(sum(c.ail.prompt_tokens for c in cases) / n),
+            "python": round(sum(c.python.prompt_tokens for c in cases) / n),
+        },
+        "avg_completion_tokens": {
+            "ail": round(sum(c.ail.completion_tokens for c in cases) / n),
+            "python": round(sum(c.python.completion_tokens for c in cases) / n),
+        },
+        "avg_total_tokens": {
+            "ail": round(sum(c.ail.prompt_tokens + c.ail.completion_tokens
+                             for c in cases) / n),
+            "python": round(sum(c.python.prompt_tokens + c.python.completion_tokens
+                                for c in cases) / n),
         },
     }
 
@@ -707,6 +756,12 @@ def _print_report(summary: dict) -> None:
           f"Py {C['avg_llm_calls']['python']}")
     print(f"  avg wall clock (ms)  AIL {C['avg_wall_clock_ms']['ail']}    "
           f"Py {C['avg_wall_clock_ms']['python']}")
+    print(f"  avg prompt tokens    AIL {C['avg_prompt_tokens']['ail']}    "
+          f"Py {C['avg_prompt_tokens']['python']}")
+    print(f"  avg completion tok   AIL {C['avg_completion_tokens']['ail']}    "
+          f"Py {C['avg_completion_tokens']['python']}")
+    print(f"  avg total tokens     AIL {C['avg_total_tokens']['ail']}    "
+          f"Py {C['avg_total_tokens']['python']}")
 
     print("\nD. Harness Effectiveness (new, per Opus 4 April 2026)")
     D = summary["D_harness_effectiveness"]
