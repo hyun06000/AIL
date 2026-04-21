@@ -1355,7 +1355,10 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 - ✅ 트랙 공식 분리, `docs/heaal/README.md` 작성 (저자 모델 / 인텐트 모델 용어 + ASCII 흐름 도표).
 - ✅ `anti_python` 프롬프트 variant 구현 (reference card 43% 단축, 부정 지시 front-load).
 - ✅ **E1 (50 short tasks): target exceeded.** Sonnet + anti_python → AIL 파싱 **94%** (기준선 36%, +58pp), 정답률 **88%** (+52pp), 에러 핸들링 누락 **0%** (문법 강제 불변). Sonnet+anti_python이 **v3 fine-tune 7B(70%)를 능가**.
-- ✅ **E2 (10 effect-heavy long tasks): both-sides run.** AIL 7/10 vs Python 9/10 raw pass. **Python 에러 핸들링 누락 10/10 (100%)** vs AIL 0/10. E2-10 Wikipedia 403 응답에서 **Python 크래시 (HTTPError unhandled), AIL은 Result로 깔끔히 처리**. 이게 HEAAL 주장의 정확한 증명 (Python의 100% 누락이 실제로 터진 구체 케이스).
+- ✅ **E2 v1 → v2 recovery.** v1: AIL 7/10 vs Python 9/10. v2 fixes (parse_json builtin + anti_python 프롬프트 강화) 후: **AIL 9/10 = Python 9/10**, **AIL 프로그램 완주 10/10** (Python 9/10, E2-10 크래시), 재시도 0.00. **태스크 합격 동률, 안전성 100% 유지.**
+- ✅ E2-10 Wikipedia 403: Python `urllib.error.HTTPError` uncaught 크래시, AIL은 `Result`로 깔끔 처리. HEAAL 주장의 구체 증거.
+- ✅ `parse_json` builtin 추가 (pure, Result 반환). JSON API 응답 처리용. purity allowlist 등록, 5개 테스트.
+- ✅ anti_python 프롬프트 강화: pure-fn/plain-fn 구분 명시, HYBRID LOOP 패턴 예제, parse_json 가이드.
 - ✅ E2 infrastructure: `benchmarks/heaal_e2/prompts.json`, `setup_fixtures.py`, `run_e2.py` (AIL + Python 양쪽 실행 + scoring).
 
 #### HEAAL — 다음 우선순위
