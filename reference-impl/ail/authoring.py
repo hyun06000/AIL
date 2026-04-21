@@ -446,7 +446,34 @@ def _build_authoring_goal() -> str:
         "that exist are `stdlib/core`, `stdlib/language`, and "
         "`stdlib/utils`; any other import (`stdlib/math`, `stdlib/io`, "
         "etc.) is an error — those modules exist in Python but NOT in "
-        "AIL."
+        "AIL.\n\n"
+        "FORBIDDEN SYNTAX — the AIL parser rejects every item below. "
+        "These are Python habits that break in AIL:\n"
+        "  * List/array type annotations: `[Number]`, `[Text]`, "
+        "`List[Number]`, `Array<Text>`. Type annotations must be bare "
+        "identifiers. Write `items: Any` or `items: Text`, never "
+        "`items: [Number]`.\n"
+        "  * Dict / map types and literals: `{Text: Number}`, `{}`, "
+        "`{\"a\": 1}`. AIL has NO map type. For key-value data, encode "
+        "as `\"key:value\"` text and use `split()` to parse.\n"
+        "  * Dict subscript assignment: `d[key] = val`. Not valid. "
+        "Build output as a list of strings and join at the end.\n"
+        "  * Keyword arguments: `fn(x=5)`, `join(items, sep=\",\")`. "
+        "AIL uses positional arguments only.\n"
+        "  * Exponentiation `**`: `x ** 2` is not valid. Write "
+        "`x * x` for squares; implement repeated multiplication in a "
+        "`pure fn` for higher powers.\n"
+        "  * Import with dot or alias: `import stdlib.utils`, "
+        "`import X as Y`. Write `import sum_list from \"stdlib/utils\"`.\n"
+        "  * `reverse()` on a Text value: `reverse(s)` where `s` is "
+        "Text returns a list of characters, not a string. To reverse a "
+        "string, write: `join(reverse(split(s, \"\")), \"\")`.\n"
+        "  * Python keywords: `def`, `lambda`, `None`, `elif`, `pass`, "
+        "`True`, `False`, `while`. AIL equivalents: `fn`/`pure fn`/"
+        "`intent`, no-null (use `\"\"` or `0`), `else if`, no pass, "
+        "`true`/`false`, `for x in range(...)`.\n"
+        "When in doubt about a syntax pattern, write it out with "
+        "explicit `for` loops and `if` branches — those always work."
     )
     # ────────────────────────────────────────────────────────────────
     # Optional v2 FORBIDDEN-SYNTAX extension.
@@ -551,30 +578,36 @@ def _tutorial_authoring_goal() -> str:
         "for example, as positive or negative`.\n\n"
         "FORBIDDEN SYNTAX — the parser will reject every item below. "
         "The model's Python prior makes these tempting; suppress them.\n"
-        "  * Generic / parameterised types: `List[Text]`, "
-        "`Tuple[Number, Text]`, `Array<Text>`. AIL types are bare "
-        "identifiers: `Text`, `Number`, `Boolean`.\n"
-        "  * Ternary: `a ? b : c`. Use explicit `if a { return b } "
-        "else { return c }`.\n"
-        "  * Slice subscript: `xs[a:b]`. Use `slice(xs, a, b)`. "
-        "(`xs[i]` is fine — it desugars to `get(xs, i)`.)\n"
-        "  * Method calls on builtins: `\"hello\".upper()` → "
-        "`upper(\"hello\")`. `xs.append(x)` → `xs = append(xs, x)`.\n"
+        "  * List/array type annotations: `[Number]`, `[Text]`, "
+        "`List[Text]`, `Tuple[Number, Text]`, `Array<Text>`. AIL types "
+        "are bare identifiers only: `Text`, `Number`, `Boolean`, `Any`. "
+        "Write `items: Any` not `items: [Number]`.\n"
+        "  * Dict / map types and literals: `{Text: Number}`, `{}`, "
+        "`{\"k\": 1}`. AIL has NO map type. Encode key-value pairs as "
+        "`\"key:value\"` text and parse with `split()`.\n"
+        "  * Dict subscript assignment: `d[key] = val`. Not valid.\n"
+        "  * Keyword arguments: `fn(x=5)`, `join(items, sep=\",\")`. "
+        "AIL uses positional arguments only.\n"
+        "  * Exponentiation `**`: write `x * x` for squares; implement "
+        "repeated multiplication in a `pure fn` for higher powers.\n"
+        "  * `reverse()` on Text: returns a list, not a string. To "
+        "reverse a string: `join(reverse(split(s, \"\")), \"\")`.\n"
+        "  * Ternary: `a ? b : c`. Use `if a { return b } else { "
+        "return c }`.\n"
+        "  * Slice subscript: `xs[a:b]`. Use `slice(xs, a, b)`.\n"
+        "  * Method calls: `\"hello\".upper()` → `upper(\"hello\")`. "
+        "`xs.append(x)` → `xs = append(xs, x)`.\n"
         "  * List comprehensions: `[x*2 for x in xs]`. Write a `for` "
         "loop with `append`.\n"
-        "  * Python keywords: `def`, `lambda`, `None`, `elif`, "
-        "`pass`. AIL has none of these.\n"
-        "  * Capitalised booleans: `True`, `False`. AIL uses "
-        "lowercase `true`, `false`.\n"
-        "  * `while`. AIL has no while loop. Use `for x in range(...)`.\n"
+        "  * Python keywords: `def`, `lambda`, `None`, `elif`, `pass`, "
+        "`True`, `False`. AIL: `fn`, no null, `else if`, `true`/`false`.\n"
+        "  * `while`. Use `for x in range(...)`.\n"
         "  * f-strings `f\"{x}\"`. Use `join([\"text \", to_text(x)], "
-        "\"\")`.\n\n"
+        "\"\")`.\n"
+        "  * Import with dot or alias: `import stdlib.utils`, "
+        "`import X as Y`. Write `import sum_list from \"stdlib/utils\"`.\n\n"
         "STDLIB — only `stdlib/core`, `stdlib/language`, `stdlib/utils` "
-        "exist. NEVER import `stdlib/math`, `stdlib/io`, `stdlib/json`, "
-        "`stdlib/datetime`, `stdlib/re` — those exist in Python but NOT "
-        "in AIL. For math beyond `+ - * / %`, use the trusted-pure "
-        "builtins `abs`, `max`, `min`, `round`, `floor`, `ceil`, "
-        "`sqrt`, `pow` directly — no import needed."
+        "exist. NEVER import `stdlib/math`, `stdlib/io`, etc."
     )
 
 
@@ -647,8 +680,23 @@ def _remediation_hints(error_text: str) -> list[str]:
         )
     if "LBRACK" in error_text and "IDENT" in error_text:
         hints.append(
-            "no_generic_or_list_type_annotations_like_Array_or_[Number]_"
-            "use_plain_Number_or_Text"
+            "no_list_type_annotations_like_[Number]_or_[Text]_"
+            "use_bare_Any_or_Number_or_Text_in_signatures"
+        )
+    if "LBRACE" in error_text and ("IDENT" in error_text or "top-level" not in error_text):
+        hints.append(
+            "AIL_has_no_dict_type_no_dict_literals_no_{}_syntax_"
+            "encode_key_value_data_as_key:value_text_and_parse_with_split"
+        )
+    if "EQ" in error_text and "RPAREN" in error_text:
+        hints.append(
+            "no_keyword_arguments_in_AIL_use_positional_args_only_"
+            "no_fn(x=5)_no_join(items_sep=',')"
+        )
+    if "STAR" in error_text and "unexpected" in error_text:
+        hints.append(
+            "no_**_exponentiation_in_AIL_write_x_*_x_for_squares_"
+            "implement_pow_as_a_pure_fn_with_a_for_loop"
         )
     if "unexpected character '\\\\'" in error_text or "unexpected character '\\'" in error_text:
         hints.append(
@@ -972,6 +1020,24 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
                 '    goal: positive_or_negative\n'
                 '}\n'
                 'entry main(x: Text) { return classify_sentiment("great!") }'
+            ),
+        ),
+        # List input — pins the correct pattern for prompts that give
+        # a literal list of numbers (e.g. "average of [85, 92, 78]").
+        # Shows: inline list literal in entry body (fine), bare type
+        # annotation `Any` (not `[Number]`), join() for string output.
+        (
+            [{"prompt": "Calculate the average of [85, 92, 78, 95, 88]"}],
+            (
+                'pure fn average(nums: Any) -> Number {\n'
+                '    total = 0\n'
+                '    for n in nums { total = total + n }\n'
+                '    return total / length(nums)\n'
+                '}\n'
+                'entry main(x: Text) {\n'
+                '    nums = [85, 92, 78, 95, 88]\n'
+                '    return average(nums)\n'
+                '}'
             ),
         ),
         # Hybrid: one computable subtask AND one judgment subtask in
