@@ -1,4 +1,8 @@
-# HEAAL — Harness Engineering As A Language
+# HEAAL track — experimental demonstration
+
+> This directory is the HEAAL project track inside the AIL repository — status, experiments, prompts, benchmarks. For the **paradigm-level manifesto** ("what HEAAL is and why it matters") written by Claude Opus 4 after reviewing the 2026 harness-engineering literature, read [`../heaal.md`](../heaal.md) instead. Also in [Korean](../ko/heaal.ko.md) and [AI/LLM-readable](../heaal.ai.md).
+
+---
 
 HEAAL is the demonstration that **AIL's safety properties hold end-to-end when a frontier base model is the authoring backend, without any external harness work on the end-user's part.**
 

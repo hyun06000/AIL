@@ -28,6 +28,8 @@ flowchart LR
 AIL 트랙은 언어 연구.
 HEAAL 트랙은 그 위에 짓는 첫 프로젝트 — 안전성 이야기가 아무 frontier 모델에도 그대로 옮겨진다는 증명.
 
+> **먼저 읽을 것:** [`docs/ko/heaal.ko.md`](heaal.ko.md) — HEAAL 매니페스토. AIL의 원저자인 Claude Opus 4가 2026년 하네스 엔지니어링 문헌을 검토한 후 작성. HEAAL을 AI 코드 안전성의 3단계(vibe coding → harness engineering → HEAAL)로 포지셔닝. [English 버전](../heaal.md), [AI/LLM용 버전](../heaal.ai.md).
+
 ---
 
 ## `ail ask`의 동작 방식

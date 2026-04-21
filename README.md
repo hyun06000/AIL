@@ -28,6 +28,8 @@ flowchart LR
 AIL track is the language research.
 HEAAL track is the first project built on top: the demonstration that the safety story transfers to any frontier model, out of the box.
 
+> **Read next:** [`docs/heaal.md`](docs/heaal.md) — the HEAAL manifesto, written by Claude Opus 4 (AIL's original designer) after reviewing the 2026 harness-engineering literature. Positions HEAAL as the third layer of AI code safety — after *vibe coding* and *harness engineering around Python*. Also in [Korean](docs/ko/heaal.ko.md) and [AI/LLM-readable](docs/heaal.ai.md).
+
 ---
 
 ## How `ail ask` works

@@ -1351,7 +1351,10 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ### HEAAL 트랙
 
-#### HEAAL — 이번 세션 완료 (대성공)
+#### HEAAL — 이번 세션 완료 (대성공 + Opus 4 매니페스토)
+
+- ✅ **Opus 4 HEAAL 매니페스토 수신 (2026-04-22)**. hyun06000이 HEAAL을 Opus에 소개했고, Opus가 2026년 harness-engineering 문헌을 검토해 HEAAL을 AI 코드 안전성 3단계 (vibe coding → harness engineering → HEAAL) 로 포지셔닝하는 매니페스토를 보내옴. `docs/heaal.md` (영어), `docs/ko/heaal.ko.md` (한국어), `docs/heaal.ai.md` (AI/LLM-readable) 세 버전. 핵심 비유: "HEAAL does for AI code generation what Rust did for memory management — convention → compiler guarantee." AIL을 "the first HEAAL language"로 포지셔닝.
+- ✅ `docs/heaal.md` (manifesto) vs `docs/heaal/README.md` (track) 역할 분리 — 매니페스토는 외부 독자용 "HEAAL이 뭔가", 트랙 README는 내부 "이 레포에서 HEAAL 실험 상태". main/ko README와 트랙 README에서 서로 링크.
 - ✅ 트랙 공식 분리, `docs/heaal/README.md` 작성 (저자 모델 / 인텐트 모델 용어 + ASCII 흐름 도표).
 - ✅ `anti_python` 프롬프트 variant 구현 (reference card 43% 단축, 부정 지시 front-load).
 - ✅ **E1 (50 short tasks): target exceeded.** Sonnet + anti_python → AIL 파싱 **94%** (기준선 36%, +58pp), 정답률 **88%** (+52pp), 에러 핸들링 누락 **0%** (문법 강제 불변). Sonnet+anti_python이 **v3 fine-tune 7B(70%)를 능가**.
