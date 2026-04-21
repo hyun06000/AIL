@@ -1173,6 +1173,18 @@ Opus 4의 지침과 충돌 시 이 블록이 우선한다.
 - docs/benchmarks/ JSON 수정 또는 삭제 — 새 JSON 추가만 허용
 - 벤치마크 목표치(숫자) 하향 조정
 - 훈련 아티팩트 (.gguf, adapter, checkpoint) git 커밋
+- `main` 브랜치에 직접 커밋 (v2 이후 — 반드시 `dev`에서 작업 후 PR/merge)
+
+### 규칙 4 — 브랜치 전략 (v2 이후, 2026-04-21 도입)
+
+링크드인 홍보 시작으로 버전 안정성 필요. 두 브랜치 운영:
+
+- **`main`** — stable 릴리즈 브랜치. PyPI 배포 및 외부 사용자 노출. 직접 커밋 금지.
+- **`dev`** — 개발 브랜치. 모든 신기능, 벤치마크, 프롬프트 개선은 여기서.
+
+**작업 흐름:** `dev`에서 개발 → 테스트 통과 → hyun06000 승인 → `main` merge → PyPI 릴리즈
+
+현재 세션은 `dev` 브랜치에서 진행 중. homeblack도 `dev`를 pull해서 사용.
 
 ---
 
@@ -1209,103 +1221,57 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ---
 
-## SESSION STATE — 2026-04-21 (최신 핸드오프)
+## SESSION STATE — 2026-04-21 (최신 핸드오프) [HISTORICAL — superseded below]
 
-### 기준선 — 5-way 동일사이즈(7B) 벤치마크
+이전 세션 기록. 최신 SESSION STATE는 아래 참조.
+요약: 5-way 벤치마크 완결, authoring.py FORBIDDEN SYNTAX 블록 추가, Round 2 실행 준비.
+전체 내용: `git show e1bb49c:CLAUDE.md` 로 복원 가능.
 
-`docs/benchmarks/2026-04-21_5way_analysis.md` 및 4개 JSON이 기준선.
-**Python baseline(C3/C1): 56% answer**. 이걸 fine-tune 모델이 넘는 것이 목표.
+---
 
-| 조건 | AIL answer | Python(fair) | 상태 |
-|---|---|---|---|
-| C1 base/nofs | 42% | 56% | −14pp |
-| C2 base/tut | 48% | 56% | −8pp |
-| C4 ft/nofs | 48% | 56% | −8pp |
-| C5 ft/tut | **52%** | 56% | **−4pp** ← 현재 최고 |
+## SESSION STATE — 2026-04-21 (Round 2 완료 + 분기 전략)
 
-Cat별 세부 (C5 기준):
-- Cat A (순수 계산): AIL 47% vs Py 73% ← **주요 격차, 파싱 실패가 원인**
-- Cat B (순수 판단): AIL 80% vs Py 7% ← **AIL 압승**
-- Cat C (하이브리드): AIL 35% vs Py 80% ← **주요 격차**
+### 기준선 — Round 2 결과 (현재 최고)
+
+**기준 파일**: `docs/benchmarks/2026-04-21_r2_analysis.md` + 7개 JSON
+
+**목표 달성: R2/C4 (ft+nofs+FORBIDDEN) = 64% — Python baseline(56%) 돌파 +8pp**
+
+| 조건 | AIL parse | AIL ans | Py ans | Cat A | Cat B | Cat C | 상태 |
+|---|---|---|---|---|---|---|---|
+| R1/C1 base+nofs | 54% | 42% | 56% | 47% | 53% | 30% | 기준선 |
+| R1/C2 base+tut | 60% | 48% | 56% | 33% | 87% | 30% | |
+| R1/C4 ft+nofs | 58% | 48% | 38% | 40% | 60% | 45% | |
+| R1/C5 ft+tut | 56% | 52% | 38% | 47% | 80% | 35% | |
+| R2/C2 base+tut | 60% | 48% | 56% | 40% | 87% | 25% | 변화 없음 |
+| **R2/C4 ft+nofs** | **72%** | **64%** | 40% | **53%** | **80%** | **60%** | **✅ 목표 달성** |
+| R2/C5 ft+tut | 56% | 44% | 40% | 40% | 67% | 30% | 퇴보 (tutorial 역효과) |
+
+Python honest baseline (R1/C1, 동일 사이즈): **56%**
+
+**최적 구성: fine-tuned (ail-coder:7b-v3) + no few-shot + FORBIDDEN SYNTAX = 64%**
+- tutorial 프롬프트는 fine-tuned 모델에 역효과 (pure fn 과용, 답변 형식 변화)
+- FORBIDDEN SYNTAX는 base 모델에 효과 없음 (fine-tune 필수)
 
 ### 이번 세션에서 완료한 것
 
-1. ✅ **5-way 동일사이즈 벤치마크 완결** — C1/C2/C4/C5 4개 조건, 50 프롬프트. JSON + 분석 문서 커밋.
-2. ✅ **이전 벤치마크 리포트 전부 삭제** — 5-way가 새 기준선.
-3. ✅ **Cat A/C 실패 원인 파악** — `[Number]` 타입 어노테이션, dict 리터럴 `{}`, keyword argument `fn(x=5)`, `**` 연산자, import dot 문법.
-4. ✅ **authoring.py 프롬프트 개선** — base + tutorial 양쪽에 FORBIDDEN SYNTAX 블록 추가. list 처리 few-shot 예제 추가. `_remediation_hints` 보강.
+1. ✅ **Round 2 벤치마크 완결** — R2/C2, C4, C5 실행. JSON + 분석 문서 커밋.
+2. ✅ **Python baseline 돌파** — R2/C4 64% > 56%. 첫 번째 마일스톤 달성.
+3. ✅ **퇴보 원인 파악** (R2/C5): `pure fn`+`sum_list` purity error, `reverse(split())` 타입 미스매치, B카테고리 답변 형식 변화.
+4. ✅ **dev/main 브랜치 전략 확립** — LinkedIn 홍보 이후 버전 안정성 필요. `dev`에서 개발, `main`은 stable 릴리즈만.
+5. ✅ **CLAUDE.md Rule 4 (브랜치 전략) 추가** — commit `e1bb49c`.
 
-### 현재 진행 중 (다음 Claude가 이어받을 것)
+### 다음 우선순위 (Round 3)
 
-**Round 2 벤치마크 실행 중** — 개선된 프롬프트로 5-way 재실행. homeblack에서 진행 중.
-
-실행 방법:
-```bash
-ssh homeblack
-# 서버 A: qwen7b-base → 조건 1, 2
-tmux kill-session -t vllm-server 2>/dev/null; sleep 3
-tmux new-session -d -s vllm-server "
-PYTORCH_ALLOC_CONF=expandable_segments:True \
-~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server \
-  --model ~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf \
-  --tokenizer ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242 \
-  --load-format gguf --served-model-name qwen2.5-coder:7b-base \
-  --host 0.0.0.0 --port 8000 --max-model-len 8192 \
-  --gpu-memory-utilization 0.85 --enforce-eager 2>&1 | tee ~/vllm-base.log"
-
-# 조건 1: base / no few-shot
-export BENCHMARK_BACKEND=vllm AIL_OPENAI_COMPAT_BASE_URL=http://localhost:8000
-export AIL_OPENAI_COMPAT_TIMEOUT_S=600 AIL_OPENAI_COMPAT_MODEL=qwen2.5-coder:7b-base
-export PYTHON_OPENAI_COMPAT_BASE_URL=http://localhost:8000 PYTHON_OPENAI_COMPAT_MODEL=qwen2.5-coder:7b-base
-unset AIL_AUTHOR_PROMPT_VARIANT
-cd ~/AIL/reference-impl && ~/venv/labs/bin/python -u tools/benchmark.py \
-    --out ~/AIL/docs/benchmarks/2026-04-21_r2_cond1_base_nofewshot.json
-
-# 조건 2: base / tutorial
-export AIL_AUTHOR_PROMPT_VARIANT=tutorial
-~/venv/labs/bin/python -u tools/benchmark.py \
-    --out ~/AIL/docs/benchmarks/2026-04-21_r2_cond2_base_tutorial.json
-unset AIL_AUTHOR_PROMPT_VARIANT
-
-# 서버 B: ail-coder:7b-v3 → 조건 4, 5
-tmux kill-session -t vllm-server 2>/dev/null; sleep 3
-tmux new-session -d -s vllm-server "
-PYTORCH_ALLOC_CONF=expandable_segments:True \
-~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server \
-  --model ~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf \
-  --tokenizer ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242 \
-  --load-format gguf --served-model-name ail-coder:7b-v3 \
-  --host 0.0.0.0 --port 8000 --max-model-len 8192 \
-  --gpu-memory-utilization 0.85 --enforce-eager 2>&1 | tee ~/vllm-finetuned.log"
-
-# 조건 4: ft / no few-shot
-export AIL_OPENAI_COMPAT_MODEL=ail-coder:7b-v3
-~/venv/labs/bin/python -u tools/benchmark.py \
-    --out ~/AIL/docs/benchmarks/2026-04-21_r2_cond4_finetuned_nofewshot.json
-
-# 조건 5: ft / tutorial
-export AIL_AUTHOR_PROMPT_VARIANT=tutorial
-~/venv/labs/bin/python -u tools/benchmark.py \
-    --out ~/AIL/docs/benchmarks/2026-04-21_r2_cond5_finetuned_tutorial.json
-```
-
-완료 후 JSON 4개를 로컬로 복사하고 분석 스크립트 실행:
-```bash
-scp homeblack:AIL/docs/benchmarks/2026-04-21_r2_cond*.json \
-    /Users/user/Desktop/code/personal/AIL/docs/benchmarks/
-```
-
-### 다음 우선순위 (Round 2 완료 후)
-
-1. **Round 2 결과 분석** — Cat A 47%→? (파싱 실패 수정 효과 측정). 목표: C5 ≥ 56%.
-2. **Cat C (hybrid) 개선 전략** — 현재 35-45%. Python 80%와 격차 큼.
-   - JSON에서 실패 케이스 패턴 분류
-   - fn+intent 인터리빙 few-shot 추가 또는 v4 fine-tune 데이터셋 확장 결정
-3. **C5 ≥ 56% 달성 시** — v4 fine-tune 검토 (HANDOFF.md 기준)
+1. **Cat A 잔여 실패 수정**: `sum_list`를 purity registry에 등록 (또는 pure fn에서 stdlib 호출 허용). A10 팰린드롬: `reverse(split(s))` → `join(reverse(split(s, "")), "")`.
+2. **Cat C (hybrid) 개선**: 현재 60% vs Python 80%. fn+intent 인터리빙 few-shot 1개 추가 (base 프롬프트에만).
+3. **Round 3 목표**: R3/C4 ≥ 70% answer rate.
+4. **v4 fine-tune 검토**: R3/C4 ≥ 70% 달성 시 (HANDOFF.md 기준).
 
 ### Environment on homeblack
 
 - SSH: `homeblack` (HostName `10.0.0.1`, User `david`)
+- Branch: `dev` (both local and homeblack — `git pull origin dev` 확인 필요)
 - vLLM: `~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server`. `PYTORCH_ALLOC_CONF=expandable_segments:True` 필수.
 - qwen7b-base GGUF: `~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf`
 - ail-coder:7b-v3 GGUF: `~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf`
@@ -1313,4 +1279,4 @@ scp homeblack:AIL/docs/benchmarks/2026-04-21_r2_cond*.json \
 - Training venv: `~/venv/labs` (unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128)
 - `export_to_ollama.py` broken — 수동 llama.cpp 파이프라인 사용 (HANDOFF.md 참고)
 
-*Written 2026-04-21 after 5-way benchmark completion and authoring prompt improvements.*
+*Written 2026-04-21 after Round 2 completion. AIL fine-tuned model first beats Python baseline.*
