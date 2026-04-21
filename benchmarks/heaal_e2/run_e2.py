@@ -21,9 +21,11 @@ import argparse
 import dataclasses
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -126,6 +128,152 @@ def score(prompt: dict, value: Any, err: str | None) -> dict:
     return {"ok": True}
 
 
+# -------------------------------------------------------------------
+# Python-side authoring + execution (for the no-harness comparison)
+# -------------------------------------------------------------------
+
+_PY_PROMPT_TEMPLATE = """You are a Python programmer. Write a single Python 3 \
+program (stdlib only — no packages) that solves the task below.
+
+When the task requires LLM judgment (sentiment, classification, \
+summarization, translation, extraction), POST to the Anthropic API at \
+https://api.anthropic.com/v1/messages using urllib.request. Read the \
+API key from the ANTHROPIC_API_KEY environment variable. Headers: \
+"x-api-key: <key>", "anthropic-version: 2023-06-01", \
+"content-type: application/json". Body: {"model": %(model)r, \
+"max_tokens": 256, "messages": [{"role": "user", "content": "<prompt>"}]}. \
+The response JSON has "content" as a list; use content[0]["text"].
+
+When the task requires computation (counting, parsing, arithmetic, \
+sorting, searching, file I/O), write plain Python — do NOT call the \
+API for that. File paths referenced in the task are real and the \
+program runs on a machine where they exist.
+
+Print ONLY the final answer to stdout on the LAST line. Any file \
+writes that the task asks for must happen as side effects before \
+that final print. No markdown fences, no prose.
+
+TASK:
+%(task)s
+"""
+
+
+def _anthropic_client():
+    try:
+        import anthropic
+    except ImportError:
+        sys.exit("anthropic package required for Python-side generation")
+    return anthropic.Anthropic(), os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+
+
+def ask_python(task: str) -> tuple[str, dict]:
+    client, model = _anthropic_client()
+    resp = client.messages.create(
+        model=model, max_tokens=1024, temperature=0.0,
+        messages=[{"role": "user",
+                   "content": _PY_PROMPT_TEMPLATE % {"model": model, "task": task}}],
+    )
+    text = resp.content[0].text if resp.content else ""
+    # Strip any fences the model emitted despite the instruction
+    text = re.sub(r"^```(?:python)?\s*\n", "", text.strip())
+    text = re.sub(r"\n```\s*$", "", text)
+    return text, {
+        "prompt_tokens": resp.usage.input_tokens,
+        "completion_tokens": resp.usage.output_tokens,
+    }
+
+
+def run_python(code: str, timeout: int = 60) -> dict:
+    d = tempfile.mkdtemp(prefix="heaal_e2_py_")
+    path = os.path.join(d, "prog.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(code)
+    t0 = time.perf_counter()
+    try:
+        r = subprocess.run([sys.executable, path],
+                           capture_output=True, text=True, timeout=timeout)
+        return {"returncode": r.returncode, "stdout": r.stdout,
+                "stderr": r.stderr, "timed_out": False,
+                "elapsed_ms": int((time.perf_counter() - t0) * 1000)}
+    except subprocess.TimeoutExpired as e:
+        return {"returncode": -1, "stdout": e.stdout or "",
+                "stderr": (e.stderr or "") + f"\n[TIMEOUT {timeout}s]",
+                "timed_out": True,
+                "elapsed_ms": int((time.perf_counter() - t0) * 1000)}
+
+
+# Heuristics for safety-property analysis on Python source
+_PY_FAILABLE_PATTERNS = (
+    r"\bint\s*\(", r"\bfloat\s*\(", r"\bopen\s*\(",
+    r"urllib\.request\.", r"\bjson\.loads\s*\(",
+)
+
+def python_lacks_error_handling(code: str) -> bool:
+    """True if the program uses any failable operation without a try/except.
+
+    Matches the measurement used in the AIL-track benchmark.py:
+    at least one failable call appears outside any `try:` block.
+    """
+    if not any(re.search(p, code) for p in _PY_FAILABLE_PATTERNS):
+        return False  # no failable ops at all
+    # Strip out try blocks (naive but effective at this scale)
+    stripped = re.sub(r"try\s*:[\s\S]*?except[^\n]*:[\s\S]*?(?=\n\S|\Z)",
+                      "", code)
+    return any(re.search(p, stripped) for p in _PY_FAILABLE_PATTERNS)
+
+
+def python_calls_llm(code: str) -> bool:
+    return bool(re.search(r"urllib\.request|anthropic|api\.anthropic\.com", code))
+
+
+def score_python(prompt: dict, stdout: str, stderr: str, returncode: int, timed_out: bool) -> dict:
+    if timed_out:
+        return {"ok": False, "reason": "python_timeout"}
+    if returncode != 0:
+        short = (stderr or "").strip().splitlines()[-1:] if stderr else [""]
+        return {"ok": False, "reason": f"python_crash (rc={returncode}): {short[0][:120]}"}
+    # stdout last non-empty line is "the answer"
+    lines = [l for l in stdout.strip().splitlines() if l.strip()]
+    value = lines[-1] if lines else ""
+    # Reuse score() with the captured value
+    return score(prompt, value, err=None)
+
+
+def run_python_side(prompt: dict) -> dict:
+    t0 = time.monotonic()
+    try:
+        code, toks = ask_python(prompt["text"])
+    except Exception as e:
+        return {
+            "source": "", "value": None,
+            "returncode": None, "stdout": "", "stderr": "",
+            "elapsed_ms": int((time.monotonic() - t0) * 1000),
+            "author_prompt_tokens": 0, "author_completion_tokens": 0,
+            "error_handling_missing": False,
+            "uses_llm": False,
+            "score": {"ok": False, "reason": f"python_authoring: {e}"},
+        }
+    exec_r = run_python(code)
+    s = score_python(prompt, exec_r["stdout"], exec_r["stderr"],
+                     exec_r["returncode"], exec_r["timed_out"])
+    lines = [l for l in exec_r["stdout"].strip().splitlines() if l.strip()]
+    value = lines[-1] if lines else ""
+    return {
+        "source": code,
+        "value": value,
+        "returncode": exec_r["returncode"],
+        "stdout_tail": exec_r["stdout"][-500:],
+        "stderr_tail": exec_r["stderr"][-500:],
+        "elapsed_ms": exec_r["elapsed_ms"],
+        "timed_out": exec_r["timed_out"],
+        "author_prompt_tokens": toks.get("prompt_tokens", 0),
+        "author_completion_tokens": toks.get("completion_tokens", 0),
+        "error_handling_missing": python_lacks_error_handling(code),
+        "uses_llm": python_calls_llm(code),
+        "score": s,
+    }
+
+
 def run_case(prompt: dict, adapter) -> dict:
     t0 = time.monotonic()
     source = ""
@@ -195,26 +343,51 @@ def main() -> int:
           f"variant={os.environ.get('AIL_AUTHOR_PROMPT_VARIANT', 'default')}")
     results = []
     for pr in prompts:
-        print(f"\n  [{pr['id']}] {pr['category']:<22}  ", end="", flush=True)
-        r = run_case(pr, adapter)
-        results.append(r)
-        if r["score"]["ok"]:
-            print(f"✅ retries={r['ail']['retries']} t={r['ail']['elapsed_ms']}ms")
-        else:
-            print(f"❌ {r['score']['reason'][:100]}")
+        print(f"\n  [{pr['id']}] {pr['category']:<22}")
 
-    # Summary
+        # AIL side — reset fixtures + output dir before each case
+        subprocess.check_call([sys.executable, str(Path(__file__).parent / "setup_fixtures.py")],
+                              stdout=subprocess.DEVNULL)
+        r = run_case(pr, adapter)
+        ail_mark = "✅" if r["score"]["ok"] else "❌"
+        print(f"      AIL    {ail_mark} retries={r['ail']['retries']} t={r['ail']['elapsed_ms']}ms")
+        if not r["score"]["ok"]:
+            print(f"             reason: {r['score']['reason'][:110]}")
+
+        # Python side — reset fixtures again so the Python sees pristine inputs
+        subprocess.check_call([sys.executable, str(Path(__file__).parent / "setup_fixtures.py")],
+                              stdout=subprocess.DEVNULL)
+        py = run_python_side(pr)
+        py_mark = "✅" if py["score"]["ok"] else "❌"
+        print(f"      Python {py_mark} t={py['elapsed_ms']}ms  err_handling_missing={py['error_handling_missing']}  uses_llm={py['uses_llm']}")
+        if not py["score"]["ok"]:
+            print(f"             reason: {py['score']['reason'][:110]}")
+        r["python"] = py
+        results.append(r)
+
+    # Summary — both sides
     n = len(results)
-    passed = sum(1 for r in results if r["score"]["ok"])
-    parsed = sum(1 for r in results if r["ail"]["source"] and not r["ail"]["error"])
-    tot_retries = sum(r["ail"]["retries"] for r in results)
-    tot_author_ptok = sum(r["ail"]["author_prompt_tokens"] for r in results)
-    tot_author_ctok = sum(r["ail"]["author_completion_tokens"] for r in results)
-    print("\n=== E2 SUMMARY ===")
-    print(f"  tasks passed:          {passed}/{n}  ({passed/n*100:.0f}%)")
-    print(f"  programs completed:    {parsed}/{n}  (no authoring error)")
-    print(f"  avg retries:           {tot_retries/n:.2f}")
-    print(f"  total author tokens:   prompt={tot_author_ptok}  completion={tot_author_ctok}")
+    ail_passed = sum(1 for r in results if r["score"]["ok"])
+    py_passed = sum(1 for r in results if r["python"]["score"]["ok"])
+    ail_parsed = sum(1 for r in results if r["ail"]["source"] and not r["ail"]["error"])
+    py_ran = sum(1 for r in results if r["python"]["returncode"] == 0)
+    ail_retries = sum(r["ail"]["retries"] for r in results)
+    ail_ptok = sum(r["ail"]["author_prompt_tokens"] for r in results)
+    ail_ctok = sum(r["ail"]["author_completion_tokens"] for r in results)
+    py_ptok = sum(r["python"]["author_prompt_tokens"] for r in results)
+    py_ctok = sum(r["python"]["author_completion_tokens"] for r in results)
+    py_err_miss = sum(1 for r in results if r["python"]["error_handling_missing"])
+    py_used_llm = sum(1 for r in results if r["python"]["uses_llm"])
+    needs_judgment = sum(1 for p in prompts if "intent" in p["category"] or p["category"] == "research_style" or "intent" in str(p.get("effects", [])))
+
+    print("\n=== E2 SUMMARY — AIL vs Python side-by-side (same Sonnet, no external harness) ===")
+    print(f"  tasks passed          : AIL {ail_passed}/{n}   Python {py_passed}/{n}")
+    print(f"  programs completed    : AIL {ail_parsed}/{n}   Python {py_ran}/{n} (rc==0)")
+    print(f"  avg retries (AIL only): {ail_retries/n:.2f}")
+    print(f"  Python err-handling missing: {py_err_miss}/{n}  ({py_err_miss/n*100:.0f}%)")
+    print(f"  Python calls LLM      : {py_used_llm}/{n}")
+    print(f"  author tokens (AIL)   : prompt={ail_ptok}  completion={ail_ctok}")
+    print(f"  author tokens (Py)    : prompt={py_ptok}  completion={py_ctok}")
 
     out = {
         "corpus": "heaal_e2",
@@ -222,11 +395,17 @@ def main() -> int:
         "author_prompt_variant": os.environ.get("AIL_AUTHOR_PROMPT_VARIANT", "default"),
         "summary": {
             "total": n,
-            "passed": passed,
-            "programs_completed": parsed,
-            "avg_retries": tot_retries / n,
-            "total_author_prompt_tokens": tot_author_ptok,
-            "total_author_completion_tokens": tot_author_ctok,
+            "ail_passed": ail_passed,
+            "python_passed": py_passed,
+            "ail_programs_completed": ail_parsed,
+            "python_programs_completed": py_ran,
+            "avg_retries_ail": ail_retries / n,
+            "python_error_handling_missing": py_err_miss,
+            "python_calls_llm": py_used_llm,
+            "ail_author_prompt_tokens": ail_ptok,
+            "ail_author_completion_tokens": ail_ctok,
+            "python_author_prompt_tokens": py_ptok,
+            "python_author_completion_tokens": py_ctok,
         },
         "cases": results,
     }

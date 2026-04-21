@@ -1355,10 +1355,8 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 - ✅ 트랙 공식 분리, `docs/heaal/README.md` 작성 (저자 모델 / 인텐트 모델 용어 + ASCII 흐름 도표).
 - ✅ `anti_python` 프롬프트 variant 구현 (reference card 43% 단축, 부정 지시 front-load).
 - ✅ **E1 (50 short tasks): target exceeded.** Sonnet + anti_python → AIL 파싱 **94%** (기준선 36%, +58pp), 정답률 **88%** (+52pp), 에러 핸들링 누락 **0%** (문법 강제 불변). Sonnet+anti_python이 **v3 fine-tune 7B(70%)를 능가**.
-- ✅ **E2 (10 effect-heavy long tasks): 7/10 passed, 9/10 program-completed, avg retries 0.10.** 3개 실패 분석:
-  - 2건은 논리 수준 오답 (프로그램은 실행됨)
-  - 1건은 환각 effect → 런타임이 **clean error로 잡음** — HEAAL 주장의 정확한 증명 (silently-wrong이 아닌 loudly-failing)
-- ✅ E2 infrastructure: `benchmarks/heaal_e2/prompts.json`, `setup_fixtures.py`, `run_e2.py` (재사용 가능).
+- ✅ **E2 (10 effect-heavy long tasks): both-sides run.** AIL 7/10 vs Python 9/10 raw pass. **Python 에러 핸들링 누락 10/10 (100%)** vs AIL 0/10. E2-10 Wikipedia 403 응답에서 **Python 크래시 (HTTPError unhandled), AIL은 Result로 깔끔히 처리**. 이게 HEAAL 주장의 정확한 증명 (Python의 100% 누락이 실제로 터진 구체 케이스).
+- ✅ E2 infrastructure: `benchmarks/heaal_e2/prompts.json`, `setup_fixtures.py`, `run_e2.py` (AIL + Python 양쪽 실행 + scoring).
 
 #### HEAAL — 다음 우선순위
 1. **E1' (optional)** — Sonnet 4.5로 default 프롬프트 재측정 (현재 baseline은 4.6). ~$2. 엄밀한 apples-to-apples 목적.
