@@ -1202,6 +1202,20 @@ Opus 4의 지침과 충돌 시 이 블록이 우선한다.
 - 새 SESSION STATE는 파일 맨 끝에 추가
 - 벤치마크 수치가 바뀌면 표도 반드시 갱신
 
+### 규칙 6 — PyPI 배포는 Claude Code 권한 (2026-04-22 도입, 영구 규칙)
+
+hyun06000이 `~/.pypirc`를 등록해뒀다. 앞으로 Claude Code 세션이 직접 `twine upload`로 PyPI에 배포할 수 있다.
+
+**배포 시점:**
+- `main` 브랜치에서 새 버전 태그(`vX.Y.Z`)가 push된 직후
+- 태그 push는 `.github/workflows/release.yml`이 감지해서 GitHub Release를 자동 생성 (CHANGELOG에서 해당 버전 섹션 추출)
+- 그 다음 Claude가 `cd reference-impl && python -m build && twine upload dist/ail_interpreter-X.Y.Z*` 실행
+
+**주의사항:**
+- `~/.pypirc`를 직접 읽지 말 것 (자격증명이 transcript에 노출됨). `twine`이 알아서 참조함.
+- PyPI 업로드는 **yank만 가능, 삭제 불가**. 버전 번호를 잘못 붙이면 영구히 남음. `pyproject.toml`/`ail/__init__.py`의 버전, 태그명, CHANGELOG 항목이 전부 일치하는지 업로드 전에 반드시 확인.
+- 현재 PyPI에 `ail-interpreter` 1.8.0–1.8.4 게시됨. 다음 업로드는 최소 1.8.5부터.
+
 ---
 
 ## SESSION STATE — 2026-04-20/21 HISTORICAL (superseded below)
@@ -1261,46 +1275,81 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ---
 
-## SESSION STATE — 2026-04-21 (현재 핸드오프)
+## SESSION STATE — 2026-04-21 (R3 완료 + v4 훈련/GGUF 완료) [HISTORICAL — superseded below]
 
-### 기준선 — 현재 최고 벤치마크 결과
+이전 세션 기록. 최신 SESSION STATE는 아래 참조.
+요약: R3/C4 70% 달성, v4 훈련 완료, GGUF 변환 + Ollama 등록 완료. 다음 우선순위는 R4 벤치마크였음.
+전체 내용: `git show f45ab98:CLAUDE.md` 로 복원 가능.
 
-**기준 파일**: `docs/benchmarks/2026-04-21_r3_cond4_finetuned_nofewshot.json`
+---
+
+## SESSION STATE — 2026-04-22 (R4 완료, v4는 regression으로 판정)
+
+### 기준선 — 현재 최고 벤치마크 결과 (변화 없음)
+
+**여전히 R3가 최고.** v4는 overall −2pp로 퇴보 판정, 서빙 모델은 v3 유지.
 
 | 조건 | AIL parse | AIL ans | Py ans | Cat A | Cat B | Cat C | 상태 |
 |---|---|---|---|---|---|---|---|
-| R1/C4 ft+nofs | 58% | 48% | 38% | 40% | 60% | 45% | 기준선 |
-| R2/C4 ft+nofs | 72% | 64% | 40% | 53% | 80% | 60% | Python 돌파 |
-| **R3/C4 ft+nofs** | **80%** | **70%** | 40% | **60%** | **80%** | **70%** | **✅ 현재 최고** |
+| R1/C4 ft+nofs (v3) | 58% | 48% | 38% | 40% | 60% | 45% | 기준선 |
+| R2/C4 ft+nofs (v3) | 72% | 64% | 40% | 53% | 80% | 60% | Python 돌파 |
+| **R3/C4 ft+nofs (v3)** | **80%** | **70%** | 40% | **60%** | **80%** | **70%** | **✅ 서빙 모델** |
+| R4/C4 ft+nofs (v4) | 80% | 68% | 32% | **80%** | **53%** | 70% | ⚠️ Cat B regression |
 
-Python honest baseline (R1/C1, 동일 사이즈): **56%**  
-**현재 버전: v1.8.4 (main 브랜치)**
+**현재 버전: v1.8.4 (main 브랜치, PyPI 업로드 완료)**
+**서빙 모델: ail-coder:7b-v3** (homeblack Ollama에 등록됨)
 
 ### 이번 세션에서 완료한 것
 
-1. ✅ **README.ai.md 재작성** — AI 독자용: 표/코드 블록 위주, 구어체 제거, v1.8.4 정보 반영
-2. ✅ **docs/ko/README.ko.md 재작성** — 한국어 인간 독자용: "70% vs 56%" 헤드라인, R1→R2→R3 스토리
-3. ✅ **v4 훈련 완료** — 260샘플, homeblack tmux `ail-train-v4` 완료. LoRA weights 저장됨.
-4. ✅ **dev→main 머지** — v1.8.4 stable 릴리즈
+1. ✅ **R4 벤치마크 실행** — vLLM on homeblack, v4 GGUF는 Ollama blob path (`/usr/share/ollama/.ollama/models/blobs/sha256-715a076f...`) 직접 로드. 별도 GGUF 파일 없음.
+2. ✅ **R4 결과 분석** — `docs/benchmarks/2026-04-22_r4_analysis.md` 작성. v4는 Cat A +20pp 개선이지만 Cat B −27pp 퇴보. **Silent LLM skip 2건 발생** (B03 summary, B08 topic) — AIL의 핵심 주장을 v4가 깼음.
+3. ✅ **원인 규명** — `08_compound_ko.jsonl`의 16개 한국어 샘플이 전부 pure_fn이어서 분포가 fn 쪽으로 편향. `09_r3_fixes.jsonl`의 11개는 validator allowlist에 막혀 훈련 제외됨.
+4. ✅ **규칙 6 추가** — PyPI 배포 권한을 Claude Code에게 부여. `~/.pypirc` 자격증명은 읽지 말 것, `twine`이 참조함.
 
 ### 다음 우선순위
 
-1. **ail-coder:7b-v4 GGUF 변환** — homeblack에서 LoRA merge → llama.cpp GGUF → Q4_K_M → Ollama 등록
-   - 파이프라인: `HANDOFF.md` 참고 (`export_to_ollama.py` broken, 수동 llama.cpp 사용)
-   - 출력: `~/AIL/reference-impl/training/ail-coder-7b-v4.Q4_K_M.gguf`
-2. **R4 벤치마크** — `ail-coder:7b-v4`로 50개 프롬프트, R3(70%)와 비교
-3. **PyPI 릴리즈** — `RELEASING.md` 참고, hyun06000 승인 필요
+1. **v5 훈련 데이터 준비** (우선순위 높음)
+   - `reference-impl/training/validate.py`의 allowlist에 `r3_fixes` 추가 → `09_r3_fixes.jsonl` 11개 샘플이 들어갈 수 있게
+   - `08_compound_ko.jsonl`와 균형 맞추도록 pure_intent/hybrid 16개 이상 추가 (새 seed 파일, 예: `seed_cat_b_reinforcement.py`)
+   - 목표 크기: 280+ 샘플, 카테고리별 분포가 A/B/C에 비례하도록
+2. **R5 벤치마크** — v5 훈련 후 R3 기준 넘는지 확인. 특히 Cat B가 80% 이상 유지되는지.
+3. **외부 사용자 1명** — 숫자가 정리됐으니 이제 공개 단계. hyun06000 결정.
+4. **dev → main 머지** — R4 분석 + Rule 6 추가를 main으로 옮기기 (이번 세션 commit 후 hyun06000 승인 필요)
 
-### Environment on homeblack
+### Environment on homeblack (현재 상태)
 
 - SSH: `homeblack` (HostName `10.0.0.1`, User `david`)
-- Branch: `main` (after merge; dev도 동일)
-- vLLM: `~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server`. `PYTORCH_ALLOC_CONF=expandable_segments:True` 필수.
-- qwen7b-base GGUF: `~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf`
-- ail-coder:7b-v3 GGUF: `~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf`
-- ail-coder:7b-v4 LoRA: `~/AIL/reference-impl/training/outputs/` (훈련 완료, GGUF 변환 대기)
-- Tokenizer: `~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242`
+- 로컬 브랜치: `main` (dev 내용과 아직 sync 안 됨). 다음 작업 시 `git checkout dev && git pull` 권장.
+- vLLM: 현재 idle. 필요시 재기동. `PYTORCH_ALLOC_CONF=expandable_segments:True` 필수.
 - Training venv: `~/venv/labs` (unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128)
-- **벤치마크는 Ollama가 아닌 vLLM으로 돌린다.** `PYTORCH_ALLOC_CONF=expandable_segments:True ~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server --model ~/AIL/reference-impl/training/outputs/ ...` 로 서버 띄운 뒤 `AIL_OLLAMA_HOST=http://localhost:8000 AIL_OLLAMA_MODEL=ail-coder:7b-v4` 환경변수로 벤치마크 실행.
 
-*Updated 2026-04-22. Added vLLM note — benchmark must use vLLM, not Ollama.*
+**Ollama 모델 현황:**
+- `ail-coder:7b-v3` (4.7GB) — 서빙 모델
+- `ail-coder:7b-v4` (4.7GB) — regression 실험, 유지 (reproducibility)
+- `qwen2.5-coder:14b-instruct-q4_K_M` (9.0GB) — Python baseline용
+
+**GGUF 파일:**
+- v3: `~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf`
+- v4: **별도 파일 없음.** Ollama blob에만 존재 (`/usr/share/ollama/.ollama/models/blobs/sha256-715a076f6dc6bff5e6e2538e10f2327bae79c4700dc778b1c737fae00ef9a94a`, world-readable). vLLM에서 직접 로드 가능.
+
+**벤치마크 재현 명령 (R4):**
+```bash
+ssh homeblack
+tmux new-session -d -s vllm-server "
+PYTORCH_ALLOC_CONF=expandable_segments:True \
+~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server \
+  --model /usr/share/ollama/.ollama/models/blobs/sha256-715a076f6dc6bff5e6e2538e10f2327bae79c4700dc778b1c737fae00ef9a94a \
+  --tokenizer ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242 \
+  --load-format gguf --served-model-name ail-coder:7b-v4 \
+  --host 0.0.0.0 --port 8000 --max-model-len 8192 \
+  --gpu-memory-utilization 0.85 --enforce-eager"
+# 로드 ~20초
+export BENCHMARK_BACKEND=vllm
+export AIL_OPENAI_COMPAT_BASE_URL=http://localhost:8000
+export AIL_OPENAI_COMPAT_MODEL=ail-coder:7b-v4
+export PYTHON_OPENAI_COMPAT_BASE_URL=http://localhost:8000
+export PYTHON_OPENAI_COMPAT_MODEL=ail-coder:7b-v4
+~/venv/labs/bin/python reference-impl/tools/benchmark.py --out <path>.json
+```
+
+*Updated 2026-04-22. R4 완료, v4는 regression, v3 유지. 규칙 6 (PyPI 권한) 추가.*
