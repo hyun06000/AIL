@@ -1336,32 +1336,67 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 - Training venv: `~/venv/labs` (unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128)
 
 **Ollama 모델 현황:**
-- `ail-coder:7b-v3` (4.7GB) — 서빙 모델
+- `ail-coder:7b-v3` (4.7GB) — v3 fine-tune
 - `ail-coder:7b-v4` (4.7GB) — regression 실험, 유지 (reproducibility)
+- `ail-coder:7b-v5` (4.7GB) — v5 실험 (single-line + Cat B 강화, 2026-04-22 훈련)
 - `qwen2.5-coder:14b-instruct-q4_K_M` (9.0GB) — Python baseline용
 
 **GGUF 파일:**
 - v3: `~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf`
-- v4: **별도 파일 없음.** Ollama blob에만 존재 (`/usr/share/ollama/.ollama/models/blobs/sha256-715a076f6dc6bff5e6e2538e10f2327bae79c4700dc778b1c737fae00ef9a94a`, world-readable). vLLM에서 직접 로드 가능.
+- v4: **별도 파일 없음.** Ollama blob에만 존재 (`/usr/share/ollama/.ollama/models/blobs/sha256-715a076f...`, world-readable). vLLM에서 직접 로드.
+- v5: `~/AIL/reference-impl/training/ail-coder-7b-v5.Q4_K_M.gguf` (4.7GB)
 
-**벤치마크 재현 명령 (R4):**
+### ⚡ LoRA → GGUF 변환: peft 직접 경로 (v5부터 canonical)
+
+**이전 방식 (unsloth 기반, v3/v4 때 사용)**: `FastLanguageModel.from_pretrained` → `save_pretrained_merged` → `convert_hf_to_gguf.py` → `llama-quantize`. **15분** 소요. v5 시도 시 base 모델을 재다운로드하려고 해서 무한 대기에 걸림 (unsloth가 bnb-4bit 캐시 검증 과정에서 실패).
+
+**새 방식 (peft 기반, 2026-04-22 v5에서 확립)**: 공식 Qwen base(`Qwen/Qwen2.5-Coder-7B-Instruct`, 캐시됨)를 fp16으로 로드 → PEFT `merge_and_unload` → `convert_hf_to_gguf.py` → `llama-quantize` → `ollama create`. **2분 30초** 소요 (6배 빠름). `~/v5_convert.sh`에 스크립트 저장됨.
+
+기본 파이프라인:
+```python
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+base = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen2.5-Coder-7B-Instruct", torch_dtype=torch.float16, device_map="cpu")
+adapter = PeftModel.from_pretrained(base, "./ail-coder-7b-lora-vN")
+merged = adapter.merge_and_unload()
+merged.save_pretrained("./ail-coder-7b-vN-merged", safe_serialization=True)
+AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Coder-7B-Instruct") \
+  .save_pretrained("./ail-coder-7b-vN-merged")
+```
+
+이후는 동일:
+```bash
+~/venv/labs/bin/python ~/llama.cpp/convert_hf_to_gguf.py ./ail-coder-7b-vN-merged --outtype f16 --outfile ./ail-coder-7b-vN.f16.gguf
+~/llama.cpp/build/bin/llama-quantize ./ail-coder-7b-vN.f16.gguf ./ail-coder-7b-vN.Q4_K_M.gguf Q4_K_M
+OLLAMA_HOST=10.0.0.1:11434 ollama create ail-coder:7b-vN -f Modelfile.ail-coder-7b-vN
+```
+
+### tmux 호출 팁 (배웠던 실수 피하기)
+
+heredoc(`<< EOF`)을 tmux `new-session` 명령 **안에** 중첩하면 셸 파싱이 깨진다. 대신 **스크립트를 파일로 먼저 쓰고** tmux에서 `bash script.sh` 형태로 실행한다. 또한 `tee`로 로깅할 거면 tmux 세션 **안에서** pipe해야 한다 — 바깥에서 `tee`하면 tmux가 띄우기만 하고 로그는 비어 있다.
+
+**벤치마크 재현 명령 (vN 공통 템플릿):**
 ```bash
 ssh homeblack
+# vLLM 서버 (GGUF 경로만 바꾸면 됨)
 tmux new-session -d -s vllm-server "
 PYTORCH_ALLOC_CONF=expandable_segments:True \
 ~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server \
-  --model /usr/share/ollama/.ollama/models/blobs/sha256-715a076f6dc6bff5e6e2538e10f2327bae79c4700dc778b1c737fae00ef9a94a \
+  --model ~/AIL/reference-impl/training/ail-coder-7b-vN.Q4_K_M.gguf \
   --tokenizer ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242 \
-  --load-format gguf --served-model-name ail-coder:7b-v4 \
+  --load-format gguf --served-model-name ail-coder:7b-vN \
   --host 0.0.0.0 --port 8000 --max-model-len 8192 \
   --gpu-memory-utilization 0.85 --enforce-eager"
-# 로드 ~20초
+# 로드 ~20초, curl http://localhost:8000/v1/models 로 확인
+
 export BENCHMARK_BACKEND=vllm
 export AIL_OPENAI_COMPAT_BASE_URL=http://localhost:8000
-export AIL_OPENAI_COMPAT_MODEL=ail-coder:7b-v4
+export AIL_OPENAI_COMPAT_MODEL=ail-coder:7b-vN
 export PYTHON_OPENAI_COMPAT_BASE_URL=http://localhost:8000
-export PYTHON_OPENAI_COMPAT_MODEL=ail-coder:7b-v4
-~/venv/labs/bin/python reference-impl/tools/benchmark.py --out <path>.json
+export PYTHON_OPENAI_COMPAT_MODEL=ail-coder:7b-vN
+~/venv/labs/bin/python -u reference-impl/tools/benchmark.py --out <path>.json
 ```
 
-*Updated 2026-04-22. R4 완료, v4는 regression, v3 유지. 규칙 6 (PyPI 권한) 추가.*
+*Updated 2026-04-22. v5 훈련 + GGUF 변환 완료, R5 벤치마크 진행 중. peft merge 방식이 canonical 변환 경로로 승급. tmux heredoc 실수 기록.*
