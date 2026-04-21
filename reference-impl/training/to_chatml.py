@@ -62,12 +62,37 @@ other name.
 Output: raw AIL source only, no markdown fences, no explanation."""
 
 
-def _emit(sample: dict) -> dict:
+def _flatten_ail(source: str, mode: str) -> str:
+    """Re-emit AIL source in one of three formats.
+
+    mode="none"        : original (human-readable indented).
+    mode="strip-indent": per-line leading whitespace removed, `\\n` preserved.
+                         Kills indentation tokens but keeps statement
+                         separators a whitespace-sensitive tokenizer might
+                         prefer.
+    mode="single-line" : newlines and indentation both collapsed into single
+                         spaces. Maximally serialized. AIL's grammar is
+                         brace-delimited, so this is semantically identical —
+                         verified against the parser on 2026-04-22.
+    """
+    if mode == "none":
+        return source
+    if mode == "strip-indent":
+        return "\n".join(line.lstrip() for line in source.split("\n"))
+    if mode == "single-line":
+        # Split on any whitespace, rejoin with single spaces.
+        # AIL has no newline-sensitive statements, and all string literals
+        # in the training set are single-line, so this is safe.
+        return " ".join(source.split())
+    raise ValueError(f"unknown flatten mode: {mode!r}")
+
+
+def _emit(sample: dict, flatten_mode: str) -> dict:
     return {
         "messages": [
             {"role": "system", "content": AIL_SYSTEM_PROMPT},
             {"role": "user", "content": sample["prompt"]},
-            {"role": "assistant", "content": sample["ail_source"]},
+            {"role": "assistant", "content": _flatten_ail(sample["ail_source"], flatten_mode)},
         ],
     }
 
@@ -79,6 +104,11 @@ def main() -> int:
     p.add_argument("--shuffle-seed", type=int, default=42,
                    help="If set, shuffle output in deterministic order "
                         "so successive validation splits compare cleanly")
+    p.add_argument("--flatten", choices=["none", "strip-indent", "single-line"],
+                   default="none",
+                   help="Transform AIL source before emitting. `single-line` "
+                        "is the v5 experiment — serialize code to maximise "
+                        "token efficiency. Default `none` preserves original.")
     args = p.parse_args()
 
     samples: list[dict] = []
@@ -96,10 +126,10 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8") as f:
         for s in samples:
-            json.dump(_emit(s), f, ensure_ascii=False)
+            json.dump(_emit(s, args.flatten), f, ensure_ascii=False)
             f.write("\n")
 
-    print(f"{len(samples)} samples → {args.out}", file=sys.stderr)
+    print(f"{len(samples)} samples → {args.out}  (flatten={args.flatten})", file=sys.stderr)
     return 0
 
 

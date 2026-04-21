@@ -35,7 +35,13 @@ from ail.parser.lexer import LexError
 
 REQUIRED_FIELDS = {"id", "prompt", "ail_source", "category", "source_of_sample"}
 VALID_CATEGORIES = {"pure_fn", "pure_intent", "hybrid"}
-VALID_SOURCES = {"existing_example", "bench_canonical", "hand_written"}
+VALID_SOURCES = {
+    "existing_example",
+    "bench_canonical",
+    "hand_written",
+    "r3_fixes",             # 09_r3_fixes.jsonl — canonical fixes for R3 failure patterns
+    "cat_b_reinforcement",  # 10_cat_b_reinforcement.jsonl — pure_intent/hybrid counterweight for v5
+}
 
 
 def _gate_parse(sample: dict) -> str | None:
