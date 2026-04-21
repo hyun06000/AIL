@@ -965,6 +965,44 @@ class Executor:
                 eval_input = raw[1] if len(raw) >= 2 else ""
                 return self._eval_ail_source(source_text, eval_input, conf)
 
+        if name == "parse_json":
+            # parse_json(source: Text) -> Result[Any]
+            # Pure. Parses a JSON string using stdlib json.loads. Returns
+            # ok(parsed) on success (dict / list / str / number / bool / null
+            # mapped to AIL Record / List / Text / Number / Boolean / 0).
+            # error(msg) on any JSONDecodeError. Added for HEAAL E2 because
+            # manual line-by-line JSON extraction failed on compact API
+            # responses (GitHub API returns everything on one line).
+            if len(raw) >= 1 and isinstance(raw[0], str):
+                import json as _json
+                try:
+                    parsed = _json.loads(raw[0])
+                    return ConfidentValue(
+                        {"_result": True, "ok": True, "value": parsed}, conf)
+                except Exception as e:
+                    return ConfidentValue(
+                        {"_result": True, "ok": False,
+                         "error": f"{type(e).__name__}: {e}"}, conf)
+
+        if name == "ail_parse_check":
+            # ail_parse_check(source: Text) -> Result[Text]
+            # Returns ok(source) if the given source parses as a valid AIL
+            # program; error(message) otherwise. Pure: does NOT execute, does
+            # NOT dispatch intents, has no side effects. Exists so that AIL
+            # programs can evaluate other AIL programs' syntactic validity —
+            # the primitive that HEAAL's self-hosting evaluator needs.
+            if len(raw) >= 1 and isinstance(raw[0], str):
+                src = raw[0]
+                try:
+                    from .. import compile_source
+                    compile_source(src)
+                    return ConfidentValue(
+                        {"_result": True, "ok": True, "value": src}, conf)
+                except Exception as e:
+                    return ConfidentValue(
+                        {"_result": True, "ok": False,
+                         "error": f"{type(e).__name__}: {e}"}, conf)
+
         # --- Result type (v1.1) ---
         # ok(value) -> {"_result": True, "ok": True, "value": V}
         # error(msg) -> {"_result": True, "ok": False, "error": E}

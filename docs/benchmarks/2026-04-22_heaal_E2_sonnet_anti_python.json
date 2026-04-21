@@ -1,0 +1,220 @@
+{
+  "corpus": "heaal_e2",
+  "model": "claude-sonnet-4-5",
+  "author_prompt_variant": "anti_python",
+  "summary": {
+    "total": 10,
+    "passed": 7,
+    "programs_completed": 9,
+    "avg_retries": 0.1,
+    "total_author_prompt_tokens": 84562,
+    "total_author_completion_tokens": 2384
+  },
+  "cases": [
+    {
+      "id": "E2-01",
+      "category": "http_only",
+      "effects_declared": [
+        "http.get"
+      ],
+      "text": "Fetch https://httpbin.org/json and return the value of slideshow.author",
+      "ail": {
+        "source": "entry main(x: Text) {\n    resp = perform http.get(\"https://httpbin.org/json\")\n    if resp.ok {\n        lines = split(resp.body, \"\\n\")\n        for line in lines {\n            if \"author\" in line {\n                parts = split(line, \":\")\n                if length(parts) >= 2 {\n                    author = trim(parts[1])\n                    author = replace(author, \"\\\"\", \"\")\n                    author = replace(author, \",\", \"\")\n                    return author\n                }\n            }\n        }\n        return \"author not found\"\n    }\n    return \"request failed\"\n}",
+        "value": "Yours Truly",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 5986,
+        "author_prompt_tokens": 8423,
+        "author_completion_tokens": 201
+      },
+      "score": {
+        "ok": true
+      }
+    },
+    {
+      "id": "E2-02",
+      "category": "http_only",
+      "effects_declared": [
+        "http.get"
+      ],
+      "text": "Fetch https://api.github.com/repos/anthropics/anthropic-sdk-python and return only the value of the top-level \"language\" field",
+      "ail": {
+        "source": "entry main(x: Text) {\n    resp = perform http.get(\"https://api.github.com/repos/anthropics/anthropic-sdk-python\")\n    body_text = resp.body\n    lines = split(body_text, \"\\n\")\n    for line in lines {\n        if starts_with(trim(line), \"\\\"language\\\"\") {\n            parts = split(line, \":\")\n            if length(parts) >= 2 {\n                value_part = trim(parts[1])\n                cleaned = replace(value_part, \"\\\"\", \"\")\n                cleaned = replace(cleaned, \",\", \"\")\n                return trim(cleaned)\n            }\n        }\n    }\n    return \"not_found\"\n}",
+        "value": "not_found",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 4965,
+        "author_prompt_tokens": 8439,
+        "author_completion_tokens": 215
+      },
+      "score": {
+        "ok": false,
+        "reason": "expected_contains: 'Python' not in 'not_found'"
+      }
+    },
+    {
+      "id": "E2-03",
+      "category": "http_intent",
+      "effects_declared": [
+        "http.get"
+      ],
+      "text": "Fetch https://httpbin.org/json, extract slideshow.title, and translate that title to Korean. Return just the Korean translation.",
+      "ail": {
+        "source": "intent translate_to_korean(text: Text) -> Text {\n    goal: translate_text_to_Korean\n}\n\nentry main(x: Text) {\n    response = perform http.get(\"https://httpbin.org/json\")\n    body = response.body\n    \n    title_start = split(body, \"\\\"title\\\": \\\"\")\n    if length(title_start) < 2 {\n        return \"error: title not found\"\n    }\n    \n    title_part = get(title_start, 1)\n    title_end = split(title_part, \"\\\"\")\n    title = get(title_end, 0)\n    \n    korean = translate_to_korean(title)\n    return korean\n}",
+        "value": "WonderWidgets로 깨어나세요!",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 8192,
+        "author_prompt_tokens": 8434,
+        "author_completion_tokens": 221
+      },
+      "score": {
+        "ok": true
+      }
+    },
+    {
+      "id": "E2-04",
+      "category": "file_only",
+      "effects_declared": [
+        "file.read"
+      ],
+      "text": "Read /tmp/heaal_e2_data/numbers.txt (one integer per line) and return the sum of all numbers.",
+      "ail": {
+        "source": "entry main(x: Text) {\n    content = perform file.read(\"/tmp/heaal_e2_data/numbers.txt\")\n    if is_error(content) {\n        return unwrap_error(content)\n    }\n    text = unwrap(content)\n    lines = split(trim(text), \"\\n\")\n    total = 0\n    for line in lines {\n        num_result = to_number(trim(line))\n        if is_ok(num_result) {\n            total = total + unwrap(num_result)\n        }\n    }\n    return total\n}",
+        "value": 78.0,
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 4916,
+        "author_prompt_tokens": 8433,
+        "author_completion_tokens": 181
+      },
+      "score": {
+        "ok": true
+      }
+    },
+    {
+      "id": "E2-05",
+      "category": "file_intent",
+      "effects_declared": [
+        "file.read"
+      ],
+      "text": "Read /tmp/heaal_e2_data/reviews.txt (one review per line). For each review, classify it as positive or negative. Return a single line of the form 'positive=N negative=M' with the final counts.",
+      "ail": {
+        "source": "pure fn count_by_sentiment(reviews: [Text], sentiment: Text) -> Number {\n    count = 0\n    for r in reviews {\n        if r == sentiment { count = count + 1 }\n    }\n    return count\n}\n\nintent classify_sentiment(review: Text) -> Text {\n    goal: positive_or_negative\n}\n\nentry main(x: Text) {\n    content = perform file.read(\"/tmp/heaal_e2_data/reviews.txt\")\n    lines = split(trim(content), \"\\n\")\n    labels = []\n    for line in lines {\n        label = classify_sentiment(line)\n        labels = append(labels, label)\n    }\n    pos = count_by_sentiment(labels, \"positive\")\n    neg = count_by_sentiment(labels, \"negative\")\n    return join([\"positive=\", to_text(pos), \" negative=\", to_text(neg)], \"\")\n}",
+        "value": "positive=5 negative=5",
+        "retries": 1,
+        "error": null,
+        "elapsed_ms": 40035,
+        "author_prompt_tokens": 16955,
+        "author_completion_tokens": 577
+      },
+      "score": {
+        "ok": true
+      }
+    },
+    {
+      "id": "E2-06",
+      "category": "file_write",
+      "effects_declared": [
+        "file.write"
+      ],
+      "text": "Compute 10 factorial and write the result (as the plain decimal number, with no extra text) to /tmp/heaal_e2_out/factorial.txt. Return just the word 'done' after the write succeeds.",
+      "ail": {
+        "source": "pure fn factorial(n: Number) -> Number {\n    if n <= 1 { return 1 }\n    return n * factorial(n - 1)\n}\n\nentry main(x: Text) {\n    result = factorial(10)\n    perform file.write(\"/tmp/heaal_e2_out/factorial.txt\", to_text(result))\n    return \"done\"\n}",
+        "value": "done",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 2877,
+        "author_prompt_tokens": 8456,
+        "author_completion_tokens": 127
+      },
+      "score": {
+        "ok": true
+      }
+    },
+    {
+      "id": "E2-07",
+      "category": "file_full_pipeline",
+      "effects_declared": [
+        "file.read",
+        "file.write"
+      ],
+      "text": "Read /tmp/heaal_e2_data/reviews.txt (one review per line). For each review, classify sentiment. Write each positive review (on its own line) to /tmp/heaal_e2_out/positives.txt. Write each negative review (on its own line) to /tmp/heaal_e2_out/negatives.txt. Return the word 'done' after both writes succeed.",
+      "ail": {
+        "source": "intent classify_sentiment(review: Text) -> Text {\n    goal: positive_or_negative\n}\n\npure fn filter_by_sentiment(reviews: [Text], sentiments: [Text], target: Text) -> [Text] {\n    filtered = []\n    for i in range(0, length(reviews)) {\n        if get(sentiments, i) == target {\n            filtered = append(filtered, get(reviews, i))\n        }\n    }\n    return filtered\n}\n\nentry main(x: Text) {\n    content = perform file.read(\"/tmp/heaal_e2_data/reviews.txt\")\n    reviews = split(trim(content), \"\\n\")\n    \n    sentiments = []\n    for review in reviews {\n        sentiment = classify_sentiment(review)\n        sentiments = append(sentiments, sentiment)\n    }\n    \n    positives = filter_by_sentiment(reviews, sentiments, \"positive\")\n    negatives = filter_by_sentiment(reviews, sentiments, \"negative\")\n    \n    pos_text = join(positives, \"\\n\")\n    neg_text = join(negatives, \"\\n\")\n    \n    pos_result = perform file.write(\"/tmp/heaal_e2_out/positives.txt\", pos_text)\n    neg_result = perform file.write(\"/tmp/heaal_e2_out/negatives.txt\", neg_text)\n    \n    return \"done\"\n}",
+        "value": "done",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 26717,
+        "author_prompt_tokens": 8498,
+        "author_completion_tokens": 402
+      },
+      "score": {
+        "ok": true
+      }
+    },
+    {
+      "id": "E2-08",
+      "category": "file_intent",
+      "effects_declared": [
+        "file.read"
+      ],
+      "text": "Read /tmp/heaal_e2_data/log.txt (twelve log lines). Classify each line's severity as INFO, WARN, or ERROR. Return a single line of the form 'INFO=N WARN=M ERROR=K' with the final counts.",
+      "ail": {
+        "source": "pure fn classify_severity(line: Text) -> Text {\n    lower_line = lower(line)\n    if starts_with(lower_line, \"error\") { return \"ERROR\" }\n    if starts_with(lower_line, \"warn\") { return \"WARN\" }\n    return \"INFO\"\n}\n\npure fn count_severity(lines: [Text], target: Text) -> Number {\n    count = 0\n    for line in lines {\n        severity = classify_severity(line)\n        if severity == target { count = count + 1 }\n    }\n    return count\n}\n\nentry main(x: Text) {\n    content = perform file.read(\"/tmp/heaal_e2_data/log.txt\")\n    lines = split(trim(content), \"\\n\")\n    info_count = count_severity(lines, \"INFO\")\n    warn_count = count_severity(lines, \"WARN\")\n    error_count = count_severity(lines, \"ERROR\")\n    return join([\"INFO=\", to_text(info_count), \" WARN=\", to_text(warn_count), \" ERROR=\", to_text(error_count)], \"\")\n}",
+        "value": "INFO=12 WARN=0 ERROR=0",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 5019,
+        "author_prompt_tokens": 8464,
+        "author_completion_tokens": 330
+      },
+      "score": {
+        "ok": false,
+        "reason": "expected_exact: got 'INFO=12 WARN=0 ERROR=0', expected 'INFO=6 WARN=3 ERROR=3'"
+      }
+    },
+    {
+      "id": "E2-09",
+      "category": "http_file",
+      "effects_declared": [
+        "http.get",
+        "file.write"
+      ],
+      "text": "Fetch https://httpbin.org/uuid, extract the uuid field, and append it as a new line to /tmp/heaal_e2_out/uuids.log. Return just the UUID.",
+      "ail": {
+        "source": "",
+        "value": null,
+        "retries": 0,
+        "error": "RuntimeError: unknown effect: extract_json_field (supported: human_ask, log, http.get, http.post, file.read, file.write, or a declared effect)",
+        "elapsed_ms": 8359,
+        "author_prompt_tokens": 0,
+        "author_completion_tokens": 0
+      },
+      "score": {
+        "ok": false,
+        "reason": "runtime_error: RuntimeError: unknown effect: extract_json_field (supported: human_ask, log, http.get, http.post, file.read, file.write, or a declared effect)"
+      }
+    },
+    {
+      "id": "E2-10",
+      "category": "research_style",
+      "effects_declared": [
+        "http.get"
+      ],
+      "text": "Fetch https://en.wikipedia.org/api/rest_v1/page/summary/Claude_(AI) and return a one-sentence English summary of the first paragraph of the page's extract. Do not copy-paste the extract; write your own summary.",
+      "ail": {
+        "source": "intent summarize_paragraph(text: Text) -> Text {\n    goal: one_sentence_summary_in_English\n}\n\nentry main(x: Text) {\n    response = perform http.get(\"https://en.wikipedia.org/api/rest_v1/page/summary/Claude_(AI)\")\n    extract = response.body\n    summary = summarize_paragraph(extract)\n    return summary\n}",
+        "value": "Claude is a series of large language models developed by Anthropic, first released in 2023, typically offered in three capability tiers (Haiku, Sonnet, and Opus) since the third generation.",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 7303,
+        "author_prompt_tokens": 8460,
+        "author_completion_tokens": 130
+      },
+      "score": {
+        "ok": true
+      }
+    }
+  ]
+}

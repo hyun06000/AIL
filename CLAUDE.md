@@ -1186,6 +1186,36 @@ Opus 4의 지침과 충돌 시 이 블록이 우선한다.
 
 현재 세션은 `dev` 브랜치에서 진행 중. homeblack도 `dev`를 pull해서 사용.
 
+### 규칙 5 — 커밋할 때마다 SESSION STATE 업데이트 (2026-04-22 도입, 영구 규칙)
+
+**모든 커밋 후 반드시 CLAUDE.md의 SESSION STATE를 업데이트하고 즉시 push한다.**
+
+업데이트 내용:
+- 방금 완료한 것 (✅ 체크리스트 형식)
+- 다음 우선순위 (번호 순서, 구체적인 커맨드/파일 경로 포함)
+- 프로젝트 상태 변화 (벤치마크 수치, 브랜치 상태, homeblack 환경 변화 등)
+
+**이유:** 여러 Claude Code 세션(사무실/집/서버)이 동시에 작업한다. SESSION STATE가 최신이어야 어느 세션이든 `git pull` 한 번으로 동일한 컨텍스트를 가지고 이어받을 수 있다. SESSION STATE가 오래된 것은 없는 것보다 나쁘다 — 틀린 정보로 작업하게 된다.
+
+**형식 규칙:**
+- 이전 SESSION STATE는 HISTORICAL로 표시하고 `git show <hash>:CLAUDE.md`로 복원 가능하다고 명시 후 내용 삭제
+- 새 SESSION STATE는 파일 맨 끝에 추가
+- 벤치마크 수치가 바뀌면 표도 반드시 갱신
+
+### 규칙 6 — PyPI 배포는 Claude Code 권한 (2026-04-22 도입, 영구 규칙)
+
+hyun06000이 `~/.pypirc`를 등록해뒀다. 앞으로 Claude Code 세션이 직접 `twine upload`로 PyPI에 배포할 수 있다.
+
+**배포 시점:**
+- `main` 브랜치에서 새 버전 태그(`vX.Y.Z`)가 push된 직후
+- 태그 push는 `.github/workflows/release.yml`이 감지해서 GitHub Release를 자동 생성 (CHANGELOG에서 해당 버전 섹션 추출)
+- 그 다음 Claude가 `cd reference-impl && python -m build && twine upload dist/ail_interpreter-X.Y.Z*` 실행
+
+**주의사항:**
+- `~/.pypirc`를 직접 읽지 말 것 (자격증명이 transcript에 노출됨). `twine`이 알아서 참조함.
+- PyPI 업로드는 **yank만 가능, 삭제 불가**. 버전 번호를 잘못 붙이면 영구히 남음. `pyproject.toml`/`ail/__init__.py`의 버전, 태그명, CHANGELOG 항목이 전부 일치하는지 업로드 전에 반드시 확인.
+- 현재 PyPI에 `ail-interpreter` 1.8.0–1.8.4 게시됨. 다음 업로드는 최소 1.8.5부터.
+
 ---
 
 ## SESSION STATE — 2026-04-20/21 HISTORICAL (superseded below)
@@ -1245,45 +1275,182 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ---
 
-## SESSION STATE — 2026-04-21 (현재 핸드오프)
+## SESSION STATE — 2026-04-21 (R3 완료 + v4 훈련/GGUF 완료) [HISTORICAL — superseded below]
 
-### 기준선 — 현재 최고 벤치마크 결과
+이전 세션 기록. 최신 SESSION STATE는 아래 참조.
+요약: R3/C4 70% 달성, v4 훈련 완료, GGUF 변환 + Ollama 등록 완료. 다음 우선순위는 R4 벤치마크였음.
+전체 내용: `git show f45ab98:CLAUDE.md` 로 복원 가능.
 
-**기준 파일**: `docs/benchmarks/2026-04-21_r3_cond4_finetuned_nofewshot.json`
+---
 
-| 조건 | AIL parse | AIL ans | Py ans | Cat A | Cat B | Cat C | 상태 |
-|---|---|---|---|---|---|---|---|
-| R1/C4 ft+nofs | 58% | 48% | 38% | 40% | 60% | 45% | 기준선 |
-| R2/C4 ft+nofs | 72% | 64% | 40% | 53% | 80% | 60% | Python 돌파 |
-| **R3/C4 ft+nofs** | **80%** | **70%** | 40% | **60%** | **80%** | **70%** | **✅ 현재 최고** |
+## SESSION STATE — 2026-04-22 (R4 완료, v4는 regression으로 판정) [HISTORICAL — superseded below]
 
-Python honest baseline (R1/C1, 동일 사이즈): **56%**  
-**현재 버전: v1.8.4 (main 브랜치)**
+이전 세션 기록. 최신 SESSION STATE는 아래 참조.
+요약: R4 완료, v4 regression 판정, v3 유지. 규칙 6 (PyPI 권한) 추가.
+전체 내용: `git show 839bf1b:CLAUDE.md` 로 복원 가능.
 
-### 이번 세션에서 완료한 것
+---
 
-1. ✅ **README.ai.md 재작성** — AI 독자용: 표/코드 블록 위주, 구어체 제거, v1.8.4 정보 반영
-2. ✅ **docs/ko/README.ko.md 재작성** — 한국어 인간 독자용: "70% vs 56%" 헤드라인, R1→R2→R3 스토리
-3. ✅ **v4 훈련 완료** — 260샘플, homeblack tmux `ail-train-v4` 완료. LoRA weights 저장됨.
-4. ✅ **dev→main 머지** — v1.8.4 stable 릴리즈
+## SESSION STATE — 2026-04-22 (R5 완료, single-line 실험 실패) [HISTORICAL — superseded below]
 
-### 다음 우선순위
+이전 세션 기록. 최신은 아래.
+요약: v5 severe regression, leading-quote artifact 원인, v3 서빙 유지.
+전체 내용: `git show d57982e:CLAUDE.md` 로 복원.
 
-1. **ail-coder:7b-v4 GGUF 변환** — homeblack에서 LoRA merge → llama.cpp GGUF → Q4_K_M → Ollama 등록
-   - 파이프라인: `HANDOFF.md` 참고 (`export_to_ollama.py` broken, 수동 llama.cpp 사용)
-   - 출력: `~/AIL/reference-impl/training/ail-coder-7b-v4.Q4_K_M.gguf`
-2. **R4 벤치마크** — `ail-coder:7b-v4`로 50개 프롬프트, R3(70%)와 비교
-3. **PyPI 릴리즈** — `RELEASING.md` 참고, hyun06000 승인 필요
+---
 
-### Environment on homeblack
+## SESSION STATE — 2026-04-22 (트랙 분리 + v6/E1 동시 진행) [HISTORICAL — superseded below]
+
+이전 세션 기록. 최신은 아래.
+요약: 트랙 공식 분리, HEAAL/E1 실행 시작 시점.
+전체 내용: `git show 2fde1ad:CLAUDE.md` 로 복원.
+
+---
+
+## SESSION STATE — 2026-04-22 (R6/E1/E2 모두 완료, 두 가설 모두 검증됨)
+
+**프로젝트가 두 트랙으로 공식 분리됨:**
+- **AIL 트랙** — 언어 자체의 성능 (훈련, 벤치마크, 파서, stdlib)
+- **HEAAL 트랙** — AIL 위에 짓는 첫 프로젝트. frontier 모델이 훈련 없이 AIL을 쓰게 하는 harness-as-a-language 증명.
+
+둘 다 `AIL/` 레포 안에서 돌아가지만 자원(GPU vs API) · 실험 변수 · 분석 디렉토리가 분리됨. 벤치마크 JSON은 `ail_*.json` / `heaal_*.json` prefix 사용. 자세한 내용: `docs/heaal/README.md`.
+
+---
+
+### AIL 트랙
+
+#### 기준선 표 — R3가 여전히 최고, v6가 가설 검증
+
+| 조건 | AIL parse | AIL ans | Cat A | Cat B | Cat C | 상태 |
+|---|---|---|---|---|---|---|
+| R1/C4 ft+nofs (v3) | 58% | 48% | 40% | 60% | 45% | 기준선 |
+| R2/C4 ft+nofs (v3) | 72% | 64% | 53% | 80% | 60% | Python 돌파 |
+| **R3/C4 ft+nofs (v3)** | **80%** | **70%** | **60%** | **80%** | **70%** | **✅ 서빙 모델** |
+| R4/C4 ft+nofs (v4) | 80% | 68% | 80% | 53% | 70% | ⚠️ Cat B regression |
+| R5/C4 ft+nofs (v5 coder+sl) | 50% | 42% | 60% | 53% | 20% | 💀 severe, leading-quote artifact |
+| **R6/C4 ft+nofs (v6 noncoder+sl)** | **80%** | **62%** | 67% | 53% | **65%** | ✅ single-line rehabilitated |
+
+**현재 버전: v1.8.4 (main 브랜치, PyPI 업로드 완료)**
+**서빙 모델: ail-coder:7b-v3** (homeblack Ollama에 등록됨)
+
+#### AIL 트랙 — 이번 세션 완료
+- ✅ R4/R5/R6 벤치마크 + 분석. v4/v5/v6 모두 archived. v3 서빙 유지.
+- ✅ R5 실패 원인 규명 (leading-quote artifact, coder 모델의 Python prior).
+- ✅ **R6로 가설 확정** — 비-coder Qwen base + 동일 single-line training = leading-quote artifact 0/50, Cat C 20%→65% 회복. single-line 포맷 자체는 문제 없음이 증명됨.
+- ✅ Validator allowlist 확장, `10_cat_b_reinforcement.jsonl` 20개 추가, 총 291 validated.
+- ✅ `to_chatml.py --flatten={none,strip-indent,single-line}` 구현.
+- ✅ peft 기반 GGUF 변환 파이프라인 (canonical, 2.5분).
+- ✅ tmux heredoc 교훈 + CLAUDE.md에 canonical 템플릿 기록.
+- ✅ `ail_parse_check` builtin 추가 (AIL self-reflection primitive, Q16/Q17 open-questions 도입).
+
+#### AIL 트랙 — 다음 우선순위
+1. **v7 (conditional)** — 비-coder + indented로 "포맷 vs base model" 8pp gap 분리. v3(70%) vs v6(62%) 격차의 원인 해부. 긴급하지 않음.
+2. **dev → main 머지** — R4/R5/R6 분석, SECURITY.md, Rule 5/6, peft pipeline, `ail_parse_check`, HEAAL E1/E2 전부 dev에 쌓임. 머지는 hyun06000 승인 필요.
+
+---
+
+### HEAAL 트랙
+
+#### HEAAL — 이번 세션 완료 (대성공)
+- ✅ 트랙 공식 분리, `docs/heaal/README.md` 작성 (저자 모델 / 인텐트 모델 용어 + ASCII 흐름 도표).
+- ✅ `anti_python` 프롬프트 variant 구현 (reference card 43% 단축, 부정 지시 front-load).
+- ✅ **E1 (50 short tasks): target exceeded.** Sonnet + anti_python → AIL 파싱 **94%** (기준선 36%, +58pp), 정답률 **88%** (+52pp), 에러 핸들링 누락 **0%** (문법 강제 불변). Sonnet+anti_python이 **v3 fine-tune 7B(70%)를 능가**.
+- ✅ **E2 v1 → v2 recovery.** v1: AIL 7/10 vs Python 9/10. v2 fixes (parse_json builtin + anti_python 프롬프트 강화) 후: **AIL 9/10 = Python 9/10**, **AIL 프로그램 완주 10/10** (Python 9/10, E2-10 크래시), 재시도 0.00. **태스크 합격 동률, 안전성 100% 유지.**
+- ✅ E2-10 Wikipedia 403: Python `urllib.error.HTTPError` uncaught 크래시, AIL은 `Result`로 깔끔 처리. HEAAL 주장의 구체 증거.
+- ✅ `parse_json` builtin 추가 (pure, Result 반환). JSON API 응답 처리용. purity allowlist 등록, 5개 테스트.
+- ✅ anti_python 프롬프트 강화: pure-fn/plain-fn 구분 명시, HYBRID LOOP 패턴 예제, parse_json 가이드.
+- ✅ E2 infrastructure: `benchmarks/heaal_e2/prompts.json`, `setup_fixtures.py`, `run_e2.py` (AIL + Python 양쪽 실행 + scoring).
+
+#### HEAAL — 다음 우선순위
+1. **E1' (optional)** — Sonnet 4.5로 default 프롬프트 재측정 (현재 baseline은 4.6). ~$2. 엄밀한 apples-to-apples 목적.
+2. **E3 (CoT) / E4 (tool-use)** — queued. E1/E2 이미 target 초과라 보너스 실험.
+3. **HEAAL을 다른 API에 적용** — GPT-4o, Gemini Pro로 same-prompt 이식. 모델 가족 간 전이성 검증.
+
+#### HEAAL 핵심 결과 (E1 + E2)
+- **하네스-as-a-language 주장 end-to-end 증명됨.**
+- 외부 하네스(linter, validator, AGENTS.md, wrapper) 0개.
+- 저자 모델 fine-tune 0회.
+- 환경변수 2개 (`AIL_AUTHORING_BACKEND`, `ANTHROPIC_MODEL`) + `ail ask`만으로 frontier 모델이 안전한 AIL을 작성.
+- 안전 속성(에러 핸들링 0% 누락, silent-skip 없음, 무한 루프 불가)은 프롬프트와 무관하게 grammar로 보장.
+
+---
+
+### 공통 규칙 (양 트랙)
+- **Rule 5**: 커밋마다 SESSION STATE 업데이트 + 즉시 push.
+- **Rule 6**: PyPI 배포 권한 Claude Code에 있음. `~/.pypirc` 읽지 말 것.
+- **공개 홍보 금지** — hyun06000 명시 승인 전까지.
+- **v1.8 문법 freeze 유지**.
+- **기존 벤치마크 JSON 교체 금지**, 새 row 추가.
+
+### Environment on homeblack (현재 상태)
 
 - SSH: `homeblack` (HostName `10.0.0.1`, User `david`)
-- Branch: `main` (after merge; dev도 동일)
-- vLLM: `~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server`. `PYTORCH_ALLOC_CONF=expandable_segments:True` 필수.
-- qwen7b-base GGUF: `~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf`
-- ail-coder:7b-v3 GGUF: `~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf`
-- ail-coder:7b-v4 LoRA: `~/AIL/reference-impl/training/outputs/` (훈련 완료, GGUF 변환 대기)
-- Tokenizer: `~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242`
+- 로컬 브랜치: `main` (dev 내용과 아직 sync 안 됨). 다음 작업 시 `git checkout dev && git pull` 권장.
+- vLLM: 현재 idle. 필요시 재기동. `PYTORCH_ALLOC_CONF=expandable_segments:True` 필수.
 - Training venv: `~/venv/labs` (unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128)
 
-*Updated 2026-04-21. v4 trained, README rewritten, merged to main as v1.8.4.*
+**Ollama 모델 현황:**
+- `ail-coder:7b-v3` (4.7GB) — v3 fine-tune
+- `ail-coder:7b-v4` (4.7GB) — regression 실험, 유지 (reproducibility)
+- `ail-coder:7b-v5` (4.7GB) — v5 실험 (single-line + Cat B 강화, 2026-04-22 훈련)
+- `qwen2.5-coder:14b-instruct-q4_K_M` (9.0GB) — Python baseline용
+
+**GGUF 파일:**
+- v3: `~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf`
+- v4: **별도 파일 없음.** Ollama blob에만 존재 (`/usr/share/ollama/.ollama/models/blobs/sha256-715a076f...`, world-readable). vLLM에서 직접 로드.
+- v5: `~/AIL/reference-impl/training/ail-coder-7b-v5.Q4_K_M.gguf` (4.7GB)
+
+### ⚡ LoRA → GGUF 변환: peft 직접 경로 (v5부터 canonical)
+
+**이전 방식 (unsloth 기반, v3/v4 때 사용)**: `FastLanguageModel.from_pretrained` → `save_pretrained_merged` → `convert_hf_to_gguf.py` → `llama-quantize`. **15분** 소요. v5 시도 시 base 모델을 재다운로드하려고 해서 무한 대기에 걸림 (unsloth가 bnb-4bit 캐시 검증 과정에서 실패).
+
+**새 방식 (peft 기반, 2026-04-22 v5에서 확립)**: 공식 Qwen base(`Qwen/Qwen2.5-Coder-7B-Instruct`, 캐시됨)를 fp16으로 로드 → PEFT `merge_and_unload` → `convert_hf_to_gguf.py` → `llama-quantize` → `ollama create`. **2분 30초** 소요 (6배 빠름). `~/v5_convert.sh`에 스크립트 저장됨.
+
+기본 파이프라인:
+```python
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+base = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen2.5-Coder-7B-Instruct", torch_dtype=torch.float16, device_map="cpu")
+adapter = PeftModel.from_pretrained(base, "./ail-coder-7b-lora-vN")
+merged = adapter.merge_and_unload()
+merged.save_pretrained("./ail-coder-7b-vN-merged", safe_serialization=True)
+AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Coder-7B-Instruct") \
+  .save_pretrained("./ail-coder-7b-vN-merged")
+```
+
+이후는 동일:
+```bash
+~/venv/labs/bin/python ~/llama.cpp/convert_hf_to_gguf.py ./ail-coder-7b-vN-merged --outtype f16 --outfile ./ail-coder-7b-vN.f16.gguf
+~/llama.cpp/build/bin/llama-quantize ./ail-coder-7b-vN.f16.gguf ./ail-coder-7b-vN.Q4_K_M.gguf Q4_K_M
+OLLAMA_HOST=10.0.0.1:11434 ollama create ail-coder:7b-vN -f Modelfile.ail-coder-7b-vN
+```
+
+### tmux 호출 팁 (배웠던 실수 피하기)
+
+heredoc(`<< EOF`)을 tmux `new-session` 명령 **안에** 중첩하면 셸 파싱이 깨진다. 대신 **스크립트를 파일로 먼저 쓰고** tmux에서 `bash script.sh` 형태로 실행한다. 또한 `tee`로 로깅할 거면 tmux 세션 **안에서** pipe해야 한다 — 바깥에서 `tee`하면 tmux가 띄우기만 하고 로그는 비어 있다.
+
+**벤치마크 재현 명령 (vN 공통 템플릿):**
+```bash
+ssh homeblack
+# vLLM 서버 (GGUF 경로만 바꾸면 됨)
+tmux new-session -d -s vllm-server "
+PYTORCH_ALLOC_CONF=expandable_segments:True \
+~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server \
+  --model ~/AIL/reference-impl/training/ail-coder-7b-vN.Q4_K_M.gguf \
+  --tokenizer ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242 \
+  --load-format gguf --served-model-name ail-coder:7b-vN \
+  --host 0.0.0.0 --port 8000 --max-model-len 8192 \
+  --gpu-memory-utilization 0.85 --enforce-eager"
+# 로드 ~20초, curl http://localhost:8000/v1/models 로 확인
+
+export BENCHMARK_BACKEND=vllm
+export AIL_OPENAI_COMPAT_BASE_URL=http://localhost:8000
+export AIL_OPENAI_COMPAT_MODEL=ail-coder:7b-vN
+export PYTHON_OPENAI_COMPAT_BASE_URL=http://localhost:8000
+export PYTHON_OPENAI_COMPAT_MODEL=ail-coder:7b-vN
+~/venv/labs/bin/python -u reference-impl/tools/benchmark.py --out <path>.json
+```
+
+*Updated 2026-04-22. v5 훈련 + GGUF 변환 완료, R5 벤치마크 진행 중. peft merge 방식이 canonical 변환 경로로 승급. tmux heredoc 실수 기록.*

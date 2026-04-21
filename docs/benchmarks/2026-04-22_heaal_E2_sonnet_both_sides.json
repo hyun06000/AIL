@@ -1,0 +1,387 @@
+{
+  "corpus": "heaal_e2",
+  "model": "claude-sonnet-4-5",
+  "author_prompt_variant": "anti_python",
+  "summary": {
+    "total": 10,
+    "ail_passed": 7,
+    "python_passed": 9,
+    "ail_programs_completed": 9,
+    "python_programs_completed": 9,
+    "avg_retries_ail": 0.3,
+    "python_error_handling_missing": 10,
+    "python_calls_llm": 8,
+    "ail_author_prompt_tokens": 110005,
+    "ail_author_completion_tokens": 3175,
+    "python_author_prompt_tokens": 3414,
+    "python_author_completion_tokens": 2432
+  },
+  "cases": [
+    {
+      "id": "E2-01",
+      "category": "http_only",
+      "effects_declared": [
+        "http.get"
+      ],
+      "text": "Fetch https://httpbin.org/json and return the value of slideshow.author",
+      "ail": {
+        "source": "entry main(x: Text) {\n    resp = perform http.get(\"https://httpbin.org/json\")\n    if resp.ok {\n        lines = split(resp.body, \"\\n\")\n        for line in lines {\n            if \"author\" in line {\n                parts = split(line, \"\\\"\")\n                if length(parts) >= 4 {\n                    return parts[3]\n                }\n            }\n        }\n        return \"author not found\"\n    }\n    return \"HTTP request failed\"\n}",
+        "value": "Yours Truly",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 4898,
+        "author_prompt_tokens": 8423,
+        "author_completion_tokens": 160
+      },
+      "score": {
+        "ok": true
+      },
+      "python": {
+        "source": "import urllib.request\nimport json\n\nurl = \"https://httpbin.org/json\"\nwith urllib.request.urlopen(url) as response:\n    data = json.loads(response.read().decode())\n\nprint(data[\"slideshow\"][\"author\"])",
+        "value": "Yours Truly",
+        "returncode": 0,
+        "stdout_tail": "Yours Truly\n",
+        "stderr_tail": "",
+        "elapsed_ms": 882,
+        "timed_out": false,
+        "author_prompt_tokens": 313,
+        "author_completion_tokens": 66,
+        "error_handling_missing": true,
+        "uses_llm": true,
+        "score": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "E2-02",
+      "category": "http_only",
+      "effects_declared": [
+        "http.get"
+      ],
+      "text": "Fetch https://api.github.com/repos/anthropics/anthropic-sdk-python and return only the value of the top-level \"language\" field",
+      "ail": {
+        "source": "entry main(x: Text) {\n    resp = perform http.get(\"https://api.github.com/repos/anthropics/anthropic-sdk-python\")\n    if resp.ok {\n        lines = split(resp.body, \"\\n\")\n        for line in lines {\n            if starts_with(trim(line), \"\\\"language\\\":\") {\n                parts = split(line, \":\")\n                if length(parts) >= 2 {\n                    value_part = trim(get(parts, 1))\n                    value_part = replace(value_part, \",\", \"\")\n                    value_part = replace(value_part, \"\\\"\", \"\")\n                    return value_part\n                }\n            }\n        }\n        return \"language field not found\"\n    }\n    return \"HTTP request failed\"\n}",
+        "value": "language field not found",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 5427,
+        "author_prompt_tokens": 8439,
+        "author_completion_tokens": 240
+      },
+      "score": {
+        "ok": false,
+        "reason": "expected_contains: 'Python' not in 'language field not found'"
+      },
+      "python": {
+        "source": "import urllib.request\nimport json\n\nurl = \"https://api.github.com/repos/anthropics/anthropic-sdk-python\"\nwith urllib.request.urlopen(url) as response:\n    data = json.loads(response.read().decode())\n    print(data[\"language\"])",
+        "value": "Python",
+        "returncode": 0,
+        "stdout_tail": "Python\n",
+        "stderr_tail": "",
+        "elapsed_ms": 96,
+        "timed_out": false,
+        "author_prompt_tokens": 329,
+        "author_completion_tokens": 75,
+        "error_handling_missing": true,
+        "uses_llm": true,
+        "score": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "E2-03",
+      "category": "http_intent",
+      "effects_declared": [
+        "http.get"
+      ],
+      "text": "Fetch https://httpbin.org/json, extract slideshow.title, and translate that title to Korean. Return just the Korean translation.",
+      "ail": {
+        "source": "import translate from \"stdlib/language\"\n\nentry main(x: Text) {\n    resp = perform http.get(\"https://httpbin.org/json\")\n    if resp.ok {\n        body = resp.body\n        title_start = split(body, \"\\\"title\\\": \\\"\")\n        if length(title_start) > 1 {\n            title_end = split(get(title_start, 1), \"\\\"\")\n            title = get(title_end, 0)\n            korean = translate(title, \"Korean\")\n            return korean\n        }\n    }\n    return \"error\"\n}",
+        "value": "WonderWidgets와 함께 깨어나세요!",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 7783,
+        "author_prompt_tokens": 8434,
+        "author_completion_tokens": 190
+      },
+      "score": {
+        "ok": true
+      },
+      "python": {
+        "source": "import urllib.request\nimport json\nimport os\n\n# Fetch the JSON data\nwith urllib.request.urlopen('https://httpbin.org/json') as response:\n    data = json.loads(response.read().decode())\n\n# Extract slideshow.title\ntitle = data['slideshow']['title']\n\n# Translate to Korean using Claude API\napi_key = os.environ['ANTHROPIC_API_KEY']\n\nprompt = f\"Translate the following text to Korean. Return only the Korean translation, nothing else: {title}\"\n\nrequest_body = {\n    \"model\": \"claude-sonnet-4-5\",\n    \"max_tokens\": 256,\n    \"messages\": [{\"role\": \"user\", \"content\": prompt}]\n}\n\nreq = urllib.request.Request(\n    'https://api.anthropic.com/v1/messages',\n    data=json.dumps(request_body).encode('utf-8'),\n    headers={\n        'x-api-key': api_key,\n        'anthropic-version': '2023-06-01',\n        'content-type': 'application/json'\n    }\n)\n\nwith urllib.request.urlopen(req) as response:\n    result = json.loads(response.read().decode())\n    korean_translation = result['content'][0]['text']\n\nprint(korean_translation)",
+        "value": "샘플 슬라이드 쇼",
+        "returncode": 0,
+        "stdout_tail": "샘플 슬라이드 쇼\n",
+        "stderr_tail": "",
+        "elapsed_ms": 2686,
+        "timed_out": false,
+        "author_prompt_tokens": 324,
+        "author_completion_tokens": 323,
+        "error_handling_missing": true,
+        "uses_llm": true,
+        "score": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "E2-04",
+      "category": "file_only",
+      "effects_declared": [
+        "file.read"
+      ],
+      "text": "Read /tmp/heaal_e2_data/numbers.txt (one integer per line) and return the sum of all numbers.",
+      "ail": {
+        "source": "entry main(x: Text) {\n    content = perform file.read(\"/tmp/heaal_e2_data/numbers.txt\")\n    if is_error(content) {\n        return \"Error reading file\"\n    }\n    text = unwrap(content)\n    lines = split(trim(text), \"\\n\")\n    total = 0\n    for line in lines {\n        num_result = to_number(trim(line))\n        if is_ok(num_result) {\n            total = total + unwrap(num_result)\n        }\n    }\n    return total\n}",
+        "value": 78.0,
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 3786,
+        "author_prompt_tokens": 8433,
+        "author_completion_tokens": 180
+      },
+      "score": {
+        "ok": true
+      },
+      "python": {
+        "source": "with open('/tmp/heaal_e2_data/numbers.txt', 'r') as f:\n    numbers = [int(line.strip()) for line in f]\n\nprint(sum(numbers))",
+        "value": "78",
+        "returncode": 0,
+        "stdout_tail": "78\n",
+        "stderr_tail": "",
+        "elapsed_ms": 35,
+        "timed_out": false,
+        "author_prompt_tokens": 323,
+        "author_completion_tokens": 55,
+        "error_handling_missing": true,
+        "uses_llm": false,
+        "score": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "E2-05",
+      "category": "file_intent",
+      "effects_declared": [
+        "file.read"
+      ],
+      "text": "Read /tmp/heaal_e2_data/reviews.txt (one review per line). For each review, classify it as positive or negative. Return a single line of the form 'positive=N negative=M' with the final counts.",
+      "ail": {
+        "source": "intent classify_sentiment(text: Text) -> Text {\n    goal: classify as positive or negative\n}\n\npure fn count_sentiments(reviews: [Text]) -> Text {\n    pos = 0\n    neg = 0\n    for review in reviews {\n        label = classify_sentiment(review)\n        if label == \"positive\" { pos = pos + 1 }\n        if label == \"negative\" { neg = neg + 1 }\n    }\n    return join([\"positive=\", to_text(pos), \" negative=\", to_text(neg)], \"\")\n}\n\nentry main(x: Text) {\n    content = perform file.read(\"/tmp/heaal_e2_data/reviews.txt\")\n    if is_error(content) { return unwrap_error(content) }\n    lines = split(unwrap(content), \"\\n\")\n    reviews = []\n    for line in lines {\n        trimmed = trim(line)\n        if length(trimmed) > 0 {\n            reviews = append(reviews, trimmed)\n        }\n    }\n    return count_sentiments(reviews)\n}",
+        "value": null,
+        "retries": 3,
+        "error": "AuthoringError: author failed to produce valid AIL after 4 tries; last error: PurityError: pure fn 'count_sentiments': cannot call intent 'classify_sentiment' — intents invoke a language model",
+        "elapsed_ms": 20020,
+        "author_prompt_tokens": 33948,
+        "author_completion_tokens": 1075
+      },
+      "score": {
+        "ok": false,
+        "reason": "runtime_error: AuthoringError: author failed to produce valid AIL after 4 tries; last error: PurityError: pure fn 'count_sentiments': cannot call intent 'classify_sentiment' — intents invoke a language model"
+      },
+      "python": {
+        "source": "import os\nimport urllib.request\nimport json\n\napi_key = os.environ.get('ANTHROPIC_API_KEY')\n\nwith open('/tmp/heaal_e2_data/reviews.txt', 'r') as f:\n    reviews = [line.strip() for line in f if line.strip()]\n\npositive_count = 0\nnegative_count = 0\n\nfor review in reviews:\n    prompt = f\"Classify the following review as either 'positive' or 'negative'. Respond with only the word 'positive' or 'negative', nothing else.\\n\\nReview: {review}\"\n    \n    data = {\n        \"model\": \"claude-sonnet-4-5\",\n        \"max_tokens\": 256,\n        \"messages\": [{\"role\": \"user\", \"content\": prompt}]\n    }\n    \n    req = urllib.request.Request(\n        \"https://api.anthropic.com/v1/messages\",\n        data=json.dumps(data).encode('utf-8'),\n        headers={\n            \"x-api-key\": api_key,\n            \"anthropic-version\": \"2023-06-01\",\n            \"content-type\": \"application/json\"\n        }\n    )\n    \n    with urllib.request.urlopen(req) as response:\n        result = json.loads(response.read().decode('utf-8'))\n        classification = result[\"content\"][0][\"text\"].strip().lower()\n        \n        if \"positive\" in classification:\n            positive_count += 1\n        elif \"negative\" in classification:\n            negative_count += 1\n\nprint(f\"positive={positive_count} negative={negative_count}\")",
+        "value": "positive=5 negative=5",
+        "returncode": 0,
+        "stdout_tail": "positive=5 negative=5\n",
+        "stderr_tail": "",
+        "elapsed_ms": 13269,
+        "timed_out": false,
+        "author_prompt_tokens": 347,
+        "author_completion_tokens": 402,
+        "error_handling_missing": true,
+        "uses_llm": true,
+        "score": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "E2-06",
+      "category": "file_write",
+      "effects_declared": [
+        "file.write"
+      ],
+      "text": "Compute 10 factorial and write the result (as the plain decimal number, with no extra text) to /tmp/heaal_e2_out/factorial.txt. Return just the word 'done' after the write succeeds.",
+      "ail": {
+        "source": "pure fn factorial(n: Number) -> Number {\n    if n <= 1 { return 1 }\n    return n * factorial(n - 1)\n}\n\nentry main(x: Text) {\n    result = factorial(10)\n    write_result = perform file.write(\"/tmp/heaal_e2_out/factorial.txt\", to_text(result))\n    return \"done\"\n}",
+        "value": "done",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 3365,
+        "author_prompt_tokens": 8456,
+        "author_completion_tokens": 124
+      },
+      "score": {
+        "ok": true
+      },
+      "python": {
+        "source": "import math\n\nresult = math.factorial(10)\n\nwith open('/tmp/heaal_e2_out/factorial.txt', 'w') as f:\n    f.write(str(result))\n\nprint('done')",
+        "value": "done",
+        "returncode": 0,
+        "stdout_tail": "done\n",
+        "stderr_tail": "",
+        "elapsed_ms": 34,
+        "timed_out": false,
+        "author_prompt_tokens": 346,
+        "author_completion_tokens": 59,
+        "error_handling_missing": true,
+        "uses_llm": false,
+        "score": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "E2-07",
+      "category": "file_full_pipeline",
+      "effects_declared": [
+        "file.read",
+        "file.write"
+      ],
+      "text": "Read /tmp/heaal_e2_data/reviews.txt (one review per line). For each review, classify sentiment. Write each positive review (on its own line) to /tmp/heaal_e2_out/positives.txt. Write each negative review (on its own line) to /tmp/heaal_e2_out/negatives.txt. Return the word 'done' after both writes succeed.",
+      "ail": {
+        "source": "intent classify_sentiment(text: Text) -> Text {\n    goal: positive_or_negative\n}\n\npure fn is_positive(label: Text) -> Boolean {\n    return label == \"positive\"\n}\n\npure fn is_negative(label: Text) -> Boolean {\n    return label == \"negative\"\n}\n\nentry main(x: Text) {\n    content = perform file.read(\"/tmp/heaal_e2_data/reviews.txt\")\n    if is_error(content) {\n        return unwrap_error(content)\n    }\n    \n    reviews = split(unwrap(content), \"\\n\")\n    positives = []\n    negatives = []\n    \n    for review in reviews {\n        if length(trim(review)) > 0 {\n            sentiment = classify_sentiment(review)\n            if is_positive(sentiment) {\n                positives = append(positives, review)\n            }\n            if is_negative(sentiment) {\n                negatives = append(negatives, review)\n            }\n        }\n    }\n    \n    pos_content = join(positives, \"\\n\")\n    neg_content = join(negatives, \"\\n\")\n    \n    pos_result = perform file.write(\"/tmp/heaal_e2_out/positives.txt\", pos_content)\n    if is_error(pos_result) {\n        return unwrap_error(pos_result)\n    }\n    \n    neg_result = perform file.write(\"/tmp/heaal_e2_out/negatives.txt\", neg_content)\n    if is_error(neg_result) {\n        return unwrap_error(neg_result)\n    }\n    \n    return \"done\"\n}",
+        "value": "done",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 25235,
+        "author_prompt_tokens": 8498,
+        "author_completion_tokens": 476
+      },
+      "score": {
+        "ok": true
+      },
+      "python": {
+        "source": "import os\nimport urllib.request\nimport json\n\napi_key = os.environ.get('ANTHROPIC_API_KEY')\n\nwith open('/tmp/heaal_e2_data/reviews.txt', 'r') as f:\n    reviews = [line.strip() for line in f if line.strip()]\n\npositives = []\nnegatives = []\n\nfor review in reviews:\n    prompt = f\"Classify the sentiment of this review as either 'positive' or 'negative'. Respond with only one word: 'positive' or 'negative'.\\n\\nReview: {review}\"\n    \n    data = {\n        \"model\": \"claude-sonnet-4-5\",\n        \"max_tokens\": 256,\n        \"messages\": [{\"role\": \"user\", \"content\": prompt}]\n    }\n    \n    headers = {\n        \"x-api-key\": api_key,\n        \"anthropic-version\": \"2023-06-01\",\n        \"content-type\": \"application/json\"\n    }\n    \n    req = urllib.request.Request(\n        \"https://api.anthropic.com/v1/messages\",\n        data=json.dumps(data).encode('utf-8'),\n        headers=headers,\n        method='POST'\n    )\n    \n    with urllib.request.urlopen(req) as response:\n        result = json.loads(response.read().decode('utf-8'))\n        sentiment = result['content'][0]['text'].strip().lower()\n        \n        if 'positive' in sentiment:\n            positives.append(review)\n        else:\n            negatives.append(review)\n\nos.makedirs('/tmp/heaal_e2_out', exist_ok=True)\n\nwith open('/tmp/heaal_e2_out/positives.txt', 'w') as f:\n    for review in positives:\n        f.write(review + '\\n')\n\nwith open('/tmp/heaal_e2_out/negatives.txt', 'w') as f:\n    for review in negatives:\n        f.write(review + '\\n')\n\nprint('done')",
+        "value": "done",
+        "returncode": 0,
+        "stdout_tail": "done\n",
+        "stderr_tail": "",
+        "elapsed_ms": 13903,
+        "timed_out": false,
+        "author_prompt_tokens": 388,
+        "author_completion_tokens": 512,
+        "error_handling_missing": true,
+        "uses_llm": true,
+        "score": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "E2-08",
+      "category": "file_intent",
+      "effects_declared": [
+        "file.read"
+      ],
+      "text": "Read /tmp/heaal_e2_data/log.txt (twelve log lines). Classify each line's severity as INFO, WARN, or ERROR. Return a single line of the form 'INFO=N WARN=M ERROR=K' with the final counts.",
+      "ail": {
+        "source": "pure fn classify_severity(line: Text) -> Text {\n    lower_line = lower(line)\n    if starts_with(lower_line, \"error\") { return \"ERROR\" }\n    if starts_with(lower_line, \"warn\") { return \"WARN\" }\n    return \"INFO\"\n}\n\npure fn count_by_severity(lines: [Text]) -> Text {\n    info_count = 0\n    warn_count = 0\n    error_count = 0\n    for line in lines {\n        severity = classify_severity(line)\n        if severity == \"INFO\" { info_count = info_count + 1 }\n        if severity == \"WARN\" { warn_count = warn_count + 1 }\n        if severity == \"ERROR\" { error_count = error_count + 1 }\n    }\n    return join([\"INFO=\", to_text(info_count), \" WARN=\", to_text(warn_count), \" ERROR=\", to_text(error_count)], \"\")\n}\n\nentry main(x: Text) {\n    content = perform file.read(\"/tmp/heaal_e2_data/log.txt\")\n    if is_error(content) { return unwrap_error(content) }\n    lines = split(unwrap(content), \"\\n\")\n    return count_by_severity(lines)\n}",
+        "value": "INFO=13 WARN=0 ERROR=0",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 6107,
+        "author_prompt_tokens": 8464,
+        "author_completion_tokens": 376
+      },
+      "score": {
+        "ok": false,
+        "reason": "expected_exact: got 'INFO=13 WARN=0 ERROR=0', expected 'INFO=6 WARN=3 ERROR=3'"
+      },
+      "python": {
+        "source": "import os\nimport json\nimport urllib.request\n\ndef classify_log_line(line):\n    api_key = os.environ.get('ANTHROPIC_API_KEY')\n    \n    prompt = f\"\"\"Classify the severity of this log line as exactly one of: INFO, WARN, or ERROR.\nRespond with ONLY the classification word (INFO, WARN, or ERROR), nothing else.\n\nLog line: {line}\"\"\"\n    \n    headers = {\n        \"x-api-key\": api_key,\n        \"anthropic-version\": \"2023-06-01\",\n        \"content-type\": \"application/json\"\n    }\n    \n    body = {\n        \"model\": \"claude-sonnet-4-5\",\n        \"max_tokens\": 256,\n        \"messages\": [{\"role\": \"user\", \"content\": prompt}]\n    }\n    \n    req = urllib.request.Request(\n        \"https://api.anthropic.com/v1/messages\",\n        data=json.dumps(body).encode('utf-8'),\n        headers=headers,\n        method='POST'\n    )\n    \n    with urllib.request.urlopen(req) as response:\n        result = json.loads(response.read().decode('utf-8'))\n        classification = result[\"content\"][0][\"text\"].strip()\n        return classification\n\nwith open('/tmp/heaal_e2_data/log.txt', 'r') as f:\n    lines = f.readlines()\n\ncounts = {\"INFO\": 0, \"WARN\": 0, \"ERROR\": 0}\n\nfor line in lines:\n    line = line.strip()\n    if line:\n        classification = classify_log_line(line)\n        if classification in counts:\n            counts[classification] += 1\n\nprint(f\"INFO={counts['INFO']} WARN={counts['WARN']} ERROR={counts['ERROR']}\")",
+        "value": "INFO=6 WARN=3 ERROR=3",
+        "returncode": 0,
+        "stdout_tail": "INFO=6 WARN=3 ERROR=3\n",
+        "stderr_tail": "",
+        "elapsed_ms": 17207,
+        "timed_out": false,
+        "author_prompt_tokens": 354,
+        "author_completion_tokens": 454,
+        "error_handling_missing": true,
+        "uses_llm": true,
+        "score": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "E2-09",
+      "category": "http_file",
+      "effects_declared": [
+        "http.get",
+        "file.write"
+      ],
+      "text": "Fetch https://httpbin.org/uuid, extract the uuid field, and append it as a new line to /tmp/heaal_e2_out/uuids.log. Return just the UUID.",
+      "ail": {
+        "source": "effect file_append {\n    path: Text\n    content: Text\n}\n\npure fn extract_uuid(body: Text) -> Text {\n    parts = split(body, \"\\\"uuid\\\": \\\"\")\n    if length(parts) < 2 { return \"\" }\n    uuid_part = get(parts, 1)\n    end = split(uuid_part, \"\\\"\")\n    return get(end, 0)\n}\n\nentry main(x: Text) {\n    resp = perform http.get(\"https://httpbin.org/uuid\")\n    uuid = extract_uuid(resp.body)\n    perform file.write(\"/tmp/heaal_e2_out/uuids.log\", join([uuid, \"\\n\"], \"\"))\n    return uuid\n}",
+        "value": "3f9dc74d-abe8-4888-b66b-a5e3aead5e65",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 5902,
+        "author_prompt_tokens": 8450,
+        "author_completion_tokens": 230
+      },
+      "score": {
+        "ok": true
+      },
+      "python": {
+        "source": "import urllib.request\nimport json\n\n# Fetch the UUID from httpbin.org\nresponse = urllib.request.urlopen('https://httpbin.org/uuid')\ndata = json.loads(response.read().decode('utf-8'))\nuuid = data['uuid']\n\n# Append to the log file\nwith open('/tmp/heaal_e2_out/uuids.log', 'a') as f:\n    f.write(uuid + '\\n')\n\n# Print the UUID\nprint(uuid)",
+        "value": "b68427cb-2449-4529-822b-94edb0a0cbcc",
+        "returncode": 0,
+        "stdout_tail": "b68427cb-2449-4529-822b-94edb0a0cbcc\n",
+        "stderr_tail": "",
+        "elapsed_ms": 868,
+        "timed_out": false,
+        "author_prompt_tokens": 340,
+        "author_completion_tokens": 125,
+        "error_handling_missing": true,
+        "uses_llm": true,
+        "score": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "E2-10",
+      "category": "research_style",
+      "effects_declared": [
+        "http.get"
+      ],
+      "text": "Fetch https://en.wikipedia.org/api/rest_v1/page/summary/Claude_(AI) and return a one-sentence English summary of the first paragraph of the page's extract. Do not copy-paste the extract; write your own summary.",
+      "ail": {
+        "source": "intent summarize_extract(text: Text) -> Text {\n    goal: one_sentence_summary_of_input\n}\n\nentry main(x: Text) {\n    response = perform http.get(\"https://en.wikipedia.org/api/rest_v1/page/summary/Claude_(AI)\")\n    extract = response.body\n    return summarize_extract(extract)\n}",
+        "value": "Claude is a series of large language models developed by Anthropic, first released in 2023, with models typically available in three sizes (Haiku, Sonnet, and Opus) since Claude 3.",
+        "retries": 0,
+        "error": null,
+        "elapsed_ms": 6262,
+        "author_prompt_tokens": 8460,
+        "author_completion_tokens": 124
+      },
+      "score": {
+        "ok": true
+      },
+      "python": {
+        "source": "import urllib.request\nimport json\nimport os\n\n# Fetch Wikipedia page summary\nwiki_url = \"https://en.wikipedia.org/api/rest_v1/page/summary/Claude_(AI)\"\nwith urllib.request.urlopen(wiki_url) as response:\n    wiki_data = json.loads(response.read().decode())\n\nextract = wiki_data['extract']\n\n# Use Claude API to summarize\napi_key = os.environ['ANTHROPIC_API_KEY']\napi_url = \"https://api.anthropic.com/v1/messages\"\n\nprompt = f\"Summarize the following text in one sentence. Write your own summary, do not copy-paste:\\n\\n{extract}\"\n\nrequest_body = {\n    \"model\": \"claude-sonnet-4-5\",\n    \"max_tokens\": 256,\n    \"messages\": [{\"role\": \"user\", \"content\": prompt}]\n}\n\nheaders = {\n    \"x-api-key\": api_key,\n    \"anthropic-version\": \"2023-06-01\",\n    \"content-type\": \"application/json\"\n}\n\nreq = urllib.request.Request(\n    api_url,\n    data=json.dumps(request_body).encode('utf-8'),\n    headers=headers,\n    method='POST'\n)\n\nwith urllib.request.urlopen(req) as response:\n    result = json.loads(response.read().decode())\n\nsummary = result['content'][0]['text']\nprint(summary)",
+        "value": "",
+        "returncode": 1,
+        "stdout_tail": "",
+        "stderr_tail": "      ^^^^^^^^^^^^^^^^^^\n  File \"/opt/anaconda3/lib/python3.11/urllib/request.py\", line 563, in error\n    return self._call_chain(*args)\n           ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/anaconda3/lib/python3.11/urllib/request.py\", line 496, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/opt/anaconda3/lib/python3.11/urllib/request.py\", line 643, in http_error_default\n    raise HTTPError(req.full_url, code, msg, hdrs, fp)\nurllib.error.HTTPError: HTTP Error 403: Forbidden\n",
+        "elapsed_ms": 289,
+        "timed_out": false,
+        "author_prompt_tokens": 350,
+        "author_completion_tokens": 361,
+        "error_handling_missing": true,
+        "uses_llm": true,
+        "score": {
+          "ok": false,
+          "reason": "python_crash (rc=1): urllib.error.HTTPError: HTTP Error 403: Forbidden"
+        }
+      }
+    }
+  ]
+}

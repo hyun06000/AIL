@@ -68,6 +68,13 @@ _PURE_BUILTINS: frozenset[str] = frozenset({
     # (they read metadata, never execute an intent or effect)
     "origin_of", "lineage_of", "has_intent_origin", "has_effect_origin",
     "calibration_of",
+    # Self-reflection — pure by construction. ail_parse_check parses a
+    # string as AIL and returns a Result, but does NOT execute it: no
+    # intents dispatched, no effects performed. Distinct from eval_ail
+    # which DOES execute and is therefore impure.
+    "ail_parse_check",
+    # JSON parse — pure, no I/O, no LLM.
+    "parse_json",
     # stdlib/utils.ail — deterministic, no side effects, no LLM
     "sum_list", "average", "unique", "flatten", "take",
     "word_count", "char_count", "is_empty", "repeat", "pad_left", "clamp",
