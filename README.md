@@ -102,11 +102,39 @@ ail ask "factorial of 7"
 # 5040
 ```
 
-Add `--show-source` to any call and you'll see the AIL the author wrote. You don't have to read it. The point of HEAAL is that you shouldn't need to.
+### Seeing the code the AI wrote
 
-## Why a new language was the right call
+Add `--show-source` to any `ail ask` call. The final answer still goes to stdout, but the AIL source the author model produced is printed to stderr above it so you can inspect or save it:
 
-Three things the grammar enforces that a Python library cannot. These are the teeth of the harness-as-a-language claim.
+```bash
+ail ask "Sum 1 to 100" --show-source
+# 5050
+# --- AIL ---
+# pure fn sum_range(start: Number, end: Number) -> Number {
+#     total = 0
+#     for i in range(start, end + 1) { total = total + i }
+#     return total
+# }
+# entry main(x: Text) { return sum_range(1, 100) }
+# --- confidence=1.000 retries=0 author=anthropic ---
+```
+
+You don't have to read it. The point of HEAAL is that you shouldn't need to — the grammar already guarantees the safety properties. But `--show-source` is there when you want to verify, save the program to a file, or debug a surprising answer.
+
+### Troubleshooting
+
+If `ail -h` errors with `ModuleNotFoundError: No module named 'ail_mvp'`, your environment has a stale editable install from a pre-v1.8 era when the package was named `ail-mvp`. Clean it out:
+
+```bash
+pip uninstall -y ail-mvp ail-interpreter
+pip install ail-interpreter
+```
+
+## Why AIL?
+
+**→ Long answer with six runnable proofs: [`docs/why-ail.md`](docs/why-ail.md).**
+
+Short answer: three things the grammar enforces that a Python library cannot. These are the teeth of the harness-as-a-language claim.
 
 AIL has no `while` keyword. The parser will not recognize it. Infinite loops are not a class of bug you can find — they're a class of program you can't write. A Python SDK can only recommend; AIL refuses to run.
 
@@ -114,7 +142,13 @@ AIL has a `Result` type that is part of the grammar. Every failable operation �
 
 `pure fn` is statically verified. No LLM calls, no effects, no calls to a non-pure fn. If any of those three things appears in the body, the parser rejects the program with `PurityError` before the runtime ever sees it. A Python decorator like `@pure` can carry the intent but cannot catch violations without an external linter a user has to install and maintain.
 
-The full comparison with runnable proof lives at [`docs/why-ail.md`](docs/why-ail.md).
+### Further reading
+
+- [`docs/heaal.md`](docs/heaal.md) — HEAAL manifesto by Claude Opus 4: paradigm-level pitch, Rust analogy, three layers of AI code safety. ([Korean](docs/ko/heaal.ko.md), [AI-readable](docs/heaal.ai.md))
+- [`docs/why-ail.md`](docs/why-ail.md) — six runnable advantages of AIL over Python + LLM SDK
+- [`docs/heaal/`](docs/heaal/) — the HEAAL experiment track in this repository (E1, E2, prompts, fixtures)
+- [`docs/benchmarks/`](docs/benchmarks/) — raw JSONs and analyses for every number in this README
+- [`docs/benchmarks/dashboards/`](docs/benchmarks/dashboards/) — HEAAL Score HTML dashboards
 
 ## What the language has now
 

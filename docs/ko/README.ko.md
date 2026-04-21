@@ -102,11 +102,39 @@ ail ask "7의 팩토리얼"
 # 5040
 ```
 
-아무 호출에나 `--show-source`를 붙이면 저자 모델이 작성한 AIL을 볼 수 있습니다. 읽을 필요는 없습니다. HEAAL의 요지는 그걸 안 읽어도 된다는 것이니까요.
+### AI가 쓴 코드 직접 보기
 
-## 왜 새 언어를 만들었나
+아무 `ail ask` 호출에나 `--show-source` 를 붙이면 됩니다. 최종 답은 여전히 stdout으로 나오고, 그 위에 저자 모델이 작성한 AIL 소스가 stderr로 출력되어 검사하거나 저장할 수 있습니다:
 
-Python 라이브러리로는 강제할 수 없는데 AIL 문법이 강제하는 세 가지가 있습니다. 이게 harness-as-a-language 주장의 실제 이빨입니다.
+```bash
+ail ask "1부터 100까지 합" --show-source
+# 5050
+# --- AIL ---
+# pure fn sum_range(start: Number, end: Number) -> Number {
+#     total = 0
+#     for i in range(start, end + 1) { total = total + i }
+#     return total
+# }
+# entry main(x: Text) { return sum_range(1, 100) }
+# --- confidence=1.000 retries=0 author=anthropic ---
+```
+
+읽을 필요는 없습니다. HEAAL의 요지는 그걸 안 읽어도 된다는 것이니까요 — 문법이 이미 안전 속성을 보장합니다. 하지만 검증하고 싶을 때, 프로그램을 파일로 저장하고 싶을 때, 놀라운 답을 디버깅할 때 `--show-source`가 있습니다.
+
+### 문제 해결
+
+`ail -h` 가 `ModuleNotFoundError: No module named 'ail_mvp'` 오류를 낸다면, 패키지 이름이 `ail-mvp`였던 v1.8 이전 시절의 editable install 흔적이 환경에 남아있는 것입니다. 정리:
+
+```bash
+pip uninstall -y ail-mvp ail-interpreter
+pip install ail-interpreter
+```
+
+## 왜 AIL인가?
+
+**→ 실행 가능한 증명 6개와 함께 긴 답변: [`docs/why-ail.md`](../why-ail.md).**
+
+짧은 답: Python 라이브러리로는 강제할 수 없는데 AIL 문법이 강제하는 세 가지가 있습니다. 이게 harness-as-a-language 주장의 실제 이빨입니다.
 
 **AIL에는 `while` 키워드가 없습니다.** 파서가 인식조차 안 합니다. 무한 루프는 "찾아야 하는 버그 분류"가 아니라 "쓸 수 없는 프로그램 분류"입니다. Python SDK는 권고만 할 수 있지만 AIL은 실행을 거부합니다.
 
@@ -114,7 +142,13 @@ Python 라이브러리로는 강제할 수 없는데 AIL 문법이 강제하는 
 
 **`pure fn`은 정적 검증됩니다.** LLM 호출, effect, 비순수 fn 호출 중 어느 것이라도 본문에 나타나면 파서가 런타임이 보기도 전에 `PurityError`로 거부합니다. Python의 `@pure` 같은 데코레이터는 의도를 표현할 수는 있지만, 사용자가 설치하고 유지보수해야 하는 외부 린터 없이는 위반을 잡지 못합니다.
 
-실행 가능한 증명이 포함된 전체 비교: [`docs/why-ail.md`](../why-ail.md).
+### 더 읽기
+
+- [`docs/ko/heaal.ko.md`](heaal.ko.md) — Claude Opus 4의 HEAAL 매니페스토: 패러다임 수준 설명, Rust 비유, AI 코드 안전성 3단계. ([English](../heaal.md), [AI-readable](../heaal.ai.md))
+- [`docs/why-ail.md`](../why-ail.md) — Python + LLM SDK 대비 AIL의 6가지 실행 가능한 장점
+- [`docs/heaal/`](../heaal/) — 이 레포 안의 HEAAL 실험 트랙 (E1, E2, 프롬프트, fixtures)
+- [`docs/benchmarks/`](../benchmarks/) — 이 README의 모든 숫자에 대한 원본 JSON과 분석
+- [`docs/benchmarks/dashboards/`](../benchmarks/dashboards/) — HEAAL Score HTML 대시보드
 
 ## 지금 언어에 뭐가 있나
 
