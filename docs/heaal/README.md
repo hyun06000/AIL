@@ -35,49 +35,33 @@ This is actually cheaper and safer than a "one model does everything" setup: the
 
 ### Flow diagram
 
-```
-┌────────────────┐
-│   End user     │   types: "Parse this CSV and give me
-│    (human)     │           the average of positive reviews"
-└────────┬───────┘
-         │ natural language
-         ▼
-┌──────────────────────────────────────────────────────┐
-│  `ail ask`  (AIL runtime)                            │
-│                                                      │
-│  1. Build authoring system prompt                    │
-│  2. Dispatch once to Author Model ──────┐            │
-│                                         │            │
-│      ┌─────────────────────┐            │            │
-│      │  AUTHOR MODEL       │            │            │
-│      │  e.g. Sonnet 4.6    │  writes    │            │
-│      │  (API, no fine-tune)│   AIL      │            │
-│      │                     │  source    │            │
-│      └─────────────────────┘            │            │
-│                                         │            │
-│      ◄─── raw AIL source ───────────────┘            │
-│                                                      │
-│  3. Parse + purity-check AIL source                  │
-│     (retry loop on parse error, up to 3×)            │
-│  4. Execute the AIL program:                         │
-│     · `pure fn` bodies run locally — no LLM          │
-│     · when an `intent` is reached,                   │
-│       dispatch ──────────────────────┐               │
-│                                      │               │
-│      ┌─────────────────────────┐     │               │
-│      │   INTENT MODEL          │     │               │
-│      │   e.g. local vLLM +     │  evaluates          │
-│      │   small Llama           │   goal              │
-│      │                         │                     │
-│      └─────────────────────────┘     │               │
-│                                      │               │
-│      ◄── (value, confidence) ────────┘               │
-│                                                      │
-│  5. Runtime assembles final result                   │
-└────────────┬─────────────────────────────────────────┘
-             │ final answer
-             ▼
-      End user sees the answer
+```mermaid
+flowchart TD
+    User([End user])
+    User -- "ail ask 'summarize CSV'" --> Ask[ail runtime]
+
+    subgraph Ask[" ail ask (runtime) "]
+        direction TB
+        P1[1. Build authoring prompt]
+        AM["<b>AUTHOR MODEL</b><br/>Sonnet 4.6 / GPT-4o / fine-tuned 7B<br/>(API or local, no fine-tune required)"]
+        P3{3. Parse +<br/>purity check}
+        P4[4. Execute AIL:<br/>pure fn → local<br/>intent → dispatch]
+        IM["<b>INTENT MODEL</b><br/>local vLLM / small Llama / same as author<br/>(independent choice)"]
+        P5[5. Assemble result]
+
+        P1 -- "dispatch once<br/>(step 2)" --> AM
+        AM -- "raw AIL source" --> P3
+        P3 -- "retry on parse error<br/>(up to 3×)" --> AM
+        P3 -- "valid program" --> P4
+        P4 -.-> IM
+        IM -.-> P4
+        P4 --> P5
+    end
+
+    Ask -- "final answer" --> User
+
+    classDef role fill:#fff3cd,stroke:#333,stroke-width:2px
+    class AM,IM role
 ```
 
 The **safety properties HEAAL demonstrates** (0% error-handling omission, no silent skip, no unbounded loop, pure-fn isolation) are properties of **step 3–5**, enforced by the AIL grammar and runtime. They are independent of which model plays the author role and which model plays the intent role. That is the whole point.
@@ -178,10 +162,49 @@ AIL track benchmarks use a bare date or `ail_` prefix.
 
 ## Current status
 
-*As of 2026-04-22:*
+*As of 2026-04-22. Core claim demonstrated: **no fine-tune, no external harness, frontier author reliably writes safe AIL, zero cost on task completion**.*
 
-- Scaffold: this directory, `anti_python` prompt variant landed in `ail.authoring`, `ail_parse_check` builtin added (AIL track contribution, enables future AIL-native HEAAL tooling).
-- E1 baseline (default prompt, Sonnet 4.6, measured 2026-04-20): [`2026-04-20_claude_sonnet46_summary.md`](../benchmarks/2026-04-20_claude_sonnet46_summary.md).
-- **E1 result (Sonnet + `anti_python`, 2026-04-22): TARGET EXCEEDED.** Parse 36% → **94%** (+58pp), answer 36% → **88%** (+52pp). Safety properties unchanged (0% error-handling omission, both prompt variants). Writeup: [`2026-04-22_heaal_E1_analysis.md`](../benchmarks/2026-04-22_heaal_E1_analysis.md).
-- **E2 result (10 long tasks with effects, Sonnet both sides, 2026-04-22): AIL matches Python on task pass (9/9) and beats on program completion (10/10 vs 9/10).** Python has 100% error-handling omission; E2-10 crashed with unhandled HTTP 403 while AIL ran cleanly. Writeup: [`2026-04-22_heaal_E2_analysis.md`](../benchmarks/2026-04-22_heaal_E2_analysis.md).
-- HEAAL core claim **demonstrated**: no fine-tune, no external harness, frontier base model authors AIL reliably, with safety properties intact AND without costing task-pass rate.
+### E1 — short tasks (50 prompts, Sonnet 4.6)
+
+```mermaid
+---
+config:
+    xyChart:
+        width: 900
+        height: 380
+---
+xychart-beta
+    title "E1: default prompt vs anti_python prompt on Sonnet"
+    x-axis ["parse success", "answer correctness", "fn/intent routing"]
+    y-axis "percent" 0 --> 100
+    bar [36, 36, 36]
+    bar [94, 88, 94]
+```
+
+Left bar = default. Right bar = `anti_python`. Same model, same 50 prompts, no external harness on either run. Writeup: [`2026-04-22_heaal_E1_analysis.md`](../benchmarks/2026-04-22_heaal_E1_analysis.md).
+
+### E2 — long tasks with effects (10 prompts, Sonnet both sides)
+
+```mermaid
+---
+config:
+    xyChart:
+        width: 900
+        height: 380
+---
+xychart-beta
+    title "E2: Sonnet via ail ask vs Sonnet writing Python (no harness)"
+    x-axis ["tasks passed", "programs ran (no crash)", "err-handling missing"]
+    y-axis "count out of 10" 0 --> 10
+    bar [9, 10, 0]
+    bar [9, 9, 10]
+```
+
+Left bar = AIL. Right bar = Python. Tied on task pass, AIL one ahead on program completion (the one Python case crashed was E2-10, Wikipedia HTTP 403 unhandled). Python programs had zero error-handling guards on every task; AIL programs had grammar-enforced guards on every task. Writeup: [`2026-04-22_heaal_E2_analysis.md`](../benchmarks/2026-04-22_heaal_E2_analysis.md).
+
+### Shipped as language additions
+
+- `AIL_AUTHOR_PROMPT_VARIANT=anti_python` — front-loaded anti-Python authoring prompt
+- `parse_json(body) -> Result[Any]` — pure builtin for JSON response bodies
+- `ail_parse_check(source) -> Result[Text]` — pure self-reflection primitive (AIL programs can validate AIL programs)
+- Baseline reference (default prompt, Sonnet 4.6, measured 2026-04-20): [`2026-04-20_claude_sonnet46_summary.md`](../benchmarks/2026-04-20_claude_sonnet46_summary.md)
