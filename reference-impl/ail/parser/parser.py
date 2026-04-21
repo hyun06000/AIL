@@ -484,12 +484,21 @@ class Parser:
 
     def parse_type_name(self) -> str:
         # Parses parametric types like List[Number], Map[Text, Number],
-        # Result[Text], Tuple[Number, Text]. Spec §2.3 freezes this
-        # surface syntax; the parser previously ignored the bracket
-        # part, which made spec-valid programs fail to parse. The
-        # type is still not used for static checking — brackets are
-        # consumed and discarded — but the model's preferred shape
-        # is now accepted.
+        # Result[Text], Tuple[Number, Text], and also bare shorthand
+        # [Number] / [Text] (model-preferred inline list annotation).
+        # Types are consumed and discarded — not used for static checking.
+        if self.check(Tok.LBRACK):
+            # bare [T] shorthand — consume brackets and treat as List
+            self.advance()
+            depth = 1
+            while depth > 0 and not self.check(Tok.EOF):
+                if self.match(Tok.LBRACK):
+                    depth += 1
+                elif self.match(Tok.RBRACK):
+                    depth -= 1
+                else:
+                    self.advance()
+            return "List"
         name = self.expect(Tok.IDENT).value
         if self.match(Tok.LBRACK):
             depth = 1
