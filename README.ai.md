@@ -62,10 +62,12 @@ reference-impl/                   # Python interpreter (full feature set)
       language.ail                # summarize, translate, classify,
                                   # extract, rewrite, critique
       utils.ail                   # 11 pure fn utilities
-  examples/                       # 14 example programs
-  tests/                          # 211 tests
+  examples/                       # 16 example programs
+  tests/                          # 252+ tests
   tools/
+    benchmark.py                  # 5-way same-size benchmark (primary)
     bench_authoring.py            # Measure small-model authoring quality
+    bench_vs_python.py            # AIL vs Python head-to-head
     calibration_demo.py           # Show confidence converge to truth
     evolve_demo.py                # Show version chain + rollback
     run_live.py                   # Run all examples against a real model
