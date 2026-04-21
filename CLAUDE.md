@@ -1237,56 +1237,53 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ---
 
-## SESSION STATE — 2026-04-21 (Round 3 완료)
+## SESSION STATE — 2026-04-21 (Round 3 완료 + v4 훈련 완료) [HISTORICAL — superseded below]
 
-### 기준선 — Round 3 결과 (현재 최고)
+이전 세션 기록. 최신 SESSION STATE는 아래 참조.
+요약: R3/C4 70% 달성, README 재작성, v4 훈련 완료, dev→main 머지.
+전체 내용: `git show 2bffc7a~1:CLAUDE.md` 로 복원 가능.
+
+---
+
+## SESSION STATE — 2026-04-21 (현재 핸드오프)
+
+### 기준선 — 현재 최고 벤치마크 결과
 
 **기준 파일**: `docs/benchmarks/2026-04-21_r3_cond4_finetuned_nofewshot.json`
-
-**목표 달성: R3/C4 (ft+nofs) = 70% — Python baseline(56%) +14pp**
 
 | 조건 | AIL parse | AIL ans | Py ans | Cat A | Cat B | Cat C | 상태 |
 |---|---|---|---|---|---|---|---|
 | R1/C4 ft+nofs | 58% | 48% | 38% | 40% | 60% | 45% | 기준선 |
 | R2/C4 ft+nofs | 72% | 64% | 40% | 53% | 80% | 60% | Python 돌파 |
-| **R3/C4 ft+nofs** | **80%** | **70%** | 40% | **60%** | **80%** | **70%** | **✅ 70% 목표 달성** |
+| **R3/C4 ft+nofs** | **80%** | **70%** | 40% | **60%** | **80%** | **70%** | **✅ 현재 최고** |
 
-Python honest baseline (R1/C1, 동일 사이즈): **56%**
-
-**최적 구성: fine-tuned (ail-coder:7b-v3) + no few-shot + FORBIDDEN SYNTAX = 70%**
-
-R2→R3 핵심 드라이버:
-- 파서에서 `[Number]`/`[Text]` bare list 타입 어노테이션 지원 → A12/A15/C03/C10/C11/C13/C19 언블록
-- purity registry에 stdlib 함수(sum_list, unique 등) 추가
-- FORBIDDEN 블록에서 `[Number]` 금지 해제, descending sort 대안 명시
-- `pure fn`에서 `intent` 호출 금지 규칙 명시
+Python honest baseline (R1/C1, 동일 사이즈): **56%**  
+**현재 버전: v1.8.4 (main 브랜치)**
 
 ### 이번 세션에서 완료한 것
 
-1. ✅ **Round 3 벤치마크 완결** — R3/C4 70%. JSON 커밋.
-2. ✅ **70% 목표 달성** — Python baseline +14pp.
-3. ✅ **파서 개선** — `[Type]` bare list annotation 지원 (commit `9821565`).
-4. ✅ **purity registry 확장** — stdlib 함수들 `_PURE_BUILTINS`에 추가.
-5. ✅ **authoring.py FORBIDDEN 블록 업데이트** — `[Number]` 허용으로 전환, sort 대안 추가.
-6. ✅ **dev/main 브랜치 전략** — `main`은 stable, `dev`에서 개발.
+1. ✅ **README.ai.md 재작성** — AI 독자용: 표/코드 블록 위주, 구어체 제거, v1.8.4 정보 반영
+2. ✅ **docs/ko/README.ko.md 재작성** — 한국어 인간 독자용: "70% vs 56%" 헤드라인, R1→R2→R3 스토리
+3. ✅ **v4 훈련 완료** — 260샘플, homeblack tmux `ail-train-v4` 완료. LoRA weights 저장됨.
+4. ✅ **dev→main 머지** — v1.8.4 stable 릴리즈
 
 ### 다음 우선순위
 
-1. **v4 fine-tune 검토** — R3/C4 ≥ 70% 달성. HANDOFF.md 기준 충족. 파인튜닝 데이터 보강 검토.
-   - R3 실패 케이스에서 새 훈련 샘플 추출 (`seed_from_bench.py` 활용)
-   - 직렬화된(공백 최소화) 형식으로 학습 데이터 생성 → 토큰 효율성 향상 아이디어
-2. **잔여 실패 패턴**: `{}` dict 리터럴 (A12, A13, C09), 생성 잘림 (C11, C19)
-3. **base 모델 개선**: FORBIDDEN이 base에 효과 없음 → fine-tune이 유일한 해법임을 확인
+1. **ail-coder:7b-v4 GGUF 변환** — homeblack에서 LoRA merge → llama.cpp GGUF → Q4_K_M → Ollama 등록
+   - 파이프라인: `HANDOFF.md` 참고 (`export_to_ollama.py` broken, 수동 llama.cpp 사용)
+   - 출력: `~/AIL/reference-impl/training/ail-coder-7b-v4.Q4_K_M.gguf`
+2. **R4 벤치마크** — `ail-coder:7b-v4`로 50개 프롬프트, R3(70%)와 비교
+3. **PyPI 릴리즈** — `RELEASING.md` 참고, hyun06000 승인 필요
 
 ### Environment on homeblack
 
 - SSH: `homeblack` (HostName `10.0.0.1`, User `david`)
-- Branch: `dev` (both local and homeblack — `git pull origin dev` 확인 필요)
+- Branch: `main` (after merge; dev도 동일)
 - vLLM: `~/venv/labs/bin/python3.11 -m vllm.entrypoints.openai.api_server`. `PYTORCH_ALLOC_CONF=expandable_segments:True` 필수.
 - qwen7b-base GGUF: `~/AIL/reference-impl/training/qwen2.5-coder-7b-base.Q4_K_M.gguf`
 - ail-coder:7b-v3 GGUF: `~/AIL/reference-impl/training/ail-coder-7b-v3.Q4_K_M.gguf`
+- ail-coder:7b-v4 LoRA: `~/AIL/reference-impl/training/outputs/` (훈련 완료, GGUF 변환 대기)
 - Tokenizer: `~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct/snapshots/c03e6d358207e414f1eca0bb1891e29f1db0e242`
 - Training venv: `~/venv/labs` (unsloth 2026.4.6, trl 0.24, peft 0.19, torch 2.10+cu128)
-- `export_to_ollama.py` broken — 수동 llama.cpp 파이프라인 사용 (HANDOFF.md 참고)
 
-*Written 2026-04-21 after Round 2 completion. AIL fine-tuned model first beats Python baseline.*
+*Updated 2026-04-21. v4 trained, README rewritten, merged to main as v1.8.4.*

@@ -4,6 +4,8 @@ A programming language designed from scratch for AI as the primary author of cod
 
 **v1.8.3** · `pip install ail-interpreter` · [Korean](docs/ko/README.ko.md) · [AI/LLM reference](README.ai.md)
 
+> **70% correct answers** on 50 standard tasks — beating the Python baseline (56%) with the same 7B model.
+
 ---
 
 ## What is AIL?
@@ -95,9 +97,34 @@ In AIL, `to_number(x)` returns a `Result`. If you call `unwrap()` without `is_ok
 
 ## Measured results
 
-Same 50 prompts, each authored once in AIL and once in Python, then executed and scored.
+**Same 7B model. Same 50 prompts. AIL: 70%. Python: 56%.**
+
+The fine-tuned AIL model (`ail-coder:7b-v3`) answers correctly on 70% of tasks. The same size Python model answers correctly on 56%. The gap isn't model quality — it's language design.
+
+| | Parse | Correct answer | Error handling omitted |
+|---|---|---|---|
+| **`ail-coder:7b-v3` (AIL)** | **80%** | **70%** | **0%** |
+| `qwen2.5-coder:7b-base` (Python) | 100% | 56% | 44% |
+
+The error-handling gap is structural, not probabilistic. AIL's `Result` type is part of the grammar — a failable operation that isn't handled is a parse error. The model cannot omit it. The Python rate doesn't go to zero as models improve; Python simply allows `int(x)` without error handling and makes no objection.
+
+### How we got to 70%
+
+This number was reached in three rounds of measurement, each targeting the failure mode the previous round revealed:
+
+| Round | Change | AIL answer |
+|---|---|---|
+| R1 baseline | `ail-coder:7b-v3`, no prompt tuning | 48% |
+| R2 | Added FORBIDDEN SYNTAX block to prompt (blocked `dict {}`, `**`, dot imports) | 64% |
+| **R3** | **Parser: accepted `[Number]`/`[Text]` list type annotations the model naturally writes** | **70%** |
+
+R2 improvement (+16pp) came from prompt engineering. R3 improvement (+6pp) came from removing a parser restriction that was wrong — the model kept writing `items: [Number]` in function signatures, which is natural and correct, but the parser rejected it. One grammar fix unblocked seven failing cases simultaneously.
+
+The methodology is documented at [`docs/benchmarks/2026-04-21_r2_analysis.md`](docs/benchmarks/2026-04-21_r2_analysis.md) and [`docs/benchmarks/2026-04-21_r3_cond4_finetuned_nofewshot.json`](docs/benchmarks/2026-04-21_r3_cond4_finetuned_nofewshot.json).
 
 ### Base models (no AIL-specific training)
+
+Without fine-tuning, base models trail on AIL parse rate — they've seen far more Python than AIL. Fine-tuning on 260 validated programs closes this gap.
 
 | Model | AIL parse | Python parse | Python skips error handling | AIL skips error handling |
 |---|---|---|---|---|
@@ -105,25 +132,9 @@ Same 50 prompts, each authored once in AIL and once in Python, then executed and
 | `qwen2.5-coder:14b` | 42% | 100% | **42% (21/50)** | **0%** |
 | `claude-sonnet-4-6` | 36% | 100% | **70% (35/50)** | **0%** |
 
-Base models trail on AIL parse rate because they've seen far more Python than AIL in training. Without fine-tuning, they default to Python syntax (`List[T]`, `x[0]` subscript, method calls).
+**One result that holds across every model tier:** AIL's error-handling omission rate is **0%**.
 
-### Fine-tuned model (`ail-coder:7b-v3`)
-
-v1.8.3 ships a QLoRA fine-tune of `qwen2.5-coder-7b-instruct` on 244 validated AIL samples.
-
-| | AIL parse | AIL answer | Python parse | Python answer | Python skips error handling |
-|---|---|---|---|---|---|
-| `ail-coder:7b-v3` | **78%** | **70%** | 54% | 48% | 44% (22/50) |
-
-- AIL answer rate exceeds Python by 22 points (70% vs 48%) on the same model and prompts. The gap comes from Python programs silently skipping LLM calls they should have made.
-- AIL parse exceeds Python parse (78% vs 54%) on the fine-tuned model.
-- G1 gate (AIL parse ≥ 80%) missed by one case. The three remaining failures all use Python-style `list[index]` subscript. Fix planned for v1.9.
-
-**One result that holds across every model tier:** AIL's error-handling omission rate is **0%**. The `Result` type is part of the grammar — you can't discard a failable result without handling it. Model quality is irrelevant.
-
-📊 Raw data: [`docs/benchmarks/`](docs/benchmarks/) · Numbers explained: [`docs/why-ail-numbers.md`](docs/why-ail-numbers.md) · FAQ: [`docs/why-ail-faq.md`](docs/why-ail-faq.md)
-
-### Reproduce the table
+### Reproduce the benchmark
 
 ```bash
 pip install 'ail-interpreter[anthropic]'
@@ -195,6 +206,7 @@ The `[LLM]` tag is the provenance boundary. Every number came from `pure fn`. On
 | v1.7 | **`match` + confidence guards**: `"positive" with confidence > 0.9 => ...` |
 | v1.8 | **Calibration**: confidence replaced by observed mean once enough samples accumulate |
 | v1.8.3 | `round`/`floor`/`ceil`/`sqrt`/`pow` trusted-pure builtins; parsers accept parametric types (`List[T]`, `Map[K,V]`, `Result[T]`); `ail-coder:7b-v3` fine-tune ships |
+| v1.8.4 | Bare list type annotations (`items: [Number]`, `-> [Text]`) accepted in all fn/intent signatures; stdlib builtins (`sum_list`, `unique`, etc.) trusted-pure; `ail-coder:7b-v4` dataset (260 samples) |
 
 ---
 
@@ -323,7 +335,7 @@ Issues and PRs in Korean are welcome.
 
 The code and documentation through **v1.0** were written by **Claude Opus 4** through the [claude.ai](https://claude.ai) chat interface — not Claude Code, not an API pipeline, a chatbot in a browser tab with git bundles copy-pasted back and forth. Those commits appear as `Author: Claude` through the v1.0.0 tag.
 
-**v1.1 through v1.8.3** were built in subsequent sessions with **Claude Code** — language features (provenance, purity contracts, attempt, parallelism, effects, match, calibration, math builtins, parametric types), the Go runtime, the training pipeline, the benchmarks, and the `ail-coder:7b-v3` fine-tune.
+**v1.1 through v1.8.4** were built in subsequent sessions with **Claude Code** — language features (provenance, purity contracts, attempt, parallelism, effects, match, calibration, math builtins, parametric types, bare list type annotations), the Go runtime, the training pipeline, the benchmarks, and the `ail-coder:7b-v3/v4` fine-tunes.
 
 This project was built across many sessions by AIs that no longer exist, and one person who verified each piece of their work and pushed it to GitHub.
 

@@ -476,6 +476,9 @@ def _build_authoring_goal() -> str:
         "call an intent — doing so is a purity violation. Only the `entry` "
         "block coordinates fn and intent. Pattern: `pure fn` parses/computes "
         "→ `entry` calls both fn and intent and assembles the result.\n"
+        "  * Anonymous fn in `sort()`: `sort(items, fn(x: Text) -> Number "
+        "{ ... })`. Define a named `pure fn` first and pass its name: "
+        "`pure fn key(x: Text) -> Number { ... }` then `sort(items, key)`.\n"
         "When in doubt about a syntax pattern, write it out with "
         "explicit `for` loops and `if` branches — those always work."
     )
