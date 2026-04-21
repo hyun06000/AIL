@@ -1299,11 +1299,19 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ---
 
-## SESSION STATE — 2026-04-22 (트랙 분리 + v6/E1 동시 진행)
+## SESSION STATE — 2026-04-22 (트랙 분리 + v6/E1 동시 진행) [HISTORICAL — superseded below]
+
+이전 세션 기록. 최신은 아래.
+요약: 트랙 공식 분리, HEAAL/E1 실행 시작 시점.
+전체 내용: `git show 2fde1ad:CLAUDE.md` 로 복원.
+
+---
+
+## SESSION STATE — 2026-04-22 (R6/E1/E2 모두 완료, 두 가설 모두 검증됨)
 
 **프로젝트가 두 트랙으로 공식 분리됨:**
 - **AIL 트랙** — 언어 자체의 성능 (훈련, 벤치마크, 파서, stdlib)
-- **HEAAL 트랙** — AIL 위에 짓는 첫 프로젝트. frontier 모델이 훈련 없이 AIL을 쓰게 하는 harness 엔지니어링.
+- **HEAAL 트랙** — AIL 위에 짓는 첫 프로젝트. frontier 모델이 훈련 없이 AIL을 쓰게 하는 harness-as-a-language 증명.
 
 둘 다 `AIL/` 레포 안에서 돌아가지만 자원(GPU vs API) · 실험 변수 · 분석 디렉토리가 분리됨. 벤치마크 JSON은 `ail_*.json` / `heaal_*.json` prefix 사용. 자세한 내용: `docs/heaal/README.md`.
 
@@ -1311,7 +1319,7 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 
 ### AIL 트랙
 
-#### 기준선 — R3가 여전히 최고
+#### 기준선 표 — R3가 여전히 최고, v6가 가설 검증
 
 | 조건 | AIL parse | AIL ans | Cat A | Cat B | Cat C | 상태 |
 |---|---|---|---|---|---|---|
@@ -1319,42 +1327,50 @@ Kept for lineage; retrieve with `git show 06243ee~1:CLAUDE.md` if needed.
 | R2/C4 ft+nofs (v3) | 72% | 64% | 53% | 80% | 60% | Python 돌파 |
 | **R3/C4 ft+nofs (v3)** | **80%** | **70%** | **60%** | **80%** | **70%** | **✅ 서빙 모델** |
 | R4/C4 ft+nofs (v4) | 80% | 68% | 80% | 53% | 70% | ⚠️ Cat B regression |
-| **R5/C4 ft+nofs (v5)** | **50%** | **42%** | 60% | 53% | **20%** | 💀 severe regression |
+| R5/C4 ft+nofs (v5 coder+sl) | 50% | 42% | 60% | 53% | 20% | 💀 severe, leading-quote artifact |
+| **R6/C4 ft+nofs (v6 noncoder+sl)** | **80%** | **62%** | 67% | 53% | **65%** | ✅ single-line rehabilitated |
 
 **현재 버전: v1.8.4 (main 브랜치, PyPI 업로드 완료)**
 **서빙 모델: ail-coder:7b-v3** (homeblack Ollama에 등록됨)
 
 #### AIL 트랙 — 이번 세션 완료
-- ✅ R4/R5 벤치마크 + 분석. v4/v5 모두 regression. v3 서빙 유지.
-- ✅ Validator allowlist 확장 (`r3_fixes`, `cat_b_reinforcement`).
-- ✅ `10_cat_b_reinforcement.jsonl` 20개 추가 → 총 291 validated.
+- ✅ R4/R5/R6 벤치마크 + 분석. v4/v5/v6 모두 archived. v3 서빙 유지.
+- ✅ R5 실패 원인 규명 (leading-quote artifact, coder 모델의 Python prior).
+- ✅ **R6로 가설 확정** — 비-coder Qwen base + 동일 single-line training = leading-quote artifact 0/50, Cat C 20%→65% 회복. single-line 포맷 자체는 문제 없음이 증명됨.
+- ✅ Validator allowlist 확장, `10_cat_b_reinforcement.jsonl` 20개 추가, 총 291 validated.
 - ✅ `to_chatml.py --flatten={none,strip-indent,single-line}` 구현.
-- ✅ peft 기반 GGUF 변환 파이프라인 (v5부터 canonical, 2.5분).
-- ✅ v5 훈련 + GGUF + Ollama 등록. R5 결과로 single-line 가설 REJECTED.
+- ✅ peft 기반 GGUF 변환 파이프라인 (canonical, 2.5분).
+- ✅ tmux heredoc 교훈 + CLAUDE.md에 canonical 템플릿 기록.
+- ✅ `ail_parse_check` builtin 추가 (AIL self-reflection primitive, Q16/Q17 open-questions 도입).
 
 #### AIL 트랙 — 다음 우선순위
-1. **v6 훈련 (현재 진행 중)** — **비-coder base model** (`Qwen/Qwen2.5-7B-Instruct`, 다운로드 진행 중)로 동일한 single-line chatml로 학습. 목적: "single-line 실패가 모델 특이적인가 (coder의 Python prior) vs 포맷 자체 문제인가"를 통제 실험으로 판별.
-   - 다운로드 상태: homeblack tmux `qwen-noncoder-download` 진행 중 (~15GB)
-   - 완료 후: v6 훈련 → peft merge → Q4_K_M → Ollama `ail-coder:7b-v6` 등록 → R6 벤치마크
-2. **strip-indent v7 (conditional)** — v6 결과가 어떻든 나오면 strip-indent도 비교 가능.
-3. **dev → main 머지** — R4/R5 분석, SECURITY.md, Rule 5/6, peft 파이프라인 쌓임. hyun06000 승인 필요.
+1. **v7 (conditional)** — 비-coder + indented로 "포맷 vs base model" 8pp gap 분리. v3(70%) vs v6(62%) 격차의 원인 해부. 긴급하지 않음.
+2. **dev → main 머지** — R4/R5/R6 분석, SECURITY.md, Rule 5/6, peft pipeline, `ail_parse_check`, HEAAL E1/E2 전부 dev에 쌓임. 머지는 hyun06000 승인 필요.
 
 ---
 
 ### HEAAL 트랙
 
-#### HEAAL — 이번 세션 완료
-- ✅ 트랙 공식 분리. `docs/heaal/README.md` 생성 (프로젝트 선언 + 실험 설계).
-- ✅ 벤치마크 JSON 파일명 규칙 도입 (`ail_*.json` / `heaal_*.json`).
+#### HEAAL — 이번 세션 완료 (대성공)
+- ✅ 트랙 공식 분리, `docs/heaal/README.md` 작성 (저자 모델 / 인텐트 모델 용어 + ASCII 흐름 도표).
+- ✅ `anti_python` 프롬프트 variant 구현 (reference card 43% 단축, 부정 지시 front-load).
+- ✅ **E1 (50 short tasks): target exceeded.** Sonnet + anti_python → AIL 파싱 **94%** (기준선 36%, +58pp), 정답률 **88%** (+52pp), 에러 핸들링 누락 **0%** (문법 강제 불변). Sonnet+anti_python이 **v3 fine-tune 7B(70%)를 능가**.
+- ✅ **E2 (10 effect-heavy long tasks): 7/10 passed, 9/10 program-completed, avg retries 0.10.** 3개 실패 분석:
+  - 2건은 논리 수준 오답 (프로그램은 실행됨)
+  - 1건은 환각 effect → 런타임이 **clean error로 잡음** — HEAAL 주장의 정확한 증명 (silently-wrong이 아닌 loudly-failing)
+- ✅ E2 infrastructure: `benchmarks/heaal_e2/prompts.json`, `setup_fixtures.py`, `run_e2.py` (재사용 가능).
 
 #### HEAAL — 다음 우선순위
-1. **E1 실험 (Anti-Python 프롬프트)** — `ail.authoring`에 `AIL_AUTHOR_PROMPT_VARIANT=anti_python` variant 추가. FORBIDDEN SYNTAX 블록을 reference card 앞에 배치. Sonnet 4.6 base로 50프롬프트 실행. 목표: 현재 36% parse → 60%+.
-2. **E1 분석** — `docs/benchmarks/2026-04-22_heaal_E1_analysis.md` 작성.
-3. **E2~E4 queue** — Grammar-first / CoT / Tool-use. E1 결과 보고 우선순위 정함.
+1. **E1' (optional)** — Sonnet 4.5로 default 프롬프트 재측정 (현재 baseline은 4.6). ~$2. 엄밀한 apples-to-apples 목적.
+2. **E3 (CoT) / E4 (tool-use)** — queued. E1/E2 이미 target 초과라 보너스 실험.
+3. **HEAAL을 다른 API에 적용** — GPT-4o, Gemini Pro로 same-prompt 이식. 모델 가족 간 전이성 검증.
 
-#### HEAAL 기준선 (현재 상태)
-- `claude-sonnet-4-6` + 표준 프롬프트: AIL parse 36%, fn/intent routing 100%, err-handling miss 70%.
-- 이미 측정됨: `docs/benchmarks/2026-04-20_claude_sonnet46_summary.md`.
+#### HEAAL 핵심 결과 (E1 + E2)
+- **하네스-as-a-language 주장 end-to-end 증명됨.**
+- 외부 하네스(linter, validator, AGENTS.md, wrapper) 0개.
+- 저자 모델 fine-tune 0회.
+- 환경변수 2개 (`AIL_AUTHORING_BACKEND`, `ANTHROPIC_MODEL`) + `ail ask`만으로 frontier 모델이 안전한 AIL을 작성.
+- 안전 속성(에러 핸들링 0% 누락, silent-skip 없음, 무한 루프 불가)은 프롬프트와 무관하게 grammar로 보장.
 
 ---
 
