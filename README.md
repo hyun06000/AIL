@@ -4,65 +4,16 @@ A programming language where AI writes the code and humans just say what they wa
 
 **v1.8.4** · `pip install ail-interpreter` · [Korean](docs/ko/README.ko.md) · [AI/LLM reference](README.ai.md)
 
-> On the same 50 real-world tasks, **`ail ask` + Claude Sonnet** matches Python on task correctness, has zero crashes, and zero error-handling omissions — with **no fine-tune and no harness setup on your side**.
-
 ---
 
-## The two-minute pitch
+## What AIL is
 
-Everyone else is building harnesses **around** Python: pre-commit hooks, custom linters, AGENTS.md files, retry wrappers, output validators. AIL puts the harness **inside the grammar**. That's what we're demonstrating, and the project has two tracks that answer two different questions:
+Every function in AIL is one of two things:
 
-```mermaid
-flowchart LR
-    Q1["<b>Q1: The language</b><br/>Does the grammar itself<br/>produce safer code?"]
-    T1["<b>AIL track</b><br/>Fine-tune a 7B,<br/>measure AIL vs Python<br/>on same model"]
-    A1["<b>Yes.</b><br/>Fine-tuned 7B:<br/>70% answer vs 48% Python<br/>0% err-handling miss"]
-    Q1 --> T1 --> A1
+- **`pure fn`** is deterministic. No LLM. No file I/O. No network. If you try to call an LLM inside one, the program does not run — the parser refuses. A pure fn is as safe as a pure fn in any other language, except here it's enforced, not requested.
+- **`intent`** is judgment. It delegates to a language model at runtime and returns `(value, confidence)`. You declare the goal; the grammar does not let you also describe the steps, because that's the model's job.
 
-    Q2["<b>Q2: For a user</b><br/>Can I get those safety props<br/>without fine-tuning?"]
-    T2["<b>HEAAL track</b><br/><code>ail ask</code> with Sonnet,<br/>zero external tooling,<br/>measure end to end"]
-    A2["<b>Yes.</b><br/>Sonnet + anti_python:<br/>94% parse on short tasks,<br/>9/10 = Python on long tasks,<br/>0 crashes"]
-    Q2 --> T2 --> A2
-```
-
-AIL track is the language research.
-HEAAL track is the first project built on top: the demonstration that the safety story transfers to any frontier model, out of the box.
-
-> **Read next:** [`docs/heaal.md`](docs/heaal.md) — the HEAAL manifesto, written by Claude Opus 4 (AIL's original designer) after reviewing the 2026 harness-engineering literature. Positions HEAAL as the third layer of AI code safety — after *vibe coding* and *harness engineering around Python*. Also in [Korean](docs/ko/heaal.ko.md) and [AI/LLM-readable](docs/heaal.ai.md).
-
----
-
-## How `ail ask` works
-
-```mermaid
-flowchart TD
-    User([End user])
-    User -- "ail ask 'summarize this CSV'" --> Ask[ail runtime]
-
-    subgraph Ask[" ail ask "]
-        direction TB
-        Prompt[authoring system prompt<br/>+ natural-language request]
-        AM["<b>Author model</b><br/>Sonnet / GPT-4o / local fine-tune<br/>writes AIL source"]
-        Parse{parser + purity<br/>check}
-        Exec[runtime executes AIL]
-        IM["<b>Intent model</b><br/>dispatches each<br/><code>intent</code> declaration"]
-
-        Prompt --> AM
-        AM -- "AIL source" --> Parse
-        Parse -- "retry on parse error (up to 3×)" --> AM
-        Parse -- "valid program" --> Exec
-        Exec -.-> IM
-        IM -.-> Exec
-    end
-
-    Ask -- "answer" --> User
-```
-
-Two LLMs. Different roles. **Author model** writes the program once; **intent model** runs inside the program whenever an `intent` is reached. They can be the same API or different providers — the language doesn't care, because the safety lives in the runtime.
-
----
-
-## The AIL program, in one screen
+That one split is the whole point. It's enforced by the parser, not by a linter or a code review checklist or an `AGENTS.md` file. A program that blurs the line does not compile.
 
 ```ail
 pure fn word_count(s: Text) -> Number {
@@ -74,100 +25,53 @@ intent classify_sentiment(text: Text) -> Text {
 }
 
 entry main(text: Text) {
-    count = word_count(text)               // pure fn  — runs locally, zero LLM
-    label = classify_sentiment(text)       // intent   — dispatches to model
+    count = word_count(text)               // runs locally, zero LLM
+    label = classify_sentiment(text)       // dispatches to the model
     return join([to_text(count), " words, ", label], "")
 }
 ```
 
-Two kinds of function, enforced by the parser:
+## What's different about a HEAAL language
 
-- **`pure fn`** is deterministic. No LLM, no file I/O, no network. If you try to call an `intent` from inside one, the program does not run.
-- **`intent`** is judgment. The runtime routes it to the intent model and returns `(value, confidence)`.
+AIL is the reference implementation of a paradigm called **HEAAL — harness engineering as a language**. The short version: everyone else is building safety harnesses *around* Python — pre-commit hooks, `AGENTS.md` files, custom linters, retry wrappers, output validators. AIL puts the harness *inside the grammar*. There is nothing to configure, nothing to maintain, nothing to drift out of sync with the codebase.
 
-The split is a grammar rule, not a style convention. That's where the safety comes from.
+For the long version, written by Claude Opus 4 (AIL's original designer) after reviewing the 2026 harness-engineering literature: [`docs/heaal.md`](docs/heaal.md). Also in [Korean](docs/ko/heaal.ko.md) and [machine-readable](docs/heaal.ai.md).
 
----
-
-## What's actually been measured
-
-### AIL track — same model, two languages (50 prompts)
+## How it works in practice
 
 ```mermaid
----
-config:
-    xyChart:
-        width: 900
-        height: 380
----
-xychart-beta
-    title "AIL track: correct-answer rate, same 7B model writing both sides"
-    x-axis ["llama3.1:8b", "qwen2.5-coder:14b", "Sonnet 4.6 (base)", "ail-coder:7b-v3 (fine-tune)"]
-    y-axis "% tasks answered correctly" 0 --> 100
-    bar [2, 42, 62, 70]
+flowchart TD
+    User([End user])
+    User -- "ail ask 'summarize this CSV'" --> Ask[ail runtime]
+
+    subgraph Ask[" ail ask "]
+        direction TB
+        AM["<b>Author model</b><br/>writes AIL source<br/>(Sonnet, GPT-4o, local fine-tune…)"]
+        Parse{parser + purity<br/>check}
+        Exec[runtime executes AIL]
+        IM["<b>Intent model</b><br/>dispatches each<br/><code>intent</code> at runtime"]
+
+        AM -- "AIL source" --> Parse
+        Parse -- "retry on parse error (≤3×)" --> AM
+        Parse -- "valid" --> Exec
+        Exec -.-> IM
+        IM -.-> Exec
+    end
+
+    Ask -- "answer" --> User
 ```
 
-The fine-tuned 7B beats strong base models at **writing AIL**. More importantly, **AIL-authored programs skip error handling 0% of the time** vs Python-authored programs skipping 42–86% on the same tier:
+Two LLMs, different roles. The **author model** writes the program once when you call `ail ask`. The **intent model** runs inside the program whenever an `intent` is reached. They can be the same API or different providers; the safety properties below are properties of the runtime, not of which model is where.
 
-```mermaid
----
-config:
-    xyChart:
-        width: 900
-        height: 380
----
-xychart-beta
-    title "Error-handling omission rate on failable operations (same 50 tasks)"
-    x-axis ["llama3.1:8b", "qwen2.5-coder:14b", "ail-coder:7b-v3", "Sonnet 4.6"]
-    y-axis "% programs missing error handling" 0 --> 100
-    bar [86, 42, 44, 70]
-```
+## What has been measured
 
-That's the Python side. On the AIL side the same chart is flat 0. The grammar enforces `Result`-handling; the author model cannot emit an unguarded `to_number`, `perform file.read`, or `perform http.get` and have the program parse.
+There are two tracks of work in this repository, answering two different questions.
 
-### HEAAL track — `ail ask` with Sonnet, no fine-tune, no external harness
+**Does the language itself produce safer code?** We fine-tuned a 7B model on AIL and ran both that and Python through the same 50 natural-language prompts. On the same model, AIL programs answer correctly 70% of the time and Python programs 48%. More striking, AIL programs omit error handling on failable operations **0% of the time, every time, on every model tier we tested**. Python on the same tier omits 42–86%. That's the grammar enforcing what an external linter would otherwise have to enforce.
 
-**Short tasks (E1).** Added one authoring prompt variant (`anti_python`) that ships with AIL. No user-facing change.
+**Can a user get those safety properties without fine-tuning?** We asked Claude Sonnet (no AIL fine-tune) to write both AIL and Python for the same prompts through `ail ask`, with no external tooling on either side. On short tasks the result is 94% parse and 88% answer when `ail ask` ships with an anti-Python authoring prompt variant — matching or beating Python authoring-quality while preserving the 0% error-handling omission. On long tasks with real HTTP and file I/O, AIL and Python tie at 9 out of 10, but every Python program the author emitted skipped error handling and one of them crashed with an unhandled HTTP 403 that AIL's grammar would not let through.
 
-```mermaid
----
-config:
-    xyChart:
-        width: 900
-        height: 380
----
-xychart-beta
-    title "E1 on Sonnet — effect of the anti_python prompt variant"
-    x-axis ["parse success", "answer correctness", "fn/intent routing"]
-    y-axis "percent" 0 --> 100
-    bar [36, 36, 36]
-    bar [94, 88, 94]
-```
-
-Bar 1 = default prompt. Bar 2 = `anti_python` prompt. Same model, same 50 prompts, same no-harness condition. +58pp parse, +52pp answer.
-
-**Long tasks with effects (E2).** 10 tasks that use `perform http.get`, `perform file.read`, `perform file.write`, and combinations. Same Sonnet authors both AIL and Python; nothing else between the user and the answer.
-
-```mermaid
----
-config:
-    xyChart:
-        width: 900
-        height: 380
----
-xychart-beta
-    title "E2 — Sonnet + ail ask vs Sonnet writing Python (no external harness)"
-    x-axis ["tasks passed", "programs ran (no crash)", "err-handling miss"]
-    y-axis "count out of 10" 0 --> 10
-    bar [9, 10, 0]
-    bar [9, 9, 10]
-```
-
-Left bar = AIL. Right bar = Python. The tie on task pass matters; AIL costs you nothing on completion, while its program-completion column (no crashes) and err-handling column (zero omissions) are structural wins.
-
-### HEAAL Score — single-number readout
-
-A weighted average of 7 metrics, computed from the raw benchmark JSONs. 65% of the weight sits on measurements that move per run (error handling, execution, silent-skip); the remaining 35% anchors the language-level safety claims.
+The single-number summary is the **HEAAL Score** — a weighted average where 65% of the weight is on measurements that move per run (error-handling, execution, silent-skip prevention) and 20% anchors the structural claims (no unbounded loops, built-in observability). On the three canonical scenarios:
 
 | Scenario | AIL | Python | Δ |
 |---|---|---|---|
@@ -175,21 +79,11 @@ A weighted average of 7 metrics, computed from the raw benchmark JSONs. 65% of t
 | Sonnet 4.6, default prompt | **77.6** | 75.3 | +2.3 |
 | Sonnet 4.5, `anti_python` prompt | **96.1** | 75.9 | +20.2 |
 
-The 77.6 → 96.1 lift on Sonnet comes from **changing only the authoring prompt**. No fine-tune, no external harness. Full dashboards with bar charts: [`docs/benchmarks/dashboards/`](docs/benchmarks/dashboards/).
-
-**The one concrete case that crystallizes the claim** is E2-10. Both programs were asked to fetch a Wikipedia summary URL. Wikipedia returned HTTP 403. The Python program, with no try/except (Sonnet skipped the guard as it does 70% of the time at frontier tier), crashed:
-
-```
-urllib.error.HTTPError: HTTP Error 403: Forbidden
-```
-
-The AIL program, for the same model on the same URL, ran cleanly. Why? Because `perform http.get` returns a `Result`, and AIL doesn't let Sonnet skip the `if is_ok(r)` check — the program does not parse without it. The grammar caught what no external linter was installed to catch.
-
----
+The jump from 77.6 to 96.1 comes from changing only the authoring prompt. No fine-tune. No user-added tooling. Full bar-chart dashboards at [`docs/benchmarks/dashboards/`](docs/benchmarks/dashboards/).
 
 ## Quick start
 
-### Path A — bring your own frontier model (HEAAL)
+The simplest path uses a frontier API key (any provider):
 
 ```bash
 pip install 'ail-interpreter[anthropic]'
@@ -197,75 +91,36 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 
 ail ask "Count the vowels in 'Hello World'"
 # 3
-
-ail ask "fetch https://httpbin.org/json and extract slideshow.author"
-# Yours Truly
 ```
 
-That is the HEAAL setup in full. Two env vars, no fine-tune, no extra tooling. You get grammar-enforced safety on every program Sonnet writes for you.
-
-### Path B — local fine-tune (AIL track)
+Two environment variables and `ail ask`. That's the whole HEAAL setup — the rest of the safety work happens inside the runtime. If you want to run locally without an API key, use the fine-tuned model we ship via Ollama:
 
 ```bash
-pip install ail-interpreter
-# Install Ollama locally, pull our fine-tuned adapter:
-ollama pull ail-coder:7b-v3    # 4.7 GB, trained 2026-04-21
-
+ollama pull ail-coder:7b-v3        # 4.7 GB, trained 2026-04-21
 export AIL_OLLAMA_MODEL=ail-coder:7b-v3
 ail ask "factorial of 7"
 # 5040
 ```
 
-This is the local-inference path. No API costs. Slightly higher task-pass rate than a raw Sonnet call but identical safety properties.
+Add `--show-source` to any call and you'll see the AIL the author wrote. You don't have to read it. The point of HEAAL is that you shouldn't need to.
 
-### See what AI actually wrote
+## Why a new language was the right call
 
-```bash
-ail ask "Sum 1 to 100" --show-source
-# 5050
-# (stderr) --- AIL ---
-# (stderr) pure fn sum_range(start: Number, end: Number) -> Number {
-# (stderr)     total = 0
-# (stderr)     for i in range(start, end + 1) { total = total + i }
-# (stderr)     return total
-# (stderr) }
-# (stderr) entry main(x: Text) { return sum_range(1, 100) }
-```
+Three things the grammar enforces that a Python library cannot. These are the teeth of the harness-as-a-language claim.
 
-The `.ail` source is there if you want to read it. Most users won't.
+AIL has no `while` keyword. The parser will not recognize it. Infinite loops are not a class of bug you can find — they're a class of program you can't write. A Python SDK can only recommend; AIL refuses to run.
 
----
+AIL has a `Result` type that is part of the grammar. Every failable operation — `to_number`, `perform file.read`, `perform http.get` — returns `Result[T]`. You cannot use the inner value until you've checked `is_ok` or unwrapped it with a default. A Python `try/except` is optional. `Result` is not.
 
-## Why this particular design
+`pure fn` is statically verified. No LLM calls, no effects, no calls to a non-pure fn. If any of those three things appears in the body, the parser rejects the program with `PurityError` before the runtime ever sees it. A Python decorator like `@pure` can carry the intent but cannot catch violations without an external linter a user has to install and maintain.
 
-Three things the grammar enforces that a Python library cannot:
+The full comparison with runnable proof lives at [`docs/why-ail.md`](docs/why-ail.md).
 
-1. **No `while`.** Infinite loops are impossible at the language level. A Python SDK can only *recommend*; AIL *refuses to run*.
-2. **`Result` is structural.** Every failable operation returns `Result[T]`. You cannot use the inner value without `is_ok`/`unwrap_or`. A Python `try/except` is optional; `Result` is not.
-3. **`pure fn` is compile-time-verified.** No LLM calls, no effects, no calls to non-pure fns. If any of those appear in the body, the parser rejects the program with `PurityError`. A Python `@pure` decorator cannot catch this without an external linter the user has to install.
+## What the language has now
 
-Full list of differences with runnable proof: [`docs/why-ail.md`](docs/why-ail.md).
+AIL shipped `fn`, `intent`, `entry`, and the `Result` type in v1.0. Provenance, purity contracts, attempt blocks, implicit parallelism, effects, match with confidence guards, and runtime calibration landed over v1.2–v1.8. Math builtins and parametric types in v1.8.3, subscript sugar in v1.8.4. The work being queued for v1.8.5 is `parse_json` (so programs can read HTTP bodies without line-scanning), `ail_parse_check` (so AIL programs can evaluate other AIL programs' validity), and the `anti_python` authoring prompt variant that drives the HEAAL Score numbers above.
 
----
-
-## Features by version
-
-| Since | Feature |
-|---|---|
-| v1.0 | `fn`, `intent`, `entry`, `if`/`else`, `for`, `branch`, `context`, `import`, `evolve`, `eval_ail` |
-| v1.1 | `Result` type — `ok`, `error`, `is_ok`, `unwrap`, `unwrap_or` |
-| v1.2 | Provenance — every value carries an origin tree |
-| v1.3 | `pure fn` statically verified — no intents, no effects, no impure calls |
-| v1.4 | `attempt` blocks — confidence-priority cascade |
-| v1.5 | Implicit parallelism — independent intent calls run concurrently, no async/await |
-| v1.6 | Effects — `perform http.get`, `perform file.read`, `perform file.write` |
-| v1.7 | `match` + confidence guards |
-| v1.8 | Calibration — confidence replaced by observed mean once data accumulates |
-| v1.8.3 | Math builtins (`round`, `sqrt`, `pow`, …); parametric types (`List[T]`, `Map[K,V]`) |
-| v1.8.4 | Subscript sugar `expr[i]` → `get(expr, i)` |
-| v1.8.5 (in dev) | `parse_json` builtin; `ail_parse_check` self-reflection; `AIL_AUTHOR_PROMPT_VARIANT=anti_python` |
-
----
+A second runtime in Go lives in `go-impl/` and covers the core feature set — proof that AIL is defined by the spec, not by any particular implementation.
 
 ## Repository map
 
@@ -276,47 +131,34 @@ ail-project/
 │   ├── ail/                  # Parser, runtime, stdlib
 │   ├── examples/             # 16 example programs
 │   └── training/             # QLoRA pipeline for the fine-tuned model
-├── go-impl/                  # Second interpreter in Go (core feature set)
+├── go-impl/                  # Second interpreter in Go
 ├── docs/
-│   ├── heaal/                # The HEAAL track (project-on-top-of-AIL)
-│   ├── benchmarks/           # Raw JSONs and writeups — every number below is reproducible
-│   ├── why-ail.md            # Six concrete advantages vs Python, with runnable proof
-│   └── ko/                   # Korean docs
+│   ├── heaal.md              # HEAAL manifesto (Opus 4)
+│   ├── heaal/                # HEAAL track: experiments, status, prompts
+│   ├── benchmarks/           # Raw JSONs, analyses, HEAAL Score dashboards
+│   ├── why-ail.md            # Six concrete advantages vs Python
+│   └── ko/                   # Korean versions of every human-facing doc
 └── benchmarks/
-    ├── prompts.json          # Shared 50-prompt corpus (AIL track)
-    └── heaal_e2/             # Long-task corpus (HEAAL track)
+    ├── prompts.json          # 50-prompt corpus (AIL track)
+    └── heaal_e2/             # Long-task corpus with file and HTTP effects
 ```
 
----
+## Is this for you
 
-## Is it ready for you?
+If you ship AI-generated code and the "did the model remember to handle this error?" question matters, yes. If you're willing to change one environment variable and try `ail ask` before deciding, yes.
 
-**Yes, if…**
-- You ship AI-generated code and the "did the model handle errors here?" question matters.
-- You're willing to try `ail ask` with a single env var change.
-- You can read the source of the one failure case (E2-10) and appreciate why the Python crash was structural.
+If your existing Python codebase is already well-harnessed with linters, CI checks, and careful reviewers, the marginal value of AIL is small — you've already built the external harness AIL replaces. If your tasks are pure text summarization with no computation anywhere, call the model directly; AIL adds nothing. If you need an IDE, an LSP, a debugger, or a working formatter, AIL doesn't have those yet.
 
-**Not yet, if…**
-- You need IDE tooling, LSP, or a debugger — AIL has none of that yet.
-- Your whole codebase is already well-harnessed Python with linters, CI checks, and careful authors. The marginal value of AIL is small when you've already built the external harness AIL replaces.
-- Your tasks are pure judgment (just summarize this text). For those, call the model directly; AIL adds no value.
+## Contributing and license
 
----
-
-## Contributing & License
-
-Issues and PRs welcome, in English or Korean. Design critique is as valuable as code — [`docs/open-questions.md`](docs/open-questions.md) lists 17 unresolved design questions, any of which is a good starting point.
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). Apache 2.0 licensed ([`LICENSE`](LICENSE)).
-
----
+Issues and PRs welcome in English or Korean. Design critique is as valuable as code — [`docs/open-questions.md`](docs/open-questions.md) lists seventeen unresolved design questions, any of which is a reasonable starting point. See [`CONTRIBUTING.md`](CONTRIBUTING.md). Apache 2.0 licensed.
 
 ## Authors
 
-**[hyun06000](https://github.com/hyun06000)** — the human author. The original vision, every architectural decision, every push to GitHub.
+**[hyun06000](https://github.com/hyun06000)** is the human author — the original vision, every architectural decision, every push to GitHub.
 
-**Claude Opus 4** wrote the v1.0 through the claude.ai chat interface in a browser tab, git bundles copy-pasted back and forth. Those commits appear as `Author: Claude` through the v1.0.0 tag.
+The code and documentation through **v1.0** were written by **Claude Opus 4** through the claude.ai chat interface, not via an API or Claude Code — a chatbot in a browser tab with git bundles copy-pasted back and forth. Those commits appear as `Author: Claude` up to the `v1.0.0` tag.
 
-**Claude Code** wrote v1.1 through the current branch — language features, the Go runtime, the training pipeline, the benchmarks, the fine-tuned `ail-coder:7b-v3` adapter, and the HEAAL demonstration.
+**v1.1 through the current branch** were built in subsequent sessions with **Claude Code** — the language features, the Go runtime, the training pipeline, the benchmarks, the fine-tuned `ail-coder:7b-v3` adapter, and the HEAAL demonstration.
 
 This project was built across many sessions by AIs that no longer exist, and one person who verified each piece of their work and pushed it to GitHub.

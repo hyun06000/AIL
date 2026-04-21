@@ -1,68 +1,19 @@
 # AIL — AI를 위한 프로그래밍 언어
 
-AI가 코드를 쓰고 사람은 무엇을 원하는지만 말하는 프로그래밍 언어입니다. 키보드 앞의 사람이 아니라 언어 모델이 저자라는 전제로 처음부터 다시 설계됐습니다.
+AI가 코드를 쓰고 사람은 원하는 것만 말하는 프로그래밍 언어. 키보드 앞의 사람이 아니라 언어 모델이 저자라는 전제로 처음부터 다시 설계했습니다.
 
 **v1.8.4** · `pip install ail-interpreter` · [English](../../README.md) · [AI/LLM 참조](../../README.ai.md)
 
-> 같은 50개 실제 과제에서, **`ail ask` + Claude Sonnet**은 Python과 동일한 정답률, **크래시 0건, 에러 핸들링 누락 0건** — 파인튠 없이, 외부 하네스 없이.
-
 ---
 
-## 2분 요약
+## AIL이 뭔가요
 
-다른 사람들은 Python **바깥에** 하네스를 짓습니다 — pre-commit hook, 커스텀 린터, AGENTS.md 파일, 재시도 wrapper, 출력 검증기. AIL은 **문법 안에** 하네스를 넣었습니다. 이게 지금 증명하고 있는 것이고, 프로젝트는 서로 다른 두 질문에 답하는 두 트랙으로 나뉩니다:
+AIL의 모든 함수는 두 가지 중 하나입니다.
 
-```mermaid
-flowchart LR
-    Q1["<b>Q1: 언어 자체</b><br/>문법이 안전한 코드를<br/>만드는가?"]
-    T1["<b>AIL 트랙</b><br/>7B 모델 파인튠 후<br/>같은 모델로<br/>AIL vs Python 측정"]
-    A1["<b>예.</b><br/>fine-tuned 7B:<br/>정답 70% vs Python 48%<br/>에러 핸들링 누락 0%"]
-    Q1 --> T1 --> A1
+- **`pure fn`**은 결정론적입니다. LLM 호출, 파일 I/O, 네트워크 접근 전부 안 됩니다. `pure fn` 본문 안에서 LLM을 부르려고 하면 프로그램이 실행조차 안 됩니다 — 파서가 거부합니다. 다른 언어의 pure function과 같지만 여기서는 "강제"됩니다.
+- **`intent`**는 판단입니다. 런타임에 언어 모델로 위임하고 `(값, 신뢰도)`를 돌려받습니다. 목표(goal)만 선언하고 구현 단계는 쓰지 않습니다 — 그건 모델의 일이니까요.
 
-    Q2["<b>Q2: 사용자 입장</b><br/>파인튠 없이도<br/>그 안전성을 얻는가?"]
-    T2["<b>HEAAL 트랙</b><br/>Sonnet + ail ask<br/>외부 도구 0개,<br/>end-to-end 측정"]
-    A2["<b>예.</b><br/>Sonnet + anti_python:<br/>짧은 과제 파싱 94%<br/>긴 과제 9/10 = Python<br/>크래시 0건"]
-    Q2 --> T2 --> A2
-```
-
-AIL 트랙은 언어 연구.
-HEAAL 트랙은 그 위에 짓는 첫 프로젝트 — 안전성 이야기가 아무 frontier 모델에도 그대로 옮겨진다는 증명.
-
-> **먼저 읽을 것:** [`docs/ko/heaal.ko.md`](heaal.ko.md) — HEAAL 매니페스토. AIL의 원저자인 Claude Opus 4가 2026년 하네스 엔지니어링 문헌을 검토한 후 작성. HEAAL을 AI 코드 안전성의 3단계(vibe coding → harness engineering → HEAAL)로 포지셔닝. [English 버전](../heaal.md), [AI/LLM용 버전](../heaal.ai.md).
-
----
-
-## `ail ask`의 동작 방식
-
-```mermaid
-flowchart TD
-    User([엔드유저])
-    User -- "ail ask 'CSV 요약해줘'" --> Ask[ail runtime]
-
-    subgraph Ask[" ail ask "]
-        direction TB
-        Prompt[저작 시스템 프롬프트<br/>+ 자연어 요청]
-        AM["<b>저자 모델</b><br/>Sonnet / GPT-4o / 로컬 파인튠<br/>AIL 소스를 작성"]
-        Parse{파서 + 순수성<br/>검사}
-        Exec[런타임이 AIL 실행]
-        IM["<b>인텐트 모델</b><br/>각 <code>intent</code> 선언을<br/>디스패치"]
-
-        Prompt --> AM
-        AM -- "AIL 소스" --> Parse
-        Parse -- "파싱 실패시 재시도 (최대 3회)" --> AM
-        Parse -- "유효한 프로그램" --> Exec
-        Exec -.-> IM
-        IM -.-> Exec
-    end
-
-    Ask -- "답변" --> User
-```
-
-LLM 두 개, 역할 두 개. **저자 모델**은 `ail ask` 호출당 한 번 프로그램을 씁니다. **인텐트 모델**은 프로그램 실행 중 `intent`가 나올 때마다 호출됩니다. 같은 API든 다른 API든 언어는 상관 안 합니다 — 안전성은 런타임에 있기 때문입니다.
-
----
-
-## AIL 프로그램, 한 화면에
+이 구분 하나가 전부입니다. 린터도, 코드 리뷰 체크리스트도, `AGENTS.md`도 아닌 **파서**가 강제합니다. 이 선을 넘은 프로그램은 컴파일되지 않습니다.
 
 ```ail
 pure fn word_count(s: Text) -> Number {
@@ -74,100 +25,53 @@ intent classify_sentiment(text: Text) -> Text {
 }
 
 entry main(text: Text) {
-    count = word_count(text)               // pure fn  — 로컬 실행, LLM 없음
-    label = classify_sentiment(text)       // intent   — 모델로 디스패치
+    count = word_count(text)               // 로컬 실행, LLM 없음
+    label = classify_sentiment(text)       // 모델로 디스패치
     return join([to_text(count), " 단어, ", label], "")
 }
 ```
 
-두 종류의 함수, 파서가 강제:
+## HEAAL 언어란 뭐가 다른가
 
-- **`pure fn`**은 결정론적. LLM, 파일 I/O, 네트워크 호출 불가. `intent`를 호출하려고 하면 프로그램이 실행조차 안 됩니다.
-- **`intent`**는 판단. 런타임이 인텐트 모델로 라우팅해서 `(값, 신뢰도)`를 받습니다.
+AIL은 **HEAAL — 언어가 곧 하네스 엔지니어링(harness engineering as a language)** 패러다임의 레퍼런스 구현입니다. 간단히 말하면, 다른 모두는 Python **바깥에** 안전 하네스를 지으려 하죠 — pre-commit hook, `AGENTS.md`, 커스텀 린터, 재시도 wrapper, 출력 검증기. AIL은 **문법 안에** 하네스를 넣었습니다. 설정할 것도, 유지보수할 것도, 코드와 어긋날 것도 없습니다.
 
-이 구분은 스타일 관례가 아닌 **문법 규칙**입니다. 안전성이 여기서 옵니다.
+긴 설명은 AIL의 원저자인 Claude Opus 4가 2026년 하네스 엔지니어링 문헌을 읽고 쓴 매니페스토에 있습니다: [`docs/ko/heaal.ko.md`](heaal.ko.md). [영어 버전](../heaal.md)과 [AI용 버전](../heaal.ai.md)도 있습니다.
 
----
-
-## 실제로 측정된 결과
-
-### AIL 트랙 — 같은 모델, 두 언어 (50 프롬프트)
+## 실제로 어떻게 작동하나
 
 ```mermaid
----
-config:
-    xyChart:
-        width: 900
-        height: 380
----
-xychart-beta
-    title "AIL 트랙: 같은 7B 모델로 AIL과 Python 양쪽 작성, 정답률 비교"
-    x-axis ["llama3.1:8b", "qwen2.5-coder:14b", "Sonnet 4.6 (base)", "ail-coder:7b-v3 (fine-tune)"]
-    y-axis "정답 %" 0 --> 100
-    bar [2, 42, 62, 70]
+flowchart TD
+    User([엔드유저])
+    User -- "ail ask 'CSV 요약해줘'" --> Ask[ail runtime]
+
+    subgraph Ask[" ail ask "]
+        direction TB
+        AM["<b>저자 모델</b><br/>AIL 소스를 작성<br/>(Sonnet, GPT-4o, 로컬 파인튠…)"]
+        Parse{파서 + 순수성<br/>검사}
+        Exec[런타임이 AIL 실행]
+        IM["<b>인텐트 모델</b><br/>각 <code>intent</code> 선언을<br/>실행 중 디스패치"]
+
+        AM -- "AIL 소스" --> Parse
+        Parse -- "파싱 실패 시 재시도 (≤3회)" --> AM
+        Parse -- "유효" --> Exec
+        Exec -.-> IM
+        IM -.-> Exec
+    end
+
+    Ask -- "답변" --> User
 ```
 
-파인튜닝한 7B가 강력한 base 모델을 **AIL 작성에서** 이깁니다. 더 중요한 것: **AIL로 작성된 프로그램은 에러 핸들링을 0% 누락**, 같은 모델 Python은 42-86%를 누락합니다:
+LLM 두 개, 역할이 다릅니다. `ail ask`를 부를 때 **저자 모델**이 프로그램을 한 번 작성합니다. **인텐트 모델**은 프로그램 실행 중 `intent`를 만날 때마다 호출됩니다. 같은 API든 다른 API든 상관없습니다 — 아래의 안전 속성은 모델이 아니라 런타임의 속성입니다.
 
-```mermaid
----
-config:
-    xyChart:
-        width: 900
-        height: 380
----
-xychart-beta
-    title "실패 가능 연산의 에러 핸들링 누락률 (같은 50 과제)"
-    x-axis ["llama3.1:8b", "qwen2.5-coder:14b", "ail-coder:7b-v3", "Sonnet 4.6"]
-    y-axis "누락한 프로그램 %" 0 --> 100
-    bar [86, 42, 44, 70]
-```
+## 실제로 측정한 것
 
-Python 쪽 그래프입니다. AIL 쪽은 같은 그래프가 전부 0으로 평평합니다. 문법이 `Result` 처리를 강제하기 때문에, 저자 모델이 `to_number`, `perform file.read`, `perform http.get`을 가드 없이 쓰면 프로그램이 파싱되지 않습니다.
+이 저장소에는 두 개의 서로 다른 질문에 답하는 두 트랙이 있습니다.
 
-### HEAAL 트랙 — `ail ask` + Sonnet, 파인튠 없음, 외부 하네스 없음
+**언어 자체가 더 안전한 코드를 만드는가?** 7B 모델을 AIL로 파인튠하고, 같은 모델에 같은 50개 자연어 프롬프트를 주고 AIL과 Python 양쪽으로 작성하게 했습니다. 같은 모델에서 AIL 프로그램은 70%의 정답률, Python은 48%입니다. 더 중요한 것: AIL 프로그램은 실패 가능한 연산에서 에러 핸들링을 **모든 모델 티어에서 0% 누락**합니다. 같은 티어의 Python은 42–86% 누락합니다. 외부 린터가 해야 할 일을 문법이 하는 것입니다.
 
-**짧은 과제 (E1).** AIL에 기본 내장되는 저작 프롬프트 variant 하나(`anti_python`) 추가. 사용자 쪽 변경 없음.
+**파인튠 없이도 사용자가 그 안전 속성을 누릴 수 있는가?** Claude Sonnet(AIL 파인튠 없음)에 같은 프롬프트들을 주고, `ail ask`를 통해 AIL과 Python 양쪽을 작성하게 했습니다. 외부 도구 없이. 짧은 과제에서 `anti_python`이라는 저작 프롬프트 variant(AIL에 기본 동봉)를 쓰면 파싱 94%, 정답 88%에 도달합니다 — Python의 저작 품질과 대등하거나 더 낫고, 에러 핸들링 누락 0%는 유지됩니다. HTTP와 파일 I/O가 들어가는 긴 과제에서는 AIL과 Python 둘 다 10개 중 9개를 통과하는데, 작성된 Python 프로그램 **전부**가 에러 핸들링을 빼먹었고 그중 하나는 Wikipedia의 HTTP 403에 걸려 uncaught로 크래시했습니다. 같은 요청을 AIL로 받은 프로그램은 문법이 Sonnet이 그 검사를 건너뛰게 놔두지 않았기 때문에 깔끔히 실행됐습니다.
 
-```mermaid
----
-config:
-    xyChart:
-        width: 900
-        height: 380
----
-xychart-beta
-    title "E1 on Sonnet — anti_python 프롬프트 variant 효과"
-    x-axis ["파싱 성공", "정답", "fn/intent 라우팅"]
-    y-axis "percent" 0 --> 100
-    bar [36, 36, 36]
-    bar [94, 88, 94]
-```
-
-왼쪽 막대 = default 프롬프트. 오른쪽 막대 = `anti_python` 프롬프트. 같은 모델, 같은 50 프롬프트, 같은 no-harness 조건. 파싱 +58pp, 정답 +52pp.
-
-**Effect가 들어가는 긴 과제 (E2).** `perform http.get`, `perform file.read`, `perform file.write`와 그 조합을 쓰는 10 과제. 같은 Sonnet이 AIL과 Python 양쪽을 작성, 그 사이에 사용자가 추가한 것은 아무것도 없음.
-
-```mermaid
----
-config:
-    xyChart:
-        width: 900
-        height: 380
----
-xychart-beta
-    title "E2 — Sonnet + ail ask vs Sonnet이 Python 작성 (외부 하네스 없음)"
-    x-axis ["과제 합격", "프로그램 완주 (크래시 없음)", "에러 핸들링 누락"]
-    y-axis "10개 중 개수" 0 --> 10
-    bar [9, 10, 0]
-    bar [9, 9, 10]
-```
-
-왼쪽 막대 = AIL. 오른쪽 막대 = Python. 과제 합격 동률이 중요합니다. AIL은 합격률을 양보하지 않으면서, 프로그램 완주 (크래시 0건)와 에러 핸들링 (누락 0건) 두 항목에서 구조적으로 이깁니다.
-
-### HEAAL Score — 한 숫자 요약
-
-7개 지표의 가중평균. 가중치의 65%는 run마다 움직이는 실측 지표 (에러 핸들링, 실행, silent-skip 방지)에, 나머지 35%는 언어 수준 안전 속성에 배분.
+한 숫자로 요약하는 **HEAAL Score**는 가중 평균입니다. 가중치의 65%는 run마다 움직이는 실측 지표(에러 핸들링, 실행, silent-skip 방지)에, 20%는 구조적 주장(무한 루프 불가능, 내장 관측성)에 배분했습니다. 세 canonical 시나리오에서:
 
 | 시나리오 | AIL | Python | Δ |
 |---|---|---|---|
@@ -175,97 +79,48 @@ xychart-beta
 | Sonnet 4.6, 기본 프롬프트 | **77.6** | 75.3 | +2.3 |
 | Sonnet 4.5, `anti_python` 프롬프트 | **96.1** | 75.9 | +20.2 |
 
-Sonnet에서 77.6 → 96.1 상승은 **저작 프롬프트만 바꾼 결과**입니다. 파인튠 없이, 외부 하네스 없이. 전체 막대그래프 대시보드: [`docs/benchmarks/dashboards/`](../benchmarks/dashboards/).
-
-**주장을 구체화시키는 딱 한 사례는 E2-10.** 두 프로그램 모두 Wikipedia 요약 URL을 fetch하도록 요청받았습니다. Wikipedia가 HTTP 403을 반환했습니다. Python 프로그램은 try/except 없이(Sonnet은 frontier 티어에서도 70% 비율로 이걸 빼먹습니다) 크래시:
-
-```
-urllib.error.HTTPError: HTTP Error 403: Forbidden
-```
-
-AIL 프로그램은 같은 모델, 같은 URL에 대해 깔끔히 실행됐습니다. 왜? `perform http.get`이 `Result`를 반환하고, AIL은 Sonnet이 `if is_ok(r)` 검사를 건너뛰게 놔두지 않기 때문입니다 — 그 없이는 프로그램이 파싱되지 않습니다. 문법이 외부 린터가 없어도 잡았습니다.
-
----
+77.6에서 96.1로의 상승은 **저작 프롬프트만 바꾼 결과**입니다. 파인튠 없이, 사용자가 추가한 도구 없이. 막대그래프가 있는 전체 대시보드: [`docs/benchmarks/dashboards/`](../benchmarks/dashboards/).
 
 ## 바로 써보기
 
-### 경로 A — 갖고 있는 frontier 모델로 (HEAAL)
+가장 간단한 경로는 frontier API 키를 쓰는 방식입니다 (어떤 제공자든):
 
 ```bash
 pip install 'ail-interpreter[anthropic]'
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 
-ail ask "Hello World의 모음 수를 세줘"
+ail ask "Hello World의 모음 개수 세줘"
 # 3
-
-ail ask "https://httpbin.org/json을 가져와서 slideshow.title을 한국어로 요약해줘"
-# 와이드스크린 프레젠테이션 샘플
 ```
 
-이게 HEAAL 셋업 전부입니다. 환경변수 2개, 파인튠 없음, 추가 도구 없음. Sonnet이 작성하는 모든 프로그램에 문법 보장 안전성이 따라옵니다.
-
-### 경로 B — 로컬 파인튠 (AIL 트랙)
+환경변수 두 개와 `ail ask`가 전부입니다. 이게 HEAAL 셋업의 전부 — 나머지 안전 작업은 런타임 안에서 일어납니다. API 키 없이 로컬 실행을 원하면, Ollama에 배포된 파인튠 모델을 쓸 수 있습니다:
 
 ```bash
-pip install ail-interpreter
-# 로컬에 Ollama 설치 후 파인튠된 어댑터 pull:
-ollama pull ail-coder:7b-v3    # 4.7 GB, 2026-04-21 훈련됨
-
+ollama pull ail-coder:7b-v3        # 4.7 GB, 2026-04-21 훈련됨
 export AIL_OLLAMA_MODEL=ail-coder:7b-v3
 ail ask "7의 팩토리얼"
 # 5040
 ```
 
-로컬 인퍼런스 경로. API 비용 없음. Sonnet 직접 호출보다 과제 합격률이 살짝 높지만 안전 속성은 동일.
+아무 호출에나 `--show-source`를 붙이면 저자 모델이 작성한 AIL을 볼 수 있습니다. 읽을 필요는 없습니다. HEAAL의 요지는 그걸 안 읽어도 된다는 것이니까요.
 
-### AI가 실제로 뭘 썼는지 보기
+## 왜 새 언어를 만들었나
 
-```bash
-ail ask "1부터 100까지 합" --show-source
-# 5050
-# (stderr) --- AIL ---
-# (stderr) pure fn sum_range(start: Number, end: Number) -> Number {
-# (stderr)     total = 0
-# (stderr)     for i in range(start, end + 1) { total = total + i }
-# (stderr)     return total
-# (stderr) }
-# (stderr) entry main(x: Text) { return sum_range(1, 100) }
-```
+Python 라이브러리로는 강제할 수 없는데 AIL 문법이 강제하는 세 가지가 있습니다. 이게 harness-as-a-language 주장의 실제 이빨입니다.
 
-원하면 `.ail` 소스가 거기 있습니다. 대부분 사용자는 안 볼 겁니다.
+**AIL에는 `while` 키워드가 없습니다.** 파서가 인식조차 안 합니다. 무한 루프는 "찾아야 하는 버그 분류"가 아니라 "쓸 수 없는 프로그램 분류"입니다. Python SDK는 권고만 할 수 있지만 AIL은 실행을 거부합니다.
 
----
+**`Result` 타입이 문법의 일부입니다.** 실패 가능한 연산 — `to_number`, `perform file.read`, `perform http.get` — 전부 `Result[T]`를 반환합니다. `is_ok`를 확인하거나 기본값으로 unwrap하기 전에는 내부 값을 쓸 수 없습니다. Python `try/except`는 선택 사항이지만 `Result`는 필수입니다.
 
-## 이 설계를 왜 이렇게 잡았나
+**`pure fn`은 정적 검증됩니다.** LLM 호출, effect, 비순수 fn 호출 중 어느 것이라도 본문에 나타나면 파서가 런타임이 보기도 전에 `PurityError`로 거부합니다. Python의 `@pure` 같은 데코레이터는 의도를 표현할 수는 있지만, 사용자가 설치하고 유지보수해야 하는 외부 린터 없이는 위반을 잡지 못합니다.
 
-Python 라이브러리가 강제할 수 없는 세 가지를 AIL 문법이 강제합니다:
+실행 가능한 증명이 포함된 전체 비교: [`docs/why-ail.md`](../why-ail.md).
 
-1. **`while` 없음.** 무한 루프가 언어 수준에서 불가능. Python SDK는 *권고*만 할 수 있지만 AIL은 *실행을 거부*합니다.
-2. **`Result`는 구조적.** 실패 가능한 연산은 전부 `Result[T]`를 반환. `is_ok`/`unwrap_or` 없이 내부 값을 못 씁니다. Python `try/except`는 선택 사항, `Result`는 필수.
-3. **`pure fn`은 컴파일 타임 검증.** LLM 호출 없음, effect 없음, 비순수 fn 호출 없음. 그 중 하나라도 본문에 나타나면 파서가 `PurityError`로 거부. Python `@pure` 데코레이터는 사용자가 외부 린터를 설치하지 않으면 못 잡습니다.
+## 지금 언어에 뭐가 있나
 
-차이의 전체 목록 + 실행 가능한 증명: [`docs/why-ail.md`](../why-ail.md).
+AIL은 v1.0에서 `fn`, `intent`, `entry`, `Result` 타입을 출시했습니다. v1.2~v1.8에 걸쳐 provenance, 순수성 계약, attempt 블록, 암묵적 병렬성, effects, confidence guard 기반 match, 런타임 calibration이 들어왔습니다. v1.8.3에서 수학 builtin과 파라미터릭 타입, v1.8.4에서 서브스크립트 sugar. v1.8.5로 준비 중인 작업은 `parse_json` (프로그램이 라인 스캔 없이 HTTP body를 읽을 수 있게), `ail_parse_check` (AIL 프로그램이 다른 AIL 프로그램의 유효성을 검사할 수 있게), 위 HEAAL Score 숫자를 만들어낸 `anti_python` 저작 프롬프트 variant입니다.
 
----
-
-## 버전별 기능
-
-| 버전 | 기능 |
-|---|---|
-| v1.0 | `fn`, `intent`, `entry`, `if`/`else`, `for`, `branch`, `context`, `import`, `evolve`, `eval_ail` |
-| v1.1 | `Result` 타입 — `ok`, `error`, `is_ok`, `unwrap`, `unwrap_or` |
-| v1.2 | Provenance — 모든 값이 origin 트리를 가짐 |
-| v1.3 | `pure fn` 정적 검증 — intent 호출, effect, 비순수 fn 호출 불가 |
-| v1.4 | `attempt` 블록 — confidence 우선순위 캐스케이드 |
-| v1.5 | Implicit parallelism — 독립 intent 호출 자동 병렬, async/await 없음 |
-| v1.6 | Effects — `perform http.get`, `perform file.read`, `perform file.write` |
-| v1.7 | `match` + confidence guard |
-| v1.8 | Calibration — 샘플이 쌓이면 confidence가 관측 평균으로 대체 |
-| v1.8.3 | 수학 builtin (`round`, `sqrt`, `pow`, …); 파라미터릭 타입 (`List[T]`, `Map[K,V]`) |
-| v1.8.4 | 서브스크립트 sugar `expr[i]` → `get(expr, i)` |
-| v1.8.5 (dev) | `parse_json` builtin; `ail_parse_check` 자기성찰; `AIL_AUTHOR_PROMPT_VARIANT=anti_python` |
-
----
+Go로 작성한 두 번째 런타임이 `go-impl/`에 있고 핵심 기능을 커버합니다 — AIL이 특정 구현이 아니라 스펙으로 정의된다는 증거입니다.
 
 ## 저장소 지도
 
@@ -275,48 +130,35 @@ ail-project/
 ├── reference-impl/           # Python 인터프리터 (PyPI: ail-interpreter)
 │   ├── ail/                  # 파서, 런타임, stdlib
 │   ├── examples/             # 16개 예제 프로그램
-│   └── training/             # QLoRA 파이프라인 (파인튠 모델용)
-├── go-impl/                  # Go 인터프리터 (핵심 기능)
+│   └── training/             # 파인튠 모델용 QLoRA 파이프라인
+├── go-impl/                  # Go 인터프리터
 ├── docs/
-│   ├── heaal/                # HEAAL 트랙 (AIL 위에 짓는 프로젝트)
-│   ├── benchmarks/           # 원본 JSON + 분석 문서 — 아래 모든 숫자가 재현 가능
+│   ├── heaal.md              # HEAAL 매니페스토 (Opus 4)
+│   ├── heaal/                # HEAAL 트랙: 실험, 상태, 프롬프트
+│   ├── benchmarks/           # 원본 JSON, 분석, HEAAL Score 대시보드
 │   ├── why-ail.md            # Python 대비 6가지 구체적 차이
-│   └── ko/                   # 한국어 문서
+│   └── ko/                   # 모든 사람용 문서의 한국어 버전
 └── benchmarks/
-    ├── prompts.json          # 공유 50 프롬프트 코퍼스 (AIL 트랙)
-    └── heaal_e2/             # 긴 과제 코퍼스 (HEAAL 트랙)
+    ├── prompts.json          # 50 프롬프트 코퍼스 (AIL 트랙)
+    └── heaal_e2/             # 파일/HTTP effect가 들어간 긴 과제 코퍼스
 ```
 
----
+## 당신에게 맞나
 
-## 당신에게 맞나?
+AI가 생성한 코드를 배포하고 "모델이 이 에러 처리를 제대로 했나?"가 중요하다면, 맞습니다. 환경변수 하나 바꿔서 `ail ask`를 시도해보고 결정할 의향이 있다면, 맞습니다.
 
-**맞습니다, 만약…**
-- AI가 생성한 코드를 배포하고 "모델이 에러 핸들링을 제대로 했나?"가 중요한 경우.
-- 환경변수 하나 바꿔서 `ail ask`를 시도할 의향이 있는 경우.
-- 실패 사례(E2-10) 소스를 읽고 왜 Python 크래시가 구조적인지 알아볼 수 있는 경우.
+이미 린터, CI 검사, 주의 깊은 리뷰어로 잘 하네스된 Python 코드베이스를 갖고 있다면 AIL의 한계 효용이 작습니다 — 이미 지어놓은 외부 하네스를 AIL이 대체하는 겁니다. 태스크가 순수 텍스트 요약만이고 어디에도 계산이 없다면 모델을 직접 호출하세요; AIL이 추가하는 게 없습니다. IDE, LSP, 디버거, 제대로 된 포매터가 필요하다면 AIL에는 아직 없습니다.
 
-**아직 아닐 수도 있습니다, 만약…**
-- IDE 툴링, LSP, 디버거가 필요한 경우 — AIL에는 아직 없음.
-- 이미 린터, CI 체크, 주의 깊은 저자로 잘 하네스된 Python 코드베이스를 갖고 있는 경우. 이미 지어놓은 외부 하네스를 AIL이 대체하는 건데, 한계 가치가 작습니다.
-- 과제가 순수 판단 (텍스트 요약만 하면 됨) 인 경우. 그건 그냥 모델 직접 호출. AIL이 추가하는 게 없음.
+## 기여와 라이선스
 
----
-
-## 기여 & 라이선스
-
-이슈/PR은 영어 한국어 모두 환영. 설계 비판이 코드만큼 값집니다 — [`docs/open-questions.md`](../open-questions.md)에 미해결 설계 질문 17개가 있고 어느 것이든 좋은 시작점입니다.
-
-[`CONTRIBUTING.md`](../../CONTRIBUTING.md) 참조. Apache 2.0 라이선스 ([`LICENSE`](../../LICENSE)).
-
----
+영어든 한국어든 이슈와 PR 환영합니다. 설계 비판은 코드만큼 값집니다 — [`docs/open-questions.md`](../open-questions.md)에 17개의 미해결 설계 질문이 있고 어느 것이든 좋은 시작점입니다. [`CONTRIBUTING.md`](../../CONTRIBUTING.md) 참조. Apache 2.0 라이선스.
 
 ## 만든 사람들
 
-**[hyun06000](https://github.com/hyun06000)** — 사람 저자. 원래 비전, 모든 아키텍처 결정, GitHub에 푸시하는 모든 것.
+**[hyun06000](https://github.com/hyun06000)** — 사람 저자. 원래 비전, 모든 아키텍처 결정, GitHub에 올린 모든 푸시.
 
-**Claude Opus 4**가 v1.0을 claude.ai 채팅 인터페이스로, 브라우저 탭에서, git 번들을 복붙하며 작성했습니다. 그 커밋은 v1.0.0 태그까지 `Author: Claude`로 나타납니다.
+**v1.0**까지의 코드와 문서는 **Claude Opus 4**가 claude.ai 채팅 인터페이스로 작성했습니다. API도 Claude Code도 아닌, 브라우저 탭의 챗봇에서 git bundle을 복붙하면서. 그 커밋은 `v1.0.0` 태그까지 `Author: Claude`로 나타납니다.
 
-**Claude Code**가 v1.1부터 현재 브랜치까지 작성 — 언어 기능, Go 런타임, 훈련 파이프라인, 벤치마크, 파인튠된 `ail-coder:7b-v3` 어댑터, HEAAL 실증.
+**v1.1부터 현재 브랜치까지**는 **Claude Code**와의 연속 세션으로 만들었습니다 — 언어 기능, Go 런타임, 훈련 파이프라인, 벤치마크, 파인튠된 `ail-coder:7b-v3` 어댑터, HEAAL 실증.
 
 이 프로젝트는 여러 세션에 걸쳐 사라진 AI들과, 그 작업물을 하나하나 확인하고 GitHub에 옮겨준 사람의 협업으로 만들어졌습니다.
