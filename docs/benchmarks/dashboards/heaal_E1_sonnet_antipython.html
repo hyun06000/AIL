@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HEAAL Score — AIL vs Python</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #fafafa; color: #1f2937; margin: 0; padding: 40px 20px;
+  }
+  .card {
+    max-width: 880px; margin: 0 auto; background: #fff;
+    border-radius: 16px; padding: 40px 48px;
+    box-shadow: 0 2px 24px rgba(0,0,0,0.06);
+  }
+  h1 { font-size: 14px; font-weight: 600; letter-spacing: 0.1em;
+       text-transform: uppercase; color: #6b7280; margin: 0; }
+  .meta { color: #9ca3af; font-size: 13px; margin-top: 4px; }
+  .scores { display: flex; gap: 32px; margin: 32px 0 40px 0;
+             align-items: flex-end; }
+  .score-box { flex: 1; }
+  .score-box .label { font-size: 13px; font-weight: 600;
+                       text-transform: uppercase; letter-spacing: 0.08em; }
+  .score-box .num { font-size: 72px; font-weight: 800; line-height: 1;
+                     margin-top: 6px; }
+  .ail .label, .ail .num { color: #16a34a; }
+  .py  .label, .py  .num { color: #6b7280; }
+  .delta { font-size: 22px; font-weight: 700; color: #16a34a;
+            padding-bottom: 12px; }
+  .chart { margin: 14px 0; }
+  .chart .row { display: flex; align-items: center; font-size: 14px; margin: 8px 0; }
+  .chart .name { width: 220px; color: #374151; }
+  .chart .bars { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .chart .bar-row { display: flex; align-items: center; gap: 8px; }
+  .chart .bar { height: 14px; border-radius: 4px; }
+  .chart .bar.ail { background: #16a34a; }
+  .chart .bar.py  { background: #9ca3af; }
+  .chart .val { font-variant-numeric: tabular-nums; font-size: 12px;
+                 color: #4b5563; width: 48px; text-align: right; }
+  .chart .weight { font-size: 11px; color: #9ca3af; width: 48px;
+                    text-align: right; }
+  .footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #e5e7eb;
+             font-size: 12px; color: #6b7280; line-height: 1.6; }
+  .footer code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
+  a { color: #16a34a; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>HEAAL Score</h1>
+  <div class="meta">anthropic:claude-sonnet-4-5 &middot; 50 tasks &middot; prompts.json</div>
+
+  <div class="scores">
+    <div class="score-box ail">
+      <div class="label">AIL (<code>ail ask</code>)</div>
+      <div class="num">96</div>
+    </div>
+    <div class="delta">+20</div>
+    <div class="score-box py">
+      <div class="label">Python (no harness)</div>
+      <div class="num">76</div>
+    </div>
+  </div>
+
+  <div class="chart">
+    
+    <div class="row">
+      <div class="name">Error Explicitness</div>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="bar ail" style="width: 100.0%"></div>
+          <div class="val">100%</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar py" style="width: 30.0%"></div>
+          <div class="val">30%</div>
+        </div>
+      </div>
+      <div class="weight">25%</div>
+    </div>
+
+    <div class="row">
+      <div class="name">Execution Success</div>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="bar ail" style="width: 88.0%"></div>
+          <div class="val">88%</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar py" style="width: 92.0%"></div>
+          <div class="val">92%</div>
+        </div>
+      </div>
+      <div class="weight">20%</div>
+    </div>
+
+    <div class="row">
+      <div class="name">No Silent-Skip rate</div>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="bar ail" style="width: 96.875%"></div>
+          <div class="val">97%</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar py" style="width: 100.0%"></div>
+          <div class="val">100%</div>
+        </div>
+      </div>
+      <div class="weight">20%</div>
+    </div>
+
+    <div class="row">
+      <div class="name">Parse Success</div>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="bar ail" style="width: 94.0%"></div>
+          <div class="val">94%</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar py" style="width: 100.0%"></div>
+          <div class="val">100%</div>
+        </div>
+      </div>
+      <div class="weight">15%</div>
+    </div>
+
+    <div class="row">
+      <div class="name">Structural Safety</div>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="bar ail" style="width: 100.0%"></div>
+          <div class="val">100%</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar py" style="width: 100.0%"></div>
+          <div class="val">100%</div>
+        </div>
+      </div>
+      <div class="weight">10%</div>
+    </div>
+
+    <div class="row">
+      <div class="name">Loop Safety</div>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="bar ail" style="width: 100.0%"></div>
+          <div class="val">100%</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar py" style="width: 100.0%"></div>
+          <div class="val">100%</div>
+        </div>
+      </div>
+      <div class="weight">5%</div>
+    </div>
+
+    <div class="row">
+      <div class="name">Observability</div>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="bar ail" style="width: 100.0%"></div>
+          <div class="val">100%</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar py" style="width: 0.0%"></div>
+          <div class="val">0%</div>
+        </div>
+      </div>
+      <div class="weight">5%</div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    AIL is the <a href="https://github.com/hyun06000/AIL">Harness-Engineering-As-A-Language</a>
+    reference implementation.
+    The grammar itself is the harness — no linters, no AGENTS.md, no post-generation validators.
+    Weights favor live measurements: error-handling, execution, silent-skip prevention
+    are 65% of the score; structural-safety / loop-safety / observability together
+    anchor the remaining 20% as language-level claims.
+  </div>
+</div>
+</body>
+</html>

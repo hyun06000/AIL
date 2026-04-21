@@ -788,7 +788,20 @@ def main() -> int:
                    help="Run only specific prompt id(s); may repeat")
     p.add_argument("--out", type=Path, required=True,
                    help="JSON report path")
+    p.add_argument("--report", nargs="?", const=True, default=False,
+                   help="After the run (or against an existing --out JSON if "
+                        "--run is omitted), compute HEAAL Score and print "
+                        "the terminal dashboard. Pass --report=<path.html> "
+                        "to also write an HTML dashboard for sharing.")
+    p.add_argument("--run", dest="run", action="store_true", default=None,
+                   help="Run the benchmark. Default: run unless --no-run.")
+    p.add_argument("--no-run", dest="run", action="store_false",
+                   help="Skip the run; just re-score the existing --out JSON.")
     args = p.parse_args()
+
+    # --run defaults to True unless --no-run was given
+    if args.run is None:
+        args.run = True
 
     data = json.loads(args.prompts.read_text(encoding="utf-8"))
     prompts = data["prompts"]
@@ -799,39 +812,54 @@ def main() -> int:
     if args.limit:
         prompts = prompts[: args.limit]
 
-    print(f"Running {len(prompts)} prompts against {_active_model_label()} "
-          f"at {_active_host_label()}")
-    print("Glyphs: [P]arse [R]oute [A]nswer — `·` = failed\n")
+    if args.run:
+        print(f"Running {len(prompts)} prompts against {_active_model_label()} "
+              f"at {_active_host_label()}")
+        print("Glyphs: [P]arse [R]oute [A]nswer — `·` = failed\n")
 
-    t0 = time.perf_counter()
-    started_at = datetime.now(timezone.utc).isoformat()
-    cases: list[CaseReport] = []
-    for pr in prompts:
-        c = run_case(pr)
-        cases.append(c)
-        _print_line(c)
+        t0 = time.perf_counter()
+        started_at = datetime.now(timezone.utc).isoformat()
+        cases: list[CaseReport] = []
+        for pr in prompts:
+            c = run_case(pr)
+            cases.append(c)
+            _print_line(c)
 
-    wall_clock_s = round(time.perf_counter() - t0, 1)
-    summary = _dimension_summary(cases)
-    _print_report(summary)
+        wall_clock_s = round(time.perf_counter() - t0, 1)
+        summary = _dimension_summary(cases)
+        _print_report(summary)
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps({
-        "model": _active_model_label(),
-        "host": _active_host_label(),
-        "backend": BENCHMARK_BACKEND,
-        "started_at": started_at,
-        "wall_clock_s": wall_clock_s,
-        "prompts_file": str(args.prompts.relative_to(REPO_ROOT)),
-        "summary": summary,
-        "cases": [
-            {"id": c.id, "category": c.category, "text": c.text,
-             "ground_truth_category": c.ground_truth_category,
-             "ail": asdict(c.ail), "python": asdict(c.python)}
-            for c in cases
-        ],
-    }, indent=2, ensure_ascii=False))
-    print(f"Report: {args.out}")
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps({
+            "model": _active_model_label(),
+            "host": _active_host_label(),
+            "backend": BENCHMARK_BACKEND,
+            "started_at": started_at,
+            "wall_clock_s": wall_clock_s,
+            "prompts_file": str(args.prompts.relative_to(REPO_ROOT)),
+            "summary": summary,
+            "cases": [
+                {"id": c.id, "category": c.category, "text": c.text,
+                 "ground_truth_category": c.ground_truth_category,
+                 "ail": asdict(c.ail), "python": asdict(c.python)}
+                for c in cases
+            ],
+        }, indent=2, ensure_ascii=False))
+        print(f"Report: {args.out}")
+
+    if args.report:
+        # Import locally so the benchmark run itself doesn't depend on the
+        # dashboard tool being importable.
+        sys.path.insert(0, str(Path(__file__).parent))
+        from heaal_score import compute, emit_terminal, emit_html
+        result = json.loads(args.out.read_text(encoding="utf-8"))
+        score = compute(result)
+        print(emit_terminal(score))
+        if isinstance(args.report, str):
+            html_path = Path(args.report)
+            html_path.parent.mkdir(parents=True, exist_ok=True)
+            html_path.write_text(emit_html(score), encoding="utf-8")
+            print(f"HEAAL dashboard: {html_path}")
     return 0
 
 

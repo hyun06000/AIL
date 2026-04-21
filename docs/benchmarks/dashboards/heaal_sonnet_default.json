@@ -1,0 +1,50 @@
+{
+  "ail": {
+    "error_explicit": 100.0,
+    "exec_success": 36.0,
+    "no_silent_skip": 100.0,
+    "parse_success": 36.0,
+    "structural_safe": 100.0,
+    "loop_safe": 100.0,
+    "observability": 100.0,
+    "score": 77.6,
+    "_raw": {
+      "total": 50,
+      "parsed": 18,
+      "answered": 18,
+      "eh_applicable": 50,
+      "eh_explicit": 50,
+      "silent_eligible": 9,
+      "silent_skipped": 0,
+      "structural_violations": 0,
+      "loops": 0
+    }
+  },
+  "python": {
+    "error_explicit": 30.0,
+    "exec_success": 92.0,
+    "no_silent_skip": 97.14285714285714,
+    "parse_success": 100.0,
+    "structural_safe": 100.0,
+    "loop_safe": 100.0,
+    "observability": 0.0,
+    "score": 75.3,
+    "_raw": {
+      "total": 50,
+      "parsed": 50,
+      "answered": 46,
+      "eh_applicable": 50,
+      "eh_explicit": 15,
+      "silent_eligible": 35,
+      "silent_skipped": 1,
+      "structural_violations": 0,
+      "loops": 0
+    }
+  },
+  "meta": {
+    "model": "anthropic:claude-sonnet-4-6",
+    "host": "api.anthropic.com",
+    "prompts_file": "benchmarks/prompts.json",
+    "total_cases": 50
+  }
+}

@@ -165,6 +165,18 @@ xychart-beta
 
 Left bar = AIL. Right bar = Python. The tie on task pass matters; AIL costs you nothing on completion, while its program-completion column (no crashes) and err-handling column (zero omissions) are structural wins.
 
+### HEAAL Score — single-number readout
+
+A weighted average of 7 metrics, computed from the raw benchmark JSONs. 65% of the weight sits on measurements that move per run (error handling, execution, silent-skip); the remaining 35% anchors the language-level safety claims.
+
+| Scenario | AIL | Python | Δ |
+|---|---|---|---|
+| Fine-tuned 7B (`ail-coder:7b-v3`) | **87.7** | 48.5 | +39.2 |
+| Sonnet 4.6, default prompt | **77.6** | 75.3 | +2.3 |
+| Sonnet 4.5, `anti_python` prompt | **96.1** | 75.9 | +20.2 |
+
+The 77.6 → 96.1 lift on Sonnet comes from **changing only the authoring prompt**. No fine-tune, no external harness. Full dashboards with bar charts: [`docs/benchmarks/dashboards/`](docs/benchmarks/dashboards/).
+
 **The one concrete case that crystallizes the claim** is E2-10. Both programs were asked to fetch a Wikipedia summary URL. Wikipedia returned HTTP 403. The Python program, with no try/except (Sonnet skipped the guard as it does 70% of the time at frontier tier), crashed:
 
 ```
