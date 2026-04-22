@@ -138,6 +138,10 @@ entry main(text: Text) {
 
 **실증적 발견:** Claude Sonnet이 AIL 관련 학습이나 파인튜닝 없이도, 동일한 태스크에서 Python과 동등하거나 그 이상의 안전성으로 AIL 코드를 생성했습니다. 모델이 똑똑해진 게 아닙니다. 하네스가 오류의 범주를 제거한 것입니다.
 
+모델 등급에 따라 변하지 않는 단 하나의 안전 속성은 grammar가 강제하는 것입니다. parse된 AIL 프로그램의 에러 핸들링 누락률은 **0%** — Anthropic Sonnet, Alibaba Qwen, Meta Llama, 그리고 7B 파인튠에서 모두 측정됨. 같은 프롬프트에 대한 Python의 누락률은 모델에 따라 **12%–70%** 범위. 흥미롭게도 강한 모델일수록 더 *자주* 빠뜨립니다 (실패 가능 호출이 많은 야심찬 코드를 더 많이 시도하면서 wrapping을 더 많이 빼먹음). AIL 숫자의 항상성이 곧 하네스이고, Python 숫자의 변동성이 기존 안전 도구가 모델마다 쫓아다녀야 하는 이유입니다.
+
+**Grammar floor가 도울 수 없는 영역:** 저자 모델이 parse 임계를 넘어야 grammar가 적용됩니다. mistral:7b는 파인튠 없이는 동일한 코퍼스에서 parse 가능한 AIL을 0개 생성합니다 — floor가 들어올릴 프로그램이 없는 것이죠. 그 임계 아래 등급은 AIL 트랙(베이스 모델 fine-tune)의 영역입니다. Qwen 7B 베이스에 시도한 결과(`ail-coder:7b-v3`)는 임계를 넘으면서 cross-tier 표 최상단에 위치합니다. 경계 문서: [`docs/benchmarks/2026-04-22_heaal_boundary_summary.md`](../benchmarks/2026-04-22_heaal_boundary_summary.md).
+
 ---
 
 ## HEAAL이 주장하지 않는 것

@@ -49,7 +49,7 @@ Verified by [`tests/test_purity.py`](../reference-impl/tests/test_purity.py) or 
 
 **Why this matters:** AI generates code statistically. Because training data overwhelmingly shows `int(x)`, `json.loads(s)`, and `open(f)` written without error handling, models produce failable operations without wrapping them. Humans know from experience that these functions can throw. Models infer it probabilistically, and often get it wrong.
 
-Using a stronger model doesn't fix this. In the benchmark, Claude Sonnet 4.6 still writes Python code that skips error handling on 70% of failable operations. llama3.1:8b hits 86%, qwen2.5-coder:14b hits 42%. The rate doesn't converge toward zero as models improve. Python simply *allows* you to write `int(x)` without error handling — the language makes no objection.
+Using a stronger model doesn't fix this. In the benchmark, Claude Sonnet 4.6 still writes Python code that skips error handling on **70%** of the parsed programs that contain failable operations. qwen2.5-coder:14b skips on 42%. The qwen7b base skips on 12%. mistral7b on 14%. The rate does not converge to zero as models scale up — if anything, stronger models attempt more ambitious code with more failable calls and skip wrapping more of them. Python simply *allows* you to write `int(x)` without error handling — the language makes no objection.
 
 In autonomous pipelines where AI generates code and executes it without human review, this omission propagates silently. Wrong values flow downstream. Nobody notices until something breaks far from the source.
 
@@ -66,7 +66,7 @@ if is_ok(raw) {
 
 Write just `unwrap(raw)` without the check and the parser rejects the program. Error handling is not something the model has to remember — the grammar enforces it.
 
-**Measured:** AIL error-handling omission rate is **0% on every model tier tested**. Python's rate ranges from 42% to 86%.
+**Measured:** AIL error-handling omission rate is **0%** on every model tier where AIL parses at all — the grammar makes the omission impossible, not unlikely. Python's rate on the same prompts, measured among parsed Python programs that contain failable operations, ranges from **12% to 70%** depending on the author model. The 0% number is the one that doesn't move.
 
 See [`examples/safe_csv_parser.ail`](../reference-impl/examples/safe_csv_parser.ail).
 

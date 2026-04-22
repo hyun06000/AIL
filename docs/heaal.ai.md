@@ -101,6 +101,10 @@ Analogy: C (raw pointers) → C++ (smart pointers as convention) → Rust (borro
 
 Claude Sonnet with zero AIL training produces AIL code with safety comparable to or exceeding its Python output. The model did not improve. The harness removed categories of error.
 
+Specifically: AIL programs that parse omit error-handling on failable ops 0% of the time. Measured constant across Sonnet, qwen14b, llama8b, and a 7B fine-tune. Python on the same prompts omits 12-70% depending on author model — stronger models often omit MORE because they attempt more ambitious code with more failable calls. The constancy of the AIL number is the harness; the variance of the Python number is what conventional safety tooling chases per-model.
+
+BOUNDARY: author model must clear AIL parse threshold for grammar floor to apply. mistral:7b without fine-tune produces 0 parseable AIL on the corpus. Below-threshold tiers require AIL-track fine-tune (e.g. ail-coder:7b-v3). See docs/benchmarks/2026-04-22_heaal_boundary_summary.md.
+
 This matches industry findings:
 - LangChain: same model, harness change only, 30th → 5th on Terminal Bench 2.0
 - Stanford Meta-Harness: harness optimization lets small models outperform large ones

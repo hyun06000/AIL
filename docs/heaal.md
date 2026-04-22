@@ -138,6 +138,10 @@ entry main(text: Text) {
 
 **Empirical finding:** Claude Sonnet, with zero AIL-specific training, produces AIL code with safety comparable to or exceeding its Python output. The model didn't get smarter. The harness removed the categories of error.
 
+The single safety property that does not move across model tiers is the one the grammar enforces. AIL programs that parse omit error handling on failable operations **0% of the time** — measured across Anthropic Sonnet, Alibaba Qwen, Meta Llama, and a 7B fine-tune. Python on the same prompts omits between 12% and 70% depending on the author model, with stronger models often omitting *more* (they attempt more ambitious code with more failable calls and skip wrapping more of them). The constancy of the AIL number is the harness; the variability of the Python number is what conventional safety tooling has to chase per-model.
+
+**Where the grammar floor cannot help:** an author model has to clear the parse threshold for the grammar to apply. mistral:7b without a fine-tune produces zero parseable AIL on the same corpus; the floor has nothing to lift. For tiers below that threshold the path is the AIL track — fine-tune the base on AIL data. We did this for a Qwen 7B base; the result (`ail-coder:7b-v3`) clears the threshold and lands at the top of the cross-tier table. The boundary is documented at [`docs/benchmarks/2026-04-22_heaal_boundary_summary.md`](benchmarks/2026-04-22_heaal_boundary_summary.md).
+
 ---
 
 ## What HEAAL Does Not Claim
