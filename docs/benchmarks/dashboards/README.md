@@ -11,10 +11,14 @@ Single-number readouts of AIL vs Python performance on the benchmark corpus. Com
 | **HEAAL E1, Sonnet + anti_python** | Sonnet 4.5 | `anti_python` | **96.1** | 75.9 | +20.2 | [HTML](heaal_E1_sonnet_antipython.html) · [JSON](heaal_E1_sonnet_antipython.json) |
 | **HEAAL C1, qwen14b base (mid-tier)** | `qwen2.5-coder:14b` | default | **80.9** | 69.6 | +11.3 | [HTML](heaal_C1_qwen14b_default.html) · [JSON](heaal_C1_qwen14b_default.json) |
 | **HEAAL C2, qwen14b + anti_python** | `qwen2.5-coder:14b` | `anti_python` | **80.9** | 69.2 | +11.7 | [HTML](heaal_C2_qwen14b_antipython.html) · [JSON](heaal_C2_qwen14b_antipython.json) |
+| **HEAAL D1, llama8b base (small)** | `llama3.1:8b-instruct` | default | **74.3** | 42.2 | **+32.1** | [HTML](heaal_D1_llama8b_default.html) · [JSON](heaal_D1_llama8b_default.json) |
+| **HEAAL D2, llama8b + anti_python** | `llama3.1:8b-instruct` | `anti_python` | **74.3** | 42.2 | +32.1 | [HTML](heaal_D2_llama8b_antipython.html) · [JSON](heaal_D2_llama8b_antipython.json) |
 
 The 77.6 → 96.1 lift on Sonnet from changing only the authoring prompt (zero other changes) is the headline HEAAL finding: **the safety properties are constant across author models, and a modest prompt tweak closes the authoring-quality gap that would otherwise force fine-tuning.**
 
 The C1 → C2 row shows the opposite — on the 14B mid-tier coder base, `anti_python` produces **zero change** in AIL output (all 50 programs bit-identical across the two runs). The negative instruction washes past qwen14b's pretraining priors at temperature 0. Writeup and failure-mode analysis: [`2026-04-22_heaal_C_qwen14b_analysis.md`](../2026-04-22_heaal_C_qwen14b_analysis.md). Takeaway: **`anti_python` is a frontier-model intervention**, not a universal prompt upgrade. Even so, AIL's grammar-enforced floor keeps the HEAAL Score at 80.9 (+11.3 vs Python) on this tier with no intervention at all.
+
+D1 → D2 confirms the same finding one tier further down (`llama3.1:8b-instruct`, smaller and from a different model family): 45/50 AIL programs bit-identical across the two runs, only A01 differs (recursive vs iterative factorial — both correct). More striking is the Δ column: at this tier the AIL/Python HEAAL Score gap is **+32.1** — the largest of any row in this table. The harness floor matters most exactly when the author model is weakest. Writeup: [`2026-04-22_heaal_D_llama8b_analysis.md`](../2026-04-22_heaal_D_llama8b_analysis.md).
 
 ## Score formula
 

@@ -1,0 +1,50 @@
+{
+  "ail": {
+    "error_explicit": 100.0,
+    "exec_success": 24.0,
+    "no_silent_skip": 100.0,
+    "parse_success": 30.0,
+    "structural_safe": 100.0,
+    "loop_safe": 100.0,
+    "observability": 100.0,
+    "score": 74.3,
+    "_raw": {
+      "total": 50,
+      "parsed": 15,
+      "answered": 12,
+      "eh_applicable": 50,
+      "eh_explicit": 50,
+      "silent_eligible": 9,
+      "silent_skipped": 0,
+      "structural_violations": 0,
+      "loops": 0
+    }
+  },
+  "python": {
+    "error_explicit": 14.0,
+    "exec_success": 8.0,
+    "no_silent_skip": 100.0,
+    "parse_success": 14.0,
+    "structural_safe": 100.0,
+    "loop_safe": 100.0,
+    "observability": 0.0,
+    "score": 42.2,
+    "_raw": {
+      "total": 50,
+      "parsed": 7,
+      "answered": 4,
+      "eh_applicable": 50,
+      "eh_explicit": 7,
+      "silent_eligible": 0,
+      "silent_skipped": 0,
+      "structural_violations": 0,
+      "loops": 0
+    }
+  },
+  "meta": {
+    "model": "llama3.1:8b-instruct-q4_K_M",
+    "host": "http://10.0.0.1:11434",
+    "prompts_file": "benchmarks/prompts.json",
+    "total_cases": 50
+  }
+}
