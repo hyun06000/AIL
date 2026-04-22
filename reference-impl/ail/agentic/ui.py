@@ -35,6 +35,48 @@ def make_logger(style: str = "friendly") -> "Logger":
     return FriendlyLogger()
 
 
+def detect_language(text: str) -> str:
+    """Two-bucket language hint: 'ko' if the text contains any Hangul
+    syllable, otherwise 'en'. Good enough to pick the right fallback
+    message; the diagnosis LLM does the proper multilingual work."""
+    if not text:
+        return "en"
+    for ch in text:
+        # Hangul Syllables block U+AC00..U+D7A3
+        if "\uac00" <= ch <= "\ud7a3":
+            return "ko"
+    return "en"
+
+
+def _static_authoring_fallback(language: str) -> list[str]:
+    """Plain-language fallback used only when the diagnose LLM call
+    itself failed (no API key, network down, etc.). No code keywords,
+    no command-line snippets — the audience is a non-developer.
+    """
+    if language == "ko":
+        return [
+            "AI가 이번에는 프로그램을 만들지 못했어요. 보통 다음 중 한 가지를",
+            "고치면 다음 시도가 통과합니다.",
+            "",
+            "  • 만들고 싶은 일이 \"글의 뜻을 이해하는 일\"이라면, INTENT.md의",
+            "    동작 설명에 \"AI가 이해해서 처리한다\" 같은 한 줄을 추가하세요.",
+            "  • 설명이 추상적일수록 AI가 어려워합니다. 구체적인 예시 한두 개를",
+            "    더해 보세요.",
+            "  • 다시 한 번만 시도해도 통과할 때가 있습니다.",
+        ]
+    return [
+        "The AI couldn't build it this time. Usually one of these helps",
+        "the next try go through:",
+        "",
+        "  • If the task is \"understand what the text means\" (translate,",
+        "    summarize, classify), add a line to your INTENT.md saying",
+        "    something like \"the AI should read and understand it\".",
+        "  • Vague descriptions are harder. Add one or two concrete",
+        "    examples of what should happen.",
+        "  • Sometimes simply trying again works.",
+    ]
+
+
 # --------------------------------------------------------- base
 
 class Logger:
@@ -123,26 +165,32 @@ class FriendlyLogger(Logger):
     def authoring_failed(self, *, adapter_desc: str,
                          diagnosis: Optional[str],
                          ledger_path: Path,
-                         attempts: int) -> None:
+                         attempts: int,
+                         language: str = "en") -> None:
         _w()
-        _w(f"  Could not build the program")
-        _w(f"     tried {adapter_desc}")
+        header = {
+            "ko": "프로그램을 만들지 못했어요",
+            "en": "Could not build the program",
+        }.get(language, "Could not build the program")
+        tried = {
+            "ko": f"시도한 AI: {adapter_desc}",
+            "en": f"tried {adapter_desc}",
+        }.get(language, f"tried {adapter_desc}")
+        _w(f"  {header}")
+        _w(f"     {tried}")
         _w()
         if diagnosis and diagnosis.strip():
             for line in diagnosis.strip().splitlines():
                 _w(f"     {line}")
         else:
-            _w(f"     The AI tried and could not produce a runnable "
-               f"version. Common fixes:")
-            _w(f"       • If the task needs judgment (translation, "
-               f"classification, summarization), say so explicitly in")
-            _w(f"         INTENT.md's Behavior section.")
-            _w(f"       • Try a stronger model — set ANTHROPIC_API_KEY "
-               f"or OPENAI_API_KEY in your environment.")
-            _w(f"       • Re-run with --auto-fix 2 to retry with "
-               f"feedback.")
+            for line in _static_authoring_fallback(language):
+                _w(f"     {line}")
         _w()
-        _w(f"     Full log: {ledger_path}")
+        log_label = {
+            "ko": "기술자용 상세 기록",
+            "en": "Full log",
+        }.get(language, "Full log")
+        _w(f"     {log_label}: {ledger_path}")
         _w()
 
     def tests_start(self, count: int) -> None:
@@ -262,7 +310,9 @@ class CompactLogger(Logger):
     def authoring_failed(self, *, adapter_desc: str,
                          diagnosis: Optional[str],
                          ledger_path: Path,
-                         attempts: int) -> None:
+                         attempts: int,
+                         language: str = "en") -> None:
+        # Compact mode ignores language — output is for scripts.
         _w(f"{self._tag()}author failed ({adapter_desc})")
         if diagnosis and diagnosis.strip():
             for line in diagnosis.strip().splitlines():

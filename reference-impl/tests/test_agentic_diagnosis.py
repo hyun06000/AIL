@@ -92,3 +92,31 @@ def test_diagnose_tolerates_dict_response():
         adapter=adapter,
     )
     assert "말로 풀어서" in out
+
+
+def test_diagnose_examples_match_adapter_format():
+    """Catches the v1.9.1 regression where examples were dicts but
+    the AnthropicAdapter unpacks them as (input, output) tuples — a
+    mismatch that crashed every diagnose call with 'too many values
+    to unpack'."""
+    from ail.agentic.diagnosis import _diagnosis_examples
+    examples = _diagnosis_examples()
+    assert examples, "should have at least one example"
+    for example in examples:
+        # Adapter does: for inp, out in examples[:5]
+        assert len(example) == 2, (
+            f"each example must be a 2-tuple (inputs_list, output); "
+            f"got {len(example)}"
+        )
+        inp, out = example
+        assert isinstance(inp, list)
+        assert isinstance(out, str)
+
+
+def test_detect_language():
+    from ail.agentic.ui import detect_language
+    assert detect_language("# 한국어 프로젝트\n\n받은 텍스트를 ...") == "ko"
+    assert detect_language("# english project\n\nDoes a thing.") == "en"
+    assert detect_language("") == "en"
+    # Mixed but contains Hangul syllables → ko
+    assert detect_language("# Mixed 한글 also OK") == "ko"

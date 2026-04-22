@@ -174,11 +174,13 @@ def _print_authoring_failure(project: Project, err: AuthoringError,
             "chars": len(diagnosis),
         })
 
+    from .ui import detect_language
     logger.authoring_failed(
         adapter_desc=adapter_desc,
         diagnosis=diagnosis,
         ledger_path=project.ledger_path,
         attempts=len(errors),
+        language=detect_language(intent_text),
     )
 
 

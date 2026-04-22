@@ -4,6 +4,49 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.2 — 2026-04-23
+
+Hot-fix on top of v1.9.1. The diagnose-on-failure feature shipped
+yesterday crashed silently inside every adapter — the few-shot
+examples were dicts where the existing adapter API expects
+`(inputs_list, output)` tuples, raising `ValueError: too many values
+to unpack` and falling back to the English static tip list every
+time. So end users never actually saw the AI-translated explanation
+the v1.9.1 release notes promised.
+
+Caught by hyun06000's first real-world test: a Korean-language
+project repeatedly hit the fallback path, which is also too
+technical for a non-developer.
+
+### Fixed
+
+- **`diagnose_authoring_failure` examples shape.** Now matches the
+  `(inputs_list, output)` tuple form the AnthropicAdapter (and the
+  others) iterates over with `for inp, out in examples[:5]`. The
+  v1.9.1 dict shape silently broke every diagnose call. Regression
+  test added that asserts the example shape against what the
+  adapter requires.
+
+### Improved (also driven by the same test)
+
+- **Static fallback is multilingual.** When the diagnose LLM call
+  itself can't run (no API key, network down), the fallback message
+  is now picked by detecting Hangul syllables in the user's
+  INTENT.md. Korean projects get Korean fallback text. The new text
+  drops command-line snippets (`ANTHROPIC_API_KEY`, `--auto-fix 2`)
+  in favor of plain advice — the audience is a non-developer who
+  doesn't know what an env var is.
+- **Header strings localized.** "Could not build the program" /
+  "Full log" headers now also localize to Korean when INTENT.md is
+  in Korean.
+
+### Tests
+
+- 316 tests pass (was 314 in v1.9.1). New: 1 examples-shape
+  contract test, 1 language-detection test.
+
+---
+
 ## v1.9.1 — 2026-04-23
 
 UX patch release. Surfaced by hyun06000's first-time use of v1.9.0 on

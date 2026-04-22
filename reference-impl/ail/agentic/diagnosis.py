@@ -112,49 +112,52 @@ def _coerce_to_text(raw: Any) -> str:
     return str(raw).strip()
 
 
-def _diagnosis_examples() -> list[dict[str, Any]]:
-    """Few-shot examples in both languages so the model matches tone."""
+def _diagnosis_examples() -> list[tuple[list[dict[str, Any]], Any]]:
+    """Few-shot examples in (inputs_list, output) tuple form expected
+    by the existing model adapters. The `inputs_list` carries the
+    fields the prompt builder will render under "INPUTS:"; we put the
+    diagnosis-specific context into one inputs dict so the example
+    is short.
+    """
     return [
-        {
-            "intent_md": (
-                "# word-counter\n\n"
-                "문장을 입력하면 형태소로 나누는 분석기.\n\n"
-                "## Behavior\n"
-                "- 빈 입력은 에러\n"
-                "- 한국어가 아니면 에러\n\n"
-                "## Tests\n- \"\" → 에러\n"
+        (
+            [{
+                "intent_md": (
+                    "# word-counter\n\n"
+                    "문장을 입력하면 형태소로 나누는 분석기.\n\n"
+                    "## Behavior\n- 빈 입력은 에러\n- 한국어가 아니면 에러\n\n"
+                    "## Tests\n- \"\" → 에러\n"
+                ),
+                "last_ail_attempt": (
+                    "pure fn analyze(text: Text) -> List[Morpheme] {\n"
+                    "    result: List[Morpheme] = []\n"
+                ),
+                "error_messages": "ParseError: unexpected token COLON(':')@6:42",
+            }],
+            (
+                "이 일은 언어를 이해해야 하는 작업이에요. AI가 규칙만으로 "
+                "풀려다 막혔어요. 한국어 형태소 분석은 사람의 말을 이해하는 "
+                "능력이 필요한 종류의 일이라서, 만든 프로그램 안에서도 "
+                "언어 모델이 한 번 끼어들어야 합니다.\n\n"
+                "INTENT.md의 동작 설명에 \"언어 모델을 써서 형태소를 분석한다\" "
+                "같은 한 줄을 더해서 다시 한 번 시도해 보세요."
             ),
-            "last_ail_attempt": (
-                "pure fn analyze(text: Text) -> List[Morpheme] {\n"
-                "    result: List[Morpheme] = []\n"
-                "    ...\n"
-                "}\n"
+        ),
+        (
+            [{
+                "intent_md": (
+                    "# summarizer\n\nSummarize articles to one sentence.\n\n"
+                    "## Tests\n- \"Long article...\" → succeed\n"
+                ),
+                "last_ail_attempt": "pure fn summarize(text: Text) -> Text { ...",
+                "error_messages": "ParseError: unexpected token",
+            }],
+            (
+                "Summarizing an article means the AI has to actually read "
+                "and understand the text. That is a reasoning task, not a "
+                "calculation, so it can't be solved with formulas alone.\n\n"
+                "Add a line to INTENT.md that says \"use a language model "
+                "to summarize\" and try again."
             ),
-            "error_messages": "ParseError: unexpected token COLON(':')@6:42",
-            "task": "diagnose",
-            "output": (
-                "이 작업은 언어를 이해해야 하는 작업이라서 AI가 규칙만으로 "
-                "계산하려다 막혔어요. 한국어 형태소 분석은 언어 모델의 판단이 "
-                "필요한 종류의 일입니다. INTENT.md의 `## Behavior` 섹션에 "
-                "\"언어 모델을 사용해서 형태소 분석을 수행한다\"라는 한 줄을 "
-                "추가하고 다시 `ail up`을 실행해 보세요."
-            ),
-        },
-        {
-            "intent_md": (
-                "# summarizer\n\n"
-                "Summarize articles to one sentence.\n\n"
-                "## Tests\n- \"Long article...\" → succeed\n"
-            ),
-            "last_ail_attempt": "pure fn summarize(text: Text) -> Text { ...",
-            "error_messages": "ParseError: unexpected token",
-            "task": "diagnose",
-            "output": (
-                "Summarizing an article needs the AI to actually read and "
-                "understand the text, which is a reasoning task rather than "
-                "a pure calculation. The AI tried to solve it with a formula "
-                "and couldn't. Add a line to `## Behavior` that says "
-                "\"Use a language model to summarize\" and run `ail up` again."
-            ),
-        },
+        ),
     ]
