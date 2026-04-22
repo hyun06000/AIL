@@ -4,6 +4,84 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.1 — 2026-04-23
+
+UX patch release. Surfaced by hyun06000's first-time use of v1.9.0 on
+a real Korean-language project. Targets the audience the agentic
+layer was designed for: people who know natural-language prompting
+but no code.
+
+No grammar changes; v1.8 spec freeze still in effect.
+
+### End-user-friendly logging (default)
+
+- **`ail up` output redesigned.** Sentences with breathing room, ✓/✗
+  marks for tests, the author model identified by name on every run.
+  The original v1.9.0 dev-style one-liners are still available with
+  `ail up --log compact` for scripts and CI.
+- **Author model now identified.** Previously the user had no way to
+  tell which backend (`anthropic/claude-sonnet-4-5`, `ollama/ail-coder:7b-v3`,
+  `openai_compat/...`) actually wrote `app.ail`. The friendly view
+  now prints it on the authoring line and the ledger records it
+  on every `author_start` event.
+
+### Authoring failure becomes a plain-language conversation
+
+- **Diagnose-on-failure.** When the author exhausts its retry budget,
+  the agent now calls the same backend ONE more time with a
+  different goal: "explain in plain language what made this hard
+  and suggest one specific edit to INTENT.md". The reply is
+  produced in the same natural language the user wrote INTENT.md in
+  (Korean → Korean, English → English) and printed instead of the
+  raw `ParseError: unexpected token COLON(':')@6:42` that v1.9.0
+  showed.
+- The diagnose prompt forbids code-level vocabulary (`syntax`,
+  `colon`, `token`, `intent`, `pure fn`, `compile`, …) and frames
+  the difficulty as a limit of what could be automated, not a
+  user mistake.
+- If the diagnose call itself fails (no API key, network down),
+  falls back to a concise static tip list. Raw errors still go to
+  `.ail/ledger.jsonl`.
+- Module: [`reference-impl/ail/agentic/diagnosis.py`](reference-impl/ail/agentic/diagnosis.py).
+
+### `ail init` UX
+
+- **Both invocation paths shown.** `ail init foo` previously suggested
+  only `ail up foo` as the next step; from inside the new project
+  folder that command became `ail up foo/foo` and failed with a
+  confusing "no INTENT.md" message. Now prints both forms:
+
+  ```
+    then:  ail up foo           (from here)
+       or: cd foo && ail up     (from inside the project)
+  ```
+
+### INTENT.md parser tolerance
+
+- **ASCII arrows accepted in test bullets.** Previously only the
+  Unicode `→` separated input from expected outcome; bullets using
+  `->` or `=>` were silently dropped (they appeared in the file but
+  never ran). Now all three forms work; tests using `-> 에러` or
+  `=> succeed` are recognized.
+
+### Recorded design principle
+
+> Errors that come from AI-generated code should be translated by AI
+> into the user's language. Tokenizer / parser / runtime vocabulary
+> should never reach a non-developer.
+
+Captured in the diagnosis module docstring; intended to inform
+future error-rendering work across the agentic layer.
+
+### Tests
+
+- 314 tests pass (was 308 in v1.9.0). New: 6 diagnosis, 1 arrow
+  fallback. Existing tests unmodified — the friendly logger is
+  routed through a `Logger` abstraction, ledger format is
+  unchanged, all assertions still hold.
+
+---
+
 ## v1.9.0 — 2026-04-22
 
 First minor bump since v1.8.0 — adds the L2 layer of the HEAAL
