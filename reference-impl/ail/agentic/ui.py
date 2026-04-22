@@ -166,7 +166,8 @@ class FriendlyLogger(Logger):
                          diagnosis: Optional[str],
                          ledger_path: Path,
                          attempts: int,
-                         language: str = "en") -> None:
+                         language: str = "en",
+                         attempt_path: Optional[Path] = None) -> None:
         _w()
         header = {
             "ko": "프로그램을 만들지 못했어요",
@@ -186,6 +187,12 @@ class FriendlyLogger(Logger):
             for line in _static_authoring_fallback(language):
                 _w(f"     {line}")
         _w()
+        if attempt_path is not None:
+            attempt_label = {
+                "ko": "AI가 마지막으로 쓴 코드 (실패한 것)",
+                "en": "AI's last attempt (failed)",
+            }.get(language, "AI's last attempt (failed)")
+            _w(f"     {attempt_label}: {attempt_path}")
         log_label = {
             "ko": "기술자용 상세 기록",
             "en": "Full log",
@@ -311,12 +318,15 @@ class CompactLogger(Logger):
                          diagnosis: Optional[str],
                          ledger_path: Path,
                          attempts: int,
-                         language: str = "en") -> None:
+                         language: str = "en",
+                         attempt_path: Optional[Path] = None) -> None:
         # Compact mode ignores language — output is for scripts.
         _w(f"{self._tag()}author failed ({adapter_desc})")
         if diagnosis and diagnosis.strip():
             for line in diagnosis.strip().splitlines():
                 _w(f"  {line}")
+        if attempt_path is not None:
+            _w(f"{self._tag()}attempt: {attempt_path}")
         _w(f"{self._tag()}log: {ledger_path}")
 
     def tests_start(self, count: int) -> None:

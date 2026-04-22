@@ -4,6 +4,61 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.3 — 2026-04-23
+
+Failed authoring attempts are now persisted to disk. Previously the
+ledger only recorded the parse error; the actual AIL source the
+model produced was thrown away. That meant a developer (or a future
+meta-author AI built on top of these projects) had no artefact to
+inspect or learn from when the model converged on the same wrong
+shape repeatedly.
+
+Surfaced by hyun06000: "정확한 에러 리포트를 얻거나 프로그램을 할 수
+있는 사용자 혹은 메타 저자 AI 등이 이 문제를 해결하려면 세션의
+저자 AI가 만든 코드나 결과물을 (실패한 거라도) 어딘가엔 기록해
+둬야 할 거야."
+
+### Added
+
+- **`.ail/attempts/<UTC-timestamp>_author_failed.ail`** — written
+  whenever the author exhausts its retry budget. The file is plain
+  AIL source (not parseable, by definition) headed by a `//` comment
+  block recording the timestamp, the author model, and one line per
+  retry's parse error. The body is the LAST attempt verbatim, so
+  someone — human or LLM — can pick up the artefact and see what
+  shape the model is converging on.
+- **`Project.save_failed_attempt()`** — public helper, also
+  available to the chat / auto-fix paths in future versions.
+- **`Project.attempts_dir`** — `attempts/` subdir of `.ail/`,
+  created on demand. `.ail/` is gitignored so attempts never
+  accidentally land in user's git history.
+- **Ledger entry `attempt_saved`** — `{path, kind, source_chars}`
+  references the file. The existing `author_failed_diagnose_attempt`
+  entry now also carries `attempt_file`.
+- **UI surfaces the attempt path.** Friendly mode prints a localized
+  "AI's last attempt (failed)" line; compact mode prints `attempt:
+  <path>`. Both pointing to the saved `.ail` file.
+
+### Tests
+
+- 318 tests pass (was 316 in v1.9.2). New: 2 attempts-save tests
+  (file shape, on-demand directory creation).
+
+### Why this matters
+
+This is the foundation for two things L2 v2 will need:
+
+  1. A meta-author AI that learns from failures by reading the
+     attempts corpus instead of just retrying blindly.
+  2. A debugging story for developers who do read AIL — they can
+     grep the saved files for the patterns the author tends to
+     get wrong.
+
+For now it is just an artefact dump, but the artefacts are no longer
+lost.
+
+---
+
 ## v1.9.2 — 2026-04-23
 
 Hot-fix on top of v1.9.1. The diagnose-on-failure feature shipped

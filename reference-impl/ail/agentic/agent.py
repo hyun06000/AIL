@@ -143,16 +143,46 @@ def _print_authoring_failure(project: Project, err: AuthoringError,
     into plain language in the user's own INTENT.md language. Falls
     back to a concise static tip list if the diagnosis call itself
     fails (network down, no API key at all, etc.).
+
+    Also writes the failed AIL attempt to .ail/attempts/ so a developer
+    (or a future meta-author AI) can inspect what the model produced.
     """
     from .diagnosis import diagnose_authoring_failure
     intent_text = project.intent_path.read_text(encoding="utf-8")
     last_src = err.partial.ail_source if err.partial else ""
     errors = list(err.partial.errors) if err.partial else [str(err)]
+
+    # Persist the failed source first so a crash in diagnose() can't
+    # cost us the artefact.
+    attempt_path = None
+    if last_src.strip():
+        try:
+            attempt_path = project.save_failed_attempt(
+                source=last_src, errors=errors,
+                author_model=adapter_desc, kind="author",
+            )
+        except Exception as se:
+            project.append_ledger({
+                "event": "attempt_save_failed",
+                "error": f"{type(se).__name__}: {se}",
+            })
+        else:
+            project.append_ledger({
+                "event": "attempt_saved",
+                "path": str(attempt_path.relative_to(project.root)),
+                "kind": "author",
+                "source_chars": len(last_src),
+            })
+
     project.append_ledger({
         "event": "author_failed_diagnose_attempt",
         "author_model": adapter_desc,
         "errors": errors[-3:],
         "last_source_chars": len(last_src),
+        "attempt_file": (
+            str(attempt_path.relative_to(project.root))
+            if attempt_path else None
+        ),
     })
 
     diagnosis = None
@@ -181,6 +211,7 @@ def _print_authoring_failure(project: Project, err: AuthoringError,
         ledger_path=project.ledger_path,
         attempts=len(errors),
         language=detect_language(intent_text),
+        attempt_path=attempt_path,
     )
 
 

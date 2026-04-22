@@ -67,6 +67,42 @@ def test_ledger_appends(tmp_path):
     assert "ts" in last
 
 
+def test_save_failed_attempt_creates_file_with_header(tmp_path):
+    proj = Project.init(tmp_path / "demo")
+    src = "pure fn x() {\n    bad: List = []\n}\n"
+    errors = [
+        "ParseError: unexpected token COLON(':')@2:9",
+        "ParseError: previous attempt also COLON",
+    ]
+    path = proj.save_failed_attempt(
+        source=src, errors=errors,
+        author_model="anthropic/claude-sonnet-4-5",
+        kind="author",
+    )
+    assert path.exists()
+    assert path.parent == proj.attempts_dir
+    body = path.read_text(encoding="utf-8")
+    # Header records metadata
+    assert "author_model:" in body
+    assert "claude-sonnet-4-5" in body
+    assert "[1] ParseError" in body
+    assert "[2] ParseError" in body
+    # Source is preserved verbatim after the header
+    assert "pure fn x()" in body
+    assert "bad: List = []" in body
+
+
+def test_save_failed_attempt_creates_attempts_dir_if_missing(tmp_path):
+    proj = Project.init(tmp_path / "demo")
+    # Project.init shouldn't pre-create attempts_dir; it appears on demand.
+    assert not proj.attempts_dir.exists()
+    proj.save_failed_attempt(
+        source="entry main(x: Text) {}", errors=["err"],
+        author_model="x", kind="author",
+    )
+    assert proj.attempts_dir.is_dir()
+
+
 def test_write_tests_extracts_from_intent(tmp_path):
     proj = Project.init(tmp_path / "demo")
     spec = proj.read_intent()

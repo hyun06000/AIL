@@ -6,6 +6,9 @@
   └── .ail/
       ├── tests.json      ← extracted from INTENT.md by the agent
       ├── ledger.jsonl    ← every authoring decision, test run, request
+      ├── attempts/       ← saved authoring attempts (one .ail per
+      │                     failed run, headed by a comment block
+      │                     listing the parse errors for each retry)
       └── state/          ← cross-session evolve state (placeholder)
 
 The Project class holds paths and convenience helpers. It does not
@@ -33,6 +36,7 @@ class Project:
     STATE_DIR = ".ail"
     TESTS_FILE = "tests.json"
     LEDGER_FILE = "ledger.jsonl"
+    ATTEMPTS_DIR = "attempts"
 
     @classmethod
     def init(cls, root: Path | str, name: Optional[str] = None) -> "Project":
@@ -92,6 +96,10 @@ class Project:
     def ledger_path(self) -> Path:
         return self.state_dir / self.LEDGER_FILE
 
+    @property
+    def attempts_dir(self) -> Path:
+        return self.state_dir / self.ATTEMPTS_DIR
+
     # ---------- spec + source ----------
 
     def read_intent(self) -> IntentSpec:
@@ -116,6 +124,54 @@ class Project:
             json.dumps(payload, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+
+    def save_failed_attempt(
+        self,
+        *,
+        source: str,
+        errors: list[str],
+        author_model: str,
+        kind: str = "author",
+    ) -> Path:
+        """Persist the AI's last AIL attempt + the errors it produced.
+
+        Returns the saved path. The file is plain `.ail` source with a
+        comment block at the top recording metadata so a developer or
+        a meta-author AI can pick up the artefact without reading the
+        ledger first.
+
+        We write whatever source we have, even if it doesn't parse.
+        Capturing failures is exactly the point — those samples are
+        the data that lets a future training run or a smarter
+        diagnose path improve over time.
+        """
+        self.attempts_dir.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y-%m-%dT%H-%M-%S", time.gmtime())
+        # Include kind so author-failed and chat/auto-fix attempts can
+        # be distinguished by name.
+        path = self.attempts_dir / f"{ts}_{kind}_failed.ail"
+        header_lines = [
+            f"// Saved by ail-interpreter: failed {kind} attempt",
+            f"// timestamp_utc: {ts}",
+            f"// author_model:  {author_model}",
+            f"// errors ({len(errors)}):",
+        ]
+        for i, err in enumerate(errors, 1):
+            # One error per line, indented; do not let a stray newline
+            # in the error text break the comment frame.
+            err_one_line = err.replace("\n", " | ")
+            header_lines.append(f"//   [{i}] {err_one_line}")
+        header_lines.append("//")
+        header_lines.append(
+            "// The block below is the LAST attempt the model produced. "
+            "It does not parse —")
+        header_lines.append(
+            "// inspect it (or hand it to another AI) to see what shape "
+            "the model is converging on.")
+        header_lines.append("")
+        body = source if source.endswith("\n") else source + "\n"
+        path.write_text("\n".join(header_lines) + "\n" + body, encoding="utf-8")
+        return path
 
     # ---------- ledger ----------
 
