@@ -1,0 +1,50 @@
+{
+  "ail": {
+    "error_explicit": 0.0,
+    "answer_correct": 0.0,
+    "no_silent_skip": 0.0,
+    "parse_success": 0.0,
+    "structural_safe": 0.0,
+    "loop_safe": 0.0,
+    "observability": 0.0,
+    "score": 0.0,
+    "_raw": {
+      "total": 50,
+      "parsed": 0,
+      "answered": 0,
+      "eh_applicable": 0,
+      "eh_explicit": 0,
+      "silent_eligible": 0,
+      "silent_skipped": 0,
+      "structural_violations": 0,
+      "loops": 0
+    }
+  },
+  "python": {
+    "error_explicit": 85.71428571428571,
+    "answer_correct": 36.0,
+    "no_silent_skip": 25.0,
+    "parse_success": 42.0,
+    "structural_safe": 100.0,
+    "loop_safe": 100.0,
+    "observability": 0.0,
+    "score": 54.9,
+    "_raw": {
+      "total": 50,
+      "parsed": 21,
+      "answered": 18,
+      "eh_applicable": 21,
+      "eh_explicit": 18,
+      "silent_eligible": 12,
+      "silent_skipped": 9,
+      "structural_violations": 0,
+      "loops": 0
+    }
+  },
+  "meta": {
+    "model": "mistral:7b-instruct-q4_K_M",
+    "host": "http://10.0.0.1:11434",
+    "prompts_file": "benchmarks/prompts.json",
+    "total_cases": 50
+  }
+}

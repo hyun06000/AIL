@@ -61,7 +61,7 @@ So the scorecard reads:
 
 | Author | Prompt | HEAAL Score (AIL) | Python baseline |
 |---|---|---|---|
-| ail-coder:7b-v3 (fine-tuned) | default | 87.7 | 48.5 |
+| ail-coder:7b-v3 (fine-tuned) | default | 87.7 | 58.0 |
 | qwen2.5-coder:14b (base, mid-tier) | default | 80.9 | 69.6 |
 | qwen2.5-coder:14b (base) | anti_python | **80.9** (no change) | 69.2 |
 | Claude Sonnet 4.6 (frontier) | default | 77.6 | 75.3 |

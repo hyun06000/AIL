@@ -110,6 +110,11 @@ reproducible.
     AIL track, fine-tuned 7B:   AIL 87.7 vs Python 48.5
     HEAAL baseline (Sonnet):    AIL 77.6 vs Python 75.3
     HEAAL E1 (anti_python):     AIL 96.1 vs Python 75.9
+  *(The Python 48.5 figure was corrected to 58.0 on 2026-04-22 after
+  a methodology audit caught a vacuous-truth bug in `heaal_score.py`.
+  Full audit + before/after table:
+  `docs/benchmarks/2026-04-22_score_audit.md`. The correction will
+  ship in v1.8.7.)*
 
 ### HEAAL documentation
 

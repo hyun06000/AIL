@@ -24,7 +24,7 @@
 | AIL error-handling miss | 0% | 0% | 0 (grammar) |
 | Python error-handling miss | 86% | 86% | 0 |
 | HEAAL Score (AIL) | **74.3** | **74.3** | 0 |
-| HEAAL Score (Python) | 42.2 | 42.2 | 0 |
+| HEAAL Score (Python) | 43.7 | 43.7 | 0 |
 
 **AIL source bit-identity across D1 and D2: 45/46 cases identical** (one case had no source on either side). Only A01 (factorial) differed — D1 produced a recursive implementation, D2 produced an iterative one. Both correct (return 5040), both well-formed AIL.
 
@@ -68,7 +68,7 @@ This is `llama3.1:8b` failing to distinguish "I should compute this" from "I sho
 
 In AIL the same confusion would manifest as `intent reverse(...)` (LLM dispatch) instead of `pure fn reverse(...)` (computation). When the model takes the `intent` path here, the AIL runtime calls the model again, gets back a string, and the program returns it. The result is sometimes correct, sometimes not — but the program **runs to completion** because the runtime's `Result` discipline catches the model misbehavior.
 
-That's why AIL's answer rate (24%) is 3× Python's (8%) at this tier, and why AIL's HEAAL Score (74.3) is 32 points above Python's (42.2). The grammar isn't producing better code — it's producing code that **can't fail in the most common ways the model produces failure-prone output.**
+That's why AIL's answer rate (24%) is 3× Python's (8%) at this tier, and why AIL's HEAAL Score (74.3) is 30.6 points above Python's (43.7). The grammar isn't producing better code — it's producing code that **can't fail in the most common ways the model produces failure-prone output.**
 
 ## Cross-tier picture (Stages C + D combined)
 
@@ -78,17 +78,17 @@ That's why AIL's answer rate (24%) is 3× Python's (8%) at this tier, and why AI
 | Sonnet 4.6 (frontier) | default | 36% | 36% | 88% | 77.6 / 75.3 | +2.3 |
 | qwen2.5-coder:14b (mid) | default | 62% | 54% | 80% | 80.9 / 69.6 | +11.3 |
 | qwen2.5-coder:14b (mid) | anti_python | 62% | 54% | 78% | 80.9 / 69.2 | +11.7 |
-| llama3.1:8b (small) | default | 30% | 24% | 8% | **74.3 / 42.2** | **+32.1** |
-| llama3.1:8b (small) | anti_python | 30% | 24% | 8% | 74.3 / 42.2 | +32.1 |
+| llama3.1:8b (small) | default | 30% | 24% | 8% | **74.3 / 43.7** | **+30.6** |
+| llama3.1:8b (small) | anti_python | 30% | 24% | 8% | 74.3 / 43.7 | +30.6 |
 
 Two refinements to the HEAAL claim emerge from this table:
 
 1. **The prompt intervention (`anti_python`) only matters at the frontier.** It produces a +18.5-point HEAAL Score lift on Sonnet 4.5 vs Sonnet 4.6 default. On both qwen14b and llama8b, it produces 0.
-2. **The grammar floor (HEAAL Score Δ AIL vs Python) is monotonic in author weakness.** As the author model gets weaker, the gap between AIL and Python *grows*: +2.3 (frontier with weak prompt) → +11.3 (mid-tier) → **+32.1 (small).** The harness matters most exactly when the author needs it most.
+2. **The grammar floor (HEAAL Score Δ AIL vs Python) widens as the author model gets weaker — but only while the model can still write *some* AIL.** Across the rows where AIL parse > 0: Sonnet default +2.3 (frontier), qwen14b +11.3 (mid-tier), llama8b **+30.6** (small but still parses 30%). The mistral row (D3/D4) shows the boundary: when AIL parse = 0/50, the grammar floor has nothing to stand on — see [`2026-04-22_heaal_D_mistral7b_analysis.md`](2026-04-22_heaal_D_mistral7b_analysis.md).
 
-The second observation is the headline. Strong author models can write either AIL or Python well, so the grammar floor matters less. Weak author models can write neither well — but the grammar floor stops them from shipping the dangerous *kind* of bad code. Python lets a weak author emit a script that looks plausible and crashes on first call; AIL forces them into a shape where what they emit either parses with safety properties intact or doesn't parse at all.
+The headline reads: strong author models can write either AIL or Python well, so the grammar floor matters less. Mid-and-small-tier author models can write neither well — but if they can produce *any* parseable AIL, the grammar floor stops them from shipping the dangerous *kind* of bad code. Python lets a weak author emit a script that looks plausible and crashes on first call; AIL forces them into a shape where what they emit either parses with safety properties intact or doesn't parse at all.
 
-This is the operational meaning of "harness as a language" at the bottom of the model spectrum.
+This is the operational meaning of "harness as a language" — but it requires the model to clear the parse threshold first.
 
 ## What remains open
 

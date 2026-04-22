@@ -1,7 +1,7 @@
 {
   "ail": {
     "error_explicit": 100.0,
-    "exec_success": 54.0,
+    "answer_correct": 54.0,
     "no_silent_skip": 78.94736842105263,
     "parse_success": 62.0,
     "structural_safe": 100.0,
@@ -12,8 +12,8 @@
       "total": 50,
       "parsed": 31,
       "answered": 27,
-      "eh_applicable": 50,
-      "eh_explicit": 50,
+      "eh_applicable": 31,
+      "eh_explicit": 31,
       "silent_eligible": 19,
       "silent_skipped": 4,
       "structural_violations": 0,
@@ -22,7 +22,7 @@
   },
   "python": {
     "error_explicit": 58.0,
-    "exec_success": 78.0,
+    "answer_correct": 78.0,
     "no_silent_skip": 45.714285714285715,
     "parse_success": 100.0,
     "structural_safe": 100.0,

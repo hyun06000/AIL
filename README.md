@@ -75,7 +75,7 @@ The single-number summary is the **HEAAL Score** — a weighted average where 65
 
 | Scenario | AIL | Python | Δ |
 |---|---|---|---|
-| Fine-tuned 7B (`ail-coder:7b-v3`) | **87.7** | 48.5 | +39.2 |
+| Fine-tuned 7B (`ail-coder:7b-v3`) | **87.7** | 58.0 | +29.7 |
 | Sonnet 4.6, default prompt | **77.6** | 75.3 | +2.3 |
 | Sonnet 4.5, `anti_python` prompt | **96.1** | 75.9 | +20.2 |
 

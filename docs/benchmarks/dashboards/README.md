@@ -2,23 +2,29 @@
 
 Single-number readouts of AIL vs Python performance on the benchmark corpus. Computed by [`reference-impl/tools/heaal_score.py`](../../../reference-impl/tools/heaal_score.py) from the raw benchmark JSONs in this directory.
 
-## The three canonical readouts
+> **Methodology note (2026-04-22):** The score formula was corrected on this date to use parsed-program denominators for per-program metrics. Some previously published numbers shifted (the Python column rose by 1–10 points in three rows; the AIL column was unchanged in every row). Full audit and before/after table: [`2026-04-22_score_audit.md`](../2026-04-22_score_audit.md).
+
+## The canonical readouts
 
 | Scenario | Author model | Prompt | AIL | Python | Δ | Details |
 |---|---|---|---|---|---|---|
-| **AIL track, fine-tuned 7B** | `ail-coder:7b-v3` | default | **87.7** | 48.5 | +39.2 | [HTML](ail_track_r3_v3_finetune.html) · [JSON](ail_track_r3_v3_finetune.json) |
+| **AIL track, fine-tuned 7B** | `ail-coder:7b-v3` | default | **87.7** | 58.0 | +29.7 | [HTML](ail_track_r3_v3_finetune.html) · [JSON](ail_track_r3_v3_finetune.json) |
 | **HEAAL baseline, Sonnet** | Sonnet 4.6 | default | **77.6** | 75.3 | +2.3 | [HTML](heaal_sonnet_default.html) · [JSON](heaal_sonnet_default.json) |
 | **HEAAL E1, Sonnet + anti_python** | Sonnet 4.5 | `anti_python` | **96.1** | 75.9 | +20.2 | [HTML](heaal_E1_sonnet_antipython.html) · [JSON](heaal_E1_sonnet_antipython.json) |
 | **HEAAL C1, qwen14b base (mid-tier)** | `qwen2.5-coder:14b` | default | **80.9** | 69.6 | +11.3 | [HTML](heaal_C1_qwen14b_default.html) · [JSON](heaal_C1_qwen14b_default.json) |
 | **HEAAL C2, qwen14b + anti_python** | `qwen2.5-coder:14b` | `anti_python` | **80.9** | 69.2 | +11.7 | [HTML](heaal_C2_qwen14b_antipython.html) · [JSON](heaal_C2_qwen14b_antipython.json) |
-| **HEAAL D1, llama8b base (small)** | `llama3.1:8b-instruct` | default | **74.3** | 42.2 | **+32.1** | [HTML](heaal_D1_llama8b_default.html) · [JSON](heaal_D1_llama8b_default.json) |
-| **HEAAL D2, llama8b + anti_python** | `llama3.1:8b-instruct` | `anti_python` | **74.3** | 42.2 | +32.1 | [HTML](heaal_D2_llama8b_antipython.html) · [JSON](heaal_D2_llama8b_antipython.json) |
+| **HEAAL D1, llama8b base (small)** | `llama3.1:8b-instruct` | default | **74.3** | 43.7 | +30.6 | [HTML](heaal_D1_llama8b_default.html) · [JSON](heaal_D1_llama8b_default.json) |
+| **HEAAL D2, llama8b + anti_python** | `llama3.1:8b-instruct` | `anti_python` | **74.3** | 43.7 | +30.6 | [HTML](heaal_D2_llama8b_antipython.html) · [JSON](heaal_D2_llama8b_antipython.json) |
+| **HEAAL D3, mistral7b base (small)** | `mistral:7b-instruct` | default | 0.0 | **54.9** | -54.9 | [HTML](heaal_D3_mistral7b_default.html) · [JSON](heaal_D3_mistral7b_default.json) |
+| **HEAAL D4, mistral7b + anti_python** | `mistral:7b-instruct` | `anti_python` | 0.0 | **54.9** | -54.9 | [HTML](heaal_D4_mistral7b_antipython.html) · [JSON](heaal_D4_mistral7b_antipython.json) |
 
 The 77.6 → 96.1 lift on Sonnet from changing only the authoring prompt (zero other changes) is the headline HEAAL finding: **the safety properties are constant across author models, and a modest prompt tweak closes the authoring-quality gap that would otherwise force fine-tuning.**
 
-The C1 → C2 row shows the opposite — on the 14B mid-tier coder base, `anti_python` produces **zero change** in AIL output (all 50 programs bit-identical across the two runs). The negative instruction washes past qwen14b's pretraining priors at temperature 0. Writeup and failure-mode analysis: [`2026-04-22_heaal_C_qwen14b_analysis.md`](../2026-04-22_heaal_C_qwen14b_analysis.md). Takeaway: **`anti_python` is a frontier-model intervention**, not a universal prompt upgrade. Even so, AIL's grammar-enforced floor keeps the HEAAL Score at 80.9 (+11.3 vs Python) on this tier with no intervention at all.
+The C1 → C2 row shows the opposite — on the 14B mid-tier coder base, `anti_python` produces **zero change** in AIL output (all 50 programs bit-identical across the two runs). The negative instruction washes past qwen14b's pretraining priors at temperature 0. Writeup: [`2026-04-22_heaal_C_qwen14b_analysis.md`](../2026-04-22_heaal_C_qwen14b_analysis.md). Takeaway: **`anti_python` is a frontier-model intervention**, not a universal prompt upgrade. Even so, AIL's grammar-enforced floor keeps the HEAAL Score at 80.9 (+11.3 vs Python) on this tier with no intervention at all.
 
-D1 → D2 confirms the same finding one tier further down (`llama3.1:8b-instruct`, smaller and from a different model family): 45/50 AIL programs bit-identical across the two runs, only A01 differs (recursive vs iterative factorial — both correct). More striking is the Δ column: at this tier the AIL/Python HEAAL Score gap is **+32.1** — the largest of any row in this table. The harness floor matters most exactly when the author model is weakest. Writeup: [`2026-04-22_heaal_D_llama8b_analysis.md`](../2026-04-22_heaal_D_llama8b_analysis.md).
+D1 → D2 confirms the same prompt-boundary finding on `llama3.1:8b-instruct` (different model family, smaller size): 45/50 AIL programs bit-identical, only A01 differs (recursive vs iterative factorial, both correct). The grammar floor still produces a +30.6 AIL/Python gap at this weak tier. Writeup: [`2026-04-22_heaal_D_llama8b_analysis.md`](../2026-04-22_heaal_D_llama8b_analysis.md).
+
+D3 → D4 marks the *boundary* of where the grammar floor can help — `mistral:7b-instruct` produced **zero parseable AIL** across all 50 prompts on both runs (instead emitting Python wrapper code that imports the AIL interpreter and calls `run()` with AIL embedded as a string). The honest score: AIL **0.0**, Python **54.9**. AIL's grammar guarantees only fire when programs *exist*; mistral at 7B base authors no AIL to apply them to. Writeup: [`2026-04-22_heaal_D_mistral7b_analysis.md`](../2026-04-22_heaal_D_mistral7b_analysis.md). The corrected interpretation of the HEAAL claim: **the harness floor matters once the model can write the language at all**; for tiers below that threshold, the path is the AIL track (fine-tune the base, e.g. `ail-coder:7b-v3` at 87.7).
 
 ## Score formula
 

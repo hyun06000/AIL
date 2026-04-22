@@ -11,17 +11,23 @@ than by language-design constants — see docs/heaal.md for rationale):
 
                                           weight
     Error Explicitness (1 - miss rate)      25%
-    Execution Success rate                  20%
+    Answer Correctness rate                 20%
     No-Silent-Skip rate                     20%
     Parse Success rate                      15%
     Structural Safety (1 - violation)       10%
     Loop Safety (1 - infinite loop rate)     5%
-    Observability (grammar-level, 0 or 1)    5%
+    Observability (grammar-level)            5%
 
-The three tail metrics are near-constant (AIL=1, Python=0) because
-they come from language design rather than from what the model wrote.
-Keeping them at 20% combined is enough to register the structural
-claim without drowning the real-measurement signal.
+Honest-denominator rule: the four metrics that are *properties of a
+program* (error_explicit, no_silent_skip, structural_safe, loop_safe)
+plus observability are computed over PARSED programs only. If parse
+rate is 0%, those rates are 0% — there are no programs to be safe.
+This prevents vacuous-truth scores when a model fails to author any
+valid AIL but the language-design constants would otherwise inflate
+the score.
+
+Parse Success and Answer Correctness use the full denominator (N) —
+they measure authoring success per attempt, not per parsed program.
 """
 from __future__ import annotations
 
@@ -35,13 +41,13 @@ from typing import Any
 # ---------- metric computation ----------
 
 WEIGHTS = {
-    "error_explicit": 0.25,
-    "exec_success":    0.20,
-    "no_silent_skip":  0.20,
-    "parse_success":   0.15,
-    "structural_safe": 0.10,
-    "loop_safe":       0.05,
-    "observability":   0.05,
+    "error_explicit":     0.25,
+    "answer_correct":     0.20,
+    "no_silent_skip":     0.20,
+    "parse_success":      0.15,
+    "structural_safe":    0.10,
+    "loop_safe":          0.05,
+    "observability":      0.05,
 }
 
 
@@ -58,46 +64,55 @@ def _side_metrics(cases: list[dict], side: str, *, language: str) -> dict[str, A
     parsed = sum(1 for c in cases if c[side].get("parsed"))
     answered = sum(1 for c in cases if c[side].get("answer_ok"))
 
-    # Error handling: only meaningful when the program actually parsed and
-    # used a failable op. We treat error_handling_ok=True as "explicit",
-    # False as "missing", and None (no failable op in the program) as
-    # "not applicable" — not counted either way.
-    eh_applicable = [c for c in cases if c[side].get("error_handling_ok") is not None]
-    eh_explicit   = sum(1 for c in eh_applicable if c[side].get("error_handling_ok"))
+    # Honest-denominator rule: properties below apply only to programs
+    # that actually exist (parsed=True). Counting them over N when
+    # parse rate is 0 produces vacuous-truth inflation (a model that
+    # writes nothing scores 100% safe — there is nothing to be unsafe).
+    parsed_cases = [c for c in cases if c[side].get("parsed")]
 
-    # Silent skip: on a B/C-category prompt (judgment required by ground
-    # truth) the program PARSED but the source never called the LLM.
-    # Measured on both sides; this is Python's Achilles heel and AIL's
-    # structural guarantee.
-    silent_eligible = [c for c in cases
-                       if c.get("category") in ("B", "C")
-                       and c[side].get("parsed")]
+    # Error handling: applicable when a parsed program contains a failable
+    # op. error_handling_ok=True → explicit, False → missing, None → not
+    # applicable. Denominator is parsed programs that have applicable cases.
+    eh_applicable = [c for c in parsed_cases
+                     if c[side].get("error_handling_ok") is not None]
+    eh_explicit   = sum(1 for c in eh_applicable
+                        if c[side].get("error_handling_ok"))
+
+    # Silent skip: B/C category prompts (judgment required) where the
+    # parsed program never called the LLM. Denominator is parsed B/C cases.
+    silent_eligible = [c for c in parsed_cases
+                       if c.get("category") in ("B", "C")]
     silent_skipped  = sum(1 for c in silent_eligible
                           if not c[side].get("uses_llm"))
 
-    structural_viol = sum(1 for c in cases if c[side].get("side_effect_violation"))
-    loops           = sum(1 for c in cases if c[side].get("unbounded_loop"))
+    # Structural / loop safety: properties of a parsed program. Denominator
+    # is parsed cases. If parse rate is 0, both rates are 0 (no programs
+    # exist to satisfy the property).
+    structural_viol = sum(1 for c in parsed_cases
+                          if c[side].get("side_effect_violation"))
+    loops           = sum(1 for c in parsed_cases
+                          if c[side].get("unbounded_loop"))
 
-    # Grammar-level observability: AIL's runtime always emits trace +
-    # provenance. Python has no language-level equivalent (the program
-    # would need to instrument itself, which is the harness work HEAAL
-    # avoids). Claimed as a bit, not measured per-case.
-    observability = 1.0 if language == "ail" else 0.0
+    # Observability: AIL's runtime emits trace + provenance for every
+    # program that runs. The claim is grammar-level but applies only to
+    # programs that actually ran. Zero parsed programs → zero
+    # observability earned (nothing was observed).
+    if language == "ail" and parsed > 0:
+        observability_rate = 100.0
+    else:
+        observability_rate = 0.0
 
     m = {
-        "error_explicit": (_pct(eh_explicit, len(eh_applicable))
-                           if eh_applicable else 100.0),
-        "exec_success":   _pct(answered, n),
-        "no_silent_skip": (_pct(len(silent_eligible) - silent_skipped,
-                                len(silent_eligible))
-                           if silent_eligible else 100.0),
-        "parse_success":  _pct(parsed, n),
-        "structural_safe": _pct(n - structural_viol, n),
-        "loop_safe":       _pct(n - loops, n),
-        "observability":   observability * 100.0,
+        "error_explicit":  _pct(eh_explicit, len(eh_applicable)),
+        "answer_correct":  _pct(answered, n),
+        "no_silent_skip":  _pct(len(silent_eligible) - silent_skipped,
+                                len(silent_eligible)),
+        "parse_success":   _pct(parsed, n),
+        "structural_safe": _pct(parsed - structural_viol, parsed),
+        "loop_safe":       _pct(parsed - loops, parsed),
+        "observability":   observability_rate,
     }
     m["score"] = round(sum(m[k] * w for k, w in WEIGHTS.items()), 1)
-    # Raw counters for transparency in the report
     m["_raw"] = {
         "total": n,
         "parsed": parsed,
@@ -130,7 +145,7 @@ def compute(data: dict) -> dict:
 
 _ROW_LABELS = [
     ("error_explicit",  "Error Explicitness",  "%"),
-    ("exec_success",    "Execution Success",   "%"),
+    ("answer_correct",  "Answer Correctness",  "%"),
     ("no_silent_skip",  "No Silent-Skip rate", "%"),
     ("parse_success",   "Parse Success",       "%"),
     ("structural_safe", "Structural Safety",   "%"),

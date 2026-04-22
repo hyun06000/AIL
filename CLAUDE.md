@@ -63,15 +63,22 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 ## NOW — 2026-04-22
 
-**버전:** v1.8.6 (main + PyPI). 서빙 모델: `ail-coder:7b-v3`.
+**버전:** v1.8.6 (main + PyPI v1.8.6). 서빙 모델: `ail-coder:7b-v3`.
 
 **트랙 분리됨** (상세: [`docs/heaal/README.md`](docs/heaal/README.md)):
 - **AIL 트랙** — 언어 자체. 기준선 R3/C4: AIL parse 80% / answer 70% vs Python 56%. 이미 Python 돌파.
-- **HEAAL 트랙** — frontier가 훈련 없이 안전한 AIL 쓰게 하는 harness-as-language 증명. E1/E2 target 초과 (Sonnet+anti_python parse 94% / ans 88% / error-omission 0%).
+- **HEAAL 트랙** — frontier가 훈련 없이 안전한 AIL 쓰게 하는 harness-as-language 증명. E1/E2 target 초과.
 
-**최신 발견** (Stage C): `anti_python`은 frontier-only intervention. mid-tier(`qwen2.5-coder:14b`)에서는 default와 anti_python 출력이 bit-identical. 그래도 문법 강제로 HEAAL Score 80.9 vs Py 69.6 유지.
+**HEAAL 경계 특성화 완료 (Stage C+D+D'):**
+- **Frontier (Sonnet 4.5+anti_python):** AIL 96.1 vs Py 75.9 (+20.2)
+- **Mid-tier (qwen14b):** AIL 80.9 vs Py 69.6 (+11.3) — anti_python 효과 0
+- **Small but parses (llama8b):** AIL 74.3 vs Py 43.7 (+30.6)
+- **Below parse threshold (mistral7b):** AIL **0.0** vs Py 54.9 (-54.9) — 경계 도달, fine-tune 필요
+- 결론: grammar floor는 모델이 parse 임계 넘을 때만 작동. 그 이하는 AIL 트랙(fine-tune)의 영역.
 
-**PyPI 미배포 변경:** 없음. dev = main = PyPI 동기화됨.
+**점수 방법론 audit (2026-04-22):** `heaal_score.py`의 vacuous-truth 버그 발견 + 수정. 4개 program-property 메트릭을 `/N`이 아니라 `/parsed`로 계산. 발표된 점수 중 R3 v3 fine-tune의 Python이 48.5→58.0으로 정정 (Δ +39.2 → +29.7). AIL 점수는 모두 변동 없음. 전체 감사: [`docs/benchmarks/2026-04-22_score_audit.md`](docs/benchmarks/2026-04-22_score_audit.md).
+
+**PyPI 미배포 변경:** `heaal_score.py` 수정. 다음 태그 v1.8.7 필요.
 
 ---
 
