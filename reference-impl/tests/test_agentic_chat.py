@@ -151,3 +151,23 @@ def test_chat_payload_coercion_handles_code_fence():
     raw = "```json\n{\"intent_md\": null, \"app_ail\": \"x\", \"summary\": \"ok\"}\n```"
     payload = _coerce_to_chat_payload(raw)
     assert payload["app_ail"] == "x"
+
+
+def test_chat_examples_match_adapter_format():
+    """Catches the v1.9.6 regression where _chat_examples returned
+    dicts but the AnthropicAdapter unpacks examples as
+    (input, output) tuples — causing every auto-fix retry to crash
+    with 'too many values to unpack' before the user saw any fix.
+    Same contract as test_diagnose_examples_match_adapter_format."""
+    from ail.agentic.chat import _chat_examples
+    examples = _chat_examples()
+    assert examples, "should have at least one example"
+    for example in examples:
+        assert len(example) == 2, (
+            f"each example must be a 2-tuple (inputs_list, output); "
+            f"got {len(example)}"
+        )
+        inp, _out = example
+        assert isinstance(inp, list), (
+            f"inputs side must be a list, got {type(inp).__name__}"
+        )

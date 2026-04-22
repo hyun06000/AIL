@@ -4,6 +4,65 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.7 — 2026-04-23
+
+Two fixes from hyun06000's `usd-now` test on v1.9.6. The headline:
+v1.9.5's two L2 v2 primitives (`perform clock.now()` + the
+http.get authoring nudge) **both verified** in production —
+Sonnet wrote `perform http.get("https://api.exchangerate-api.com/...")`
+and `perform clock.now()` exactly as steered, no fabrication, no
+hardcoded timestamp. v1.9.7 closes the two adjacent issues that
+emerged.
+
+### Fixed — `chat_apply` (and therefore `--auto-fix`) crashed every time
+
+- `ail/agentic/chat.py::_chat_examples()` returned dicts where the
+  AnthropicAdapter (and others) iterate examples as `(input, output)`
+  tuples. Every chat call therefore raised
+  `ValueError: too many values to unpack (expected 2)` inside the
+  adapter. `--auto-fix N` showed it via the friendly logger
+  ("AI가 수정안을 내놓지 못했어요: ValueError: ..."), and `ail chat`
+  on a real project would crash the same way.
+- Same shape mismatch was fixed in `diagnosis.py` at v1.9.2; the
+  parallel hole in `chat.py` survived because no path exercised
+  it until hyun06000 hit `--auto-fix 2`.
+- Added a regression test that asserts the example contract
+  matches what the adapter expects (mirror of the diagnosis
+  contract test from v1.9.2).
+
+### Improved — authoring prompt: signal errors via Result, not strings
+
+- In hyun06000's `usd-now` Sonnet wrote
+  `if is_error(usd_result) { return unwrap_error(usd_result) }`
+  for the empty-input and "abc" test cases. The function returns
+  a Korean error string, which is fine UX in a browser — but the
+  agentic test runner inspects the return shape (Result error vs
+  plain Text) to decide whether the run "errored" or "succeeded".
+  A returned string looks like success.
+- New section in the default authoring goal: SIGNALING ERROR FROM
+  entry main. The rule is "return the Result error directly, NOT
+  `unwrap_error(...)`". Same for success — prefer `ok(value)` so
+  the server / test runner can introspect uniformly. The HTTP
+  layer already unwraps Result for end-user display, so users
+  still see the same error text.
+
+### Tests
+
+- 331 tests pass (was 330). +1 chat-examples contract test.
+
+### Verified by this release
+
+- v1.9.5 fix #1 (`perform http.get`): ✅ Sonnet picked the effect
+  on the real exchangerate-api URL with no `intent fetch_*`
+  delegation.
+- v1.9.5 fix #2 (`perform clock.now()`): ✅ Sonnet used the new
+  primitive instead of the `"2024-01-15"`-style hardcoded literal
+  the news-dashboard case study showed.
+- v1.9.6 i18n (FriendlyLogger Korean): ✅ Whole session in Korean
+  on a Korean INTENT.md, including the new auto-fix lines.
+
+---
+
 ## v1.9.6 — 2026-04-23
 
 Whole-session Korean localization for the FriendlyLogger. Until

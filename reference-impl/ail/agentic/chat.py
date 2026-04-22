@@ -183,18 +183,29 @@ def _parse_json_loosely(text: str) -> dict[str, Any]:
     return json.loads(candidate)
 
 
-def _chat_examples() -> list[dict[str, Any]]:
-    """Tiny example set so the model knows the JSON shape."""
+def _chat_examples() -> list[tuple[list[dict[str, Any]], Any]]:
+    """Tiny example set so the model knows the JSON shape.
+
+    Returned as `(inputs_list, output)` tuples matching the adapter
+    contract — the AnthropicAdapter (and others) iterate examples via
+    `for inp, out in examples[:5]`. Returning dicts here would crash
+    every chat call with `ValueError: too many values to unpack`. The
+    same shape mismatch was fixed in diagnosis.py at v1.9.2; this
+    parallel hole survived until v1.9.6 testing exposed it during
+    auto-fix retries.
+    """
     return [
-        {
-            "request": "make the empty-input error message Korean",
-            "current_intent_md": "# greeter\n\n## Tests\n- \"\" → error\n",
-            "current_app_ail": (
-                "entry main(input: Text) {\n"
-                "    if length(input) == 0 { return error(\"empty\") }\n"
-                "    return input\n}\n"
-            ),
-            "output": {
+        (
+            [{
+                "request": "make the empty-input error message Korean",
+                "current_intent_md": "# greeter\n\n## Tests\n- \"\" → error\n",
+                "current_app_ail": (
+                    "entry main(input: Text) {\n"
+                    "    if length(input) == 0 { return error(\"empty\") }\n"
+                    "    return input\n}\n"
+                ),
+            }],
+            {
                 "intent_md": None,
                 "app_ail": (
                     "entry main(input: Text) {\n"
@@ -203,5 +214,5 @@ def _chat_examples() -> list[dict[str, Any]]:
                 ),
                 "summary": "Translated the empty-input error message to Korean.",
             },
-        },
+        ),
     ]
