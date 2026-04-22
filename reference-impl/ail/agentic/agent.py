@@ -325,7 +325,17 @@ def bring_up(
     `serve=False` returns after authoring + tests (useful in CI / tests
     of the agent itself).
     """
-    logger = logger or make_logger(log_style)
+    # Detect the INTENT.md language BEFORE creating the logger so the
+    # whole session localizes, not just the authoring-failure path.
+    # Korean INTENT → Korean logs; anything else → English.
+    from .ui import detect_language as _detect
+    intent_text_for_lang = ""
+    try:
+        intent_text_for_lang = project.intent_path.read_text(encoding="utf-8")
+    except Exception:
+        pass
+    lang = _detect(intent_text_for_lang)
+    logger = logger or make_logger(log_style, language=lang)
     logger.header(project.root.name)
 
     spec = project.read_intent()

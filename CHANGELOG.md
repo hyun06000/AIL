@@ -4,6 +4,52 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.6 — 2026-04-23
+
+Whole-session Korean localization for the FriendlyLogger. Until
+v1.9.5 only the authoring-failure path localized; every other log
+line ("Reading INTENT.md", "Running tests", "Tests didn't pass —
+not starting the service", "Service is live", ...) stayed English
+even when INTENT.md was Korean. That's half-translated output —
+worse than a fully English interface for the audience we target.
+
+Surfaced by hyun06000: on a Korean `usd-now` project, the
+authoring-failure path showed Korean diagnosis but the test
+summary and the abort sentence were in English.
+
+### Changed
+
+- **`FriendlyLogger` is now fully bilingual (Korean / English).**
+  A `_STRINGS` table maps every log-line key to both languages.
+  The logger instance takes a `language` hint on construction.
+- **`bring_up` detects language from INTENT.md once at entry** and
+  passes it through to `make_logger`. Korean INTENT → whole
+  session in Korean: project header, reading-intent line, author
+  start / done, test results ("성공 기대 → 성공", "에러 기대 → 에러"),
+  summary ("4개 중 2개 통과 — 2개 아직 실패"), the tests-aborted
+  block, watcher warnings, serving banner, port-collision error,
+  auto-fix progress lines, shutdown.
+- **Pluralization handled.** English pluralizes via `{s}` suffix
+  resolved from the count argument; Korean uses the same phrase
+  for singular and plural (linguistically correct).
+
+### Compatibility
+
+- `CompactLogger` stays language-neutral (it exists for scripts
+  and CI that grep for `[PASS]`/`[FAIL]` markers). Unchanged.
+- `--log compact` output is unchanged.
+- `make_logger(style)` still works with one argument; the new
+  `language` keyword is optional and defaults to English.
+
+### Tests
+
+- Still 330 tests. No new test file — each log string's layout is
+  already indirectly covered by the agent end-to-end tests; the
+  i18n change is a per-call lookup with defensive fallback to the
+  English table for any missing Korean key.
+
+---
+
 ## v1.9.5 — 2026-04-23
 
 First two of the six L2 v2 primitives surfaced by the 2026-04-23

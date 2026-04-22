@@ -28,11 +28,11 @@ from typing import Any, Optional
 
 # --------------------------------------------------------- factory
 
-def make_logger(style: str = "friendly") -> "Logger":
+def make_logger(style: str = "friendly", language: str = "en") -> "Logger":
     style = (style or "friendly").lower()
     if style == "compact":
         return CompactLogger()
-    return FriendlyLogger()
+    return FriendlyLogger(language=language)
 
 
 def detect_language(text: str) -> str:
@@ -46,6 +46,112 @@ def detect_language(text: str) -> str:
         if "\uac00" <= ch <= "\ud7a3":
             return "ko"
     return "en"
+
+
+# All FriendlyLogger strings, keyed by (language, key). Korean is not
+# pluralized — the same phrase covers both singular and plural counts.
+# English uses the `{n}` count as the plural signal (we test inline).
+_STRINGS: dict[str, dict[str, str]] = {
+    "en": {
+        "reading_intent":    "Reading INTENT.md",
+        "behavior_count":    "{n} behavior rule{s}",
+        "test_count":        "{n} test case{s}",
+        "authoring_start":   "Writing the program",
+        "authoring_using":   "using {model}",
+        "authoring_done":    "Program ready",
+        "authoring_saved":   "saved to {name}",
+        "using_existing":    "Using existing {name}",
+        "existing_bytes":    "{n} bytes on disk",
+        "tests_start":       "Running tests",
+        "expect_succeed":    "succeed",
+        "expect_error":      "error",
+        "observed_succeed":  "succeeded",
+        "observed_error":    "errored",
+        "empty_input":       "empty input",
+        "expected_to":       "expected to {verb}",
+        "all_passed":        "{n} of {t} passed",
+        "some_failed":       "{n} of {t} passed — {f} still failing",
+        "no_tests":          "(no tests declared)",
+        "tests_aborted_1":   "Tests didn't pass — not starting the service.",
+        "tests_aborted_2":   "Edit INTENT.md or app.ail, or re-run with --auto-fix N.",
+        "watching":          "Watching INTENT.md and app.ail for edits.",
+        "intent_changed":    "INTENT.md changed — re-reading ({t} tests){suffix}",
+        "also_app":          " (app.ail changed too)",
+        "app_changed":       "app.ail changed — re-checking",
+        "watcher_warning":
+            "Heads up: {f} of {t} tests now failing. The service is still "
+            "running, but requests may misbehave until the next edit fixes it.",
+        "serving_header":    "Service is live",
+        "serving_open_1":    "Open that URL in a browser to use it — there's a",
+        "serving_open_2":    "text box waiting for you.",
+        "serving_edit_1":    "Edit INTENT.md and save: the service updates itself.",
+        "serving_edit_2":    "No restart. No re-run. The tab you just opened keeps",
+        "serving_edit_3":    "working.",
+        "serving_stop":      "Press Ctrl-C here to stop the service.",
+        "shutting_down":     "Shutting down.",
+        "bind_failed_1":     "Could not open http://{host}:{port}/",
+        "bind_failed_2":
+            "Another ail project on the same port? Change the port in "
+            "INTENT.md's Deployment section, or pass --port.",
+        "auto_fix_attempt":
+            "Trying to fix the program (attempt {a} of {m}, {f} "
+            "test{s} failing)…",
+        "auto_fix_call_failed": "The AI couldn't propose a fix: {error}",
+        "auto_fix_declined":
+            "The AI decided nothing needed to change. Leaving the program as is.",
+        "auto_fix_succeeded":  "Fixed after {a} attempt{s}.",
+    },
+    "ko": {
+        "reading_intent":    "INTENT.md 읽는 중",
+        "behavior_count":    "동작 규칙 {n}개",
+        "test_count":        "테스트 {n}개",
+        "authoring_start":   "프로그램 쓰는 중",
+        "authoring_using":   "사용하는 AI: {model}",
+        "authoring_done":    "프로그램 준비 완료",
+        "authoring_saved":   "저장됨: {name}",
+        "using_existing":    "기존 {name} 사용",
+        "existing_bytes":    "디스크에 {n} 바이트",
+        "tests_start":       "테스트 돌리는 중",
+        "expect_succeed":    "성공",
+        "expect_error":      "에러",
+        "observed_succeed":  "성공",
+        "observed_error":    "에러",
+        "empty_input":       "빈 입력",
+        "expected_to":       "{verb} 기대",
+        "all_passed":        "{t}개 중 {n}개 통과",
+        "some_failed":       "{t}개 중 {n}개 통과 — {f}개 아직 실패",
+        "no_tests":          "(선언된 테스트 없음)",
+        "tests_aborted_1":   "테스트가 통과하지 못해서 서비스를 시작하지 않아요.",
+        "tests_aborted_2":
+            "INTENT.md나 app.ail을 수정해 보거나, --auto-fix N 옵션을 붙여 "
+            "다시 실행해 보세요.",
+        "watching":          "INTENT.md와 app.ail의 변경을 지켜보는 중.",
+        "intent_changed":    "INTENT.md가 바뀌었어요 — 다시 읽는 중 (테스트 {t}개){suffix}",
+        "also_app":          " (app.ail도 함께 바뀜)",
+        "app_changed":       "app.ail이 바뀌었어요 — 다시 확인하는 중",
+        "watcher_warning":
+            "주의: 테스트 {t}개 중 {f}개가 지금 실패해요. 서비스는 계속 "
+            "돌아가지만, 다음 편집이 고칠 때까지 요청이 이상하게 동작할 수 있어요.",
+        "serving_header":    "서비스 준비 완료",
+        "serving_open_1":    "브라우저에서 이 주소를 열어 보세요 — 입력창이",
+        "serving_open_2":    "기다리고 있어요.",
+        "serving_edit_1":    "INTENT.md를 편집하고 저장하면 서비스가 스스로 갱신됩니다.",
+        "serving_edit_2":    "재시작이 필요 없고, 방금 연 탭도 계속",
+        "serving_edit_3":    "작동합니다.",
+        "serving_stop":      "여기서 Ctrl-C를 누르면 서비스가 멈춰요.",
+        "shutting_down":     "종료 중.",
+        "bind_failed_1":     "http://{host}:{port}/ 를 열 수 없어요",
+        "bind_failed_2":
+            "같은 포트에서 이미 다른 ail 프로젝트가 돌고 있나요? INTENT.md의 "
+            "Deployment 섹션에서 포트를 바꾸거나 --port 옵션으로 지정하세요.",
+        "auto_fix_attempt":
+            "프로그램을 고치는 중 ({a}/{m}번째 시도, 테스트 {f}개 실패)…",
+        "auto_fix_call_failed": "AI가 수정안을 내놓지 못했어요: {error}",
+        "auto_fix_declined":
+            "AI가 바꿀 게 없다고 판단했어요. 프로그램은 그대로 둡니다.",
+        "auto_fix_succeeded":  "{a}번 시도 후 고쳤어요.",
+    },
+}
 
 
 def _static_authoring_fallback(language: str) -> list[str]:
@@ -128,7 +234,23 @@ def _w(s: str = "") -> None:
 
 
 class FriendlyLogger(Logger):
-    """Breathing room, sentences, ✓ / ✗ marks. The default."""
+    """Breathing room, sentences, ✓ / ✗ marks. The default.
+
+    Localized: constructor takes a language hint (typically derived
+    from INTENT.md via detect_language). English and Korean are
+    first-class; unknown languages fall back to English.
+    """
+
+    def __init__(self, language: str = "en") -> None:
+        self._lang = language if language in _STRINGS else "en"
+
+    def _s(self, key: str, **kw) -> str:
+        template = _STRINGS[self._lang].get(key) or _STRINGS["en"][key]
+        # `{s}` is the English plural suffix; resolved here so call
+        # sites can pass `n=...` and get correct pluralization.
+        if "{s}" in template and "s" not in kw:
+            kw["s"] = "s" if kw.get("n", kw.get("t", kw.get("a", 0))) != 1 else ""
+        return template.format(**kw) if kw else template
 
     def header(self, project_name: str) -> None:
         _w()
@@ -137,29 +259,29 @@ class FriendlyLogger(Logger):
         _w()
 
     def reading_intent(self, behavior: int, tests: int) -> None:
-        _w(f"  Reading INTENT.md")
+        _w(f"  {self._s('reading_intent')}")
         parts = []
         if behavior:
-            parts.append(f"{behavior} behavior rule{'s' if behavior != 1 else ''}")
+            parts.append(self._s("behavior_count", n=behavior))
         if tests:
-            parts.append(f"{tests} test case{'s' if tests != 1 else ''}")
+            parts.append(self._s("test_count", n=tests))
         if parts:
             _w(f"     {' · '.join(parts)}")
         _w()
 
     def authoring_start(self, adapter_desc: str) -> None:
-        _w(f"  Writing the program")
-        _w(f"     using {adapter_desc}")
+        _w(f"  {self._s('authoring_start')}")
+        _w(f"     {self._s('authoring_using', model=adapter_desc)}")
         _w()
 
     def authoring_done(self, path: Path) -> None:
-        _w(f"  Program ready")
-        _w(f"     saved to {path.name}")
+        _w(f"  {self._s('authoring_done')}")
+        _w(f"     {self._s('authoring_saved', name=path.name)}")
         _w()
 
     def using_existing(self, path: Path, size: int) -> None:
-        _w(f"  Using existing {path.name}")
-        _w(f"     {size} bytes on disk")
+        _w(f"  {self._s('using_existing', name=path.name)}")
+        _w(f"     {self._s('existing_bytes', n=size)}")
         _w()
 
     def authoring_failed(self, *, adapter_desc: str,
@@ -201,94 +323,89 @@ class FriendlyLogger(Logger):
         _w()
 
     def tests_start(self, count: int) -> None:
-        _w(f"  Running tests")
+        _w(f"  {self._s('tests_start')}")
 
     def test_result(self, *, input_text: str, expect_ok: bool,
                     ran_ok: bool, passed: bool) -> None:
         mark = "✓" if passed else "✗"
-        expect = "succeed" if expect_ok else "error"
-        observed = "succeeded" if ran_ok else "errored"
-        shown = repr(input_text) if input_text else "empty input"
+        expect = self._s("expect_succeed" if expect_ok else "expect_error")
+        observed = self._s("observed_succeed" if ran_ok else "observed_error")
+        shown = repr(input_text) if input_text else self._s("empty_input")
         if len(shown) > 40:
             shown = shown[:37] + "..."
-        _w(f"     {mark} {shown:<42} expected to {expect:<8} → {observed}")
+        expect_phrase = self._s("expected_to", verb=expect)
+        _w(f"     {mark} {shown:<42} {expect_phrase:<20} → {observed}")
 
     def tests_summary(self, passed: int, total: int) -> None:
         _w()
         if total == 0:
-            _w(f"     (no tests declared)")
+            _w(f"     {self._s('no_tests')}")
         elif passed == total:
-            _w(f"     {passed} of {total} passed")
+            _w(f"     {self._s('all_passed', n=passed, t=total)}")
         else:
-            _w(f"     {passed} of {total} passed — {total - passed} still failing")
+            _w(f"     {self._s('some_failed', n=passed, t=total, f=total-passed)}")
         _w()
 
     def tests_aborted(self) -> None:
-        _w(f"  Tests didn't pass — not starting the service.")
-        _w(f"     Edit INTENT.md or app.ail, or re-run with --auto-fix N.")
+        _w(f"  {self._s('tests_aborted_1')}")
+        _w(f"     {self._s('tests_aborted_2')}")
         _w()
 
     def watcher_watching(self) -> None:
-        _w(f"  Watching INTENT.md and app.ail for edits.")
+        _w(f"  {self._s('watching')}")
         _w()
 
     def watcher_intent_changed(self, tests: int, also_app: bool) -> None:
         _w()
-        suffix = " (app.ail changed too)" if also_app else ""
-        _w(f"  INTENT.md changed — re-reading ({tests} tests){suffix}")
+        suffix = self._s("also_app") if also_app else ""
+        _w(f"  {self._s('intent_changed', t=tests, suffix=suffix)}")
 
     def watcher_app_changed(self) -> None:
         _w()
-        _w(f"  app.ail changed — re-checking")
+        _w(f"  {self._s('app_changed')}")
 
     def watcher_warning(self, failed: int, total: int) -> None:
-        _w(f"     Heads up: {failed} of {total} tests now failing. "
-           f"The service is still running, but requests may misbehave "
-           f"until the next edit fixes it.")
+        _w(f"     {self._s('watcher_warning', f=failed, t=total)}")
         _w()
 
     def serving(self, host: str, port: int) -> None:
         url = f"http://{host}:{port}/"
-        _w(f"  Service is live")
+        _w(f"  {self._s('serving_header')}")
         _w(f"     {url}")
-        _w(f"     Open that URL in a browser to use it — there's a")
-        _w(f"     text box waiting for you.")
+        _w(f"     {self._s('serving_open_1')}")
+        _w(f"     {self._s('serving_open_2')}")
         _w()
-        _w(f"     Edit INTENT.md and save: the service updates itself.")
-        _w(f"     No restart. No re-run. The tab you just opened keeps")
-        _w(f"     working.")
+        _w(f"     {self._s('serving_edit_1')}")
+        _w(f"     {self._s('serving_edit_2')}")
+        _w(f"     {self._s('serving_edit_3')}")
         _w()
-        _w(f"     Press Ctrl-C here to stop the service.")
+        _w(f"     {self._s('serving_stop')}")
         _w()
 
     def shutting_down(self) -> None:
         _w()
-        _w(f"  Shutting down.")
+        _w(f"  {self._s('shutting_down')}")
 
     def port_bind_failed(self, host: str, port: int, reason: str) -> None:
         _w()
-        _w(f"  Could not open http://{host}:{port}/")
+        _w(f"  {self._s('bind_failed_1', host=host, port=port)}")
         _w(f"     {reason}")
-        _w(f"     Another ail project on the same port? Change the port "
-           f"in INTENT.md's Deployment section, or pass --port.")
+        _w(f"     {self._s('bind_failed_2')}")
         _w()
 
     def auto_fix_attempt(self, attempt: int, max_attempts: int,
                          failing: int) -> None:
         _w()
-        _w(f"  Trying to fix the program (attempt {attempt} of "
-           f"{max_attempts}, {failing} test{'s' if failing != 1 else ''} "
-           f"failing)…")
+        _w(f"  {self._s('auto_fix_attempt', a=attempt, m=max_attempts, f=failing, n=failing)}")
 
     def auto_fix_call_failed(self, error: str) -> None:
-        _w(f"     The AI couldn't propose a fix: {error}")
+        _w(f"     {self._s('auto_fix_call_failed', error=error)}")
 
     def auto_fix_model_declined(self) -> None:
-        _w(f"     The AI decided nothing needed to change. Leaving the "
-           f"program as is.")
+        _w(f"     {self._s('auto_fix_declined')}")
 
     def auto_fix_succeeded(self, attempts: int) -> None:
-        _w(f"  Fixed after {attempts} attempt{'s' if attempts != 1 else ''}.")
+        _w(f"  {self._s('auto_fix_succeeded', a=attempts, n=attempts)}")
         _w()
 
 
