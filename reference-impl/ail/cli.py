@@ -158,7 +158,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"Initialized AIL project at {proj.root}")
         print(f"  edit:  {proj.intent_path}")
-        print(f"  then:  ail up {args.name}")
+        print(f"  then:  ail up {args.name}        (from here)")
+        print(f"     or: cd {args.name} && ail up  (from inside the project)")
         return 0
 
     if args.cmd == "up":

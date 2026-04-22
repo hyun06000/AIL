@@ -237,6 +237,19 @@ def bring_up(
             source = _author_app(project, spec, max_retries=max_retries)
         except AuthoringError as e:
             print(f"author failed: {e}", file=sys.stderr)
+            print(f"\nWhat to try:", file=sys.stderr)
+            print(f"  1. The task in INTENT.md may need `intent` (LLM "
+                  f"judgment) rather than `pure fn` (pure computation). "
+                  f"Add a line like 'Use a language model to analyze' "
+                  f"and re-run.", file=sys.stderr)
+            print(f"  2. Use a stronger author model — set "
+                  f"ANTHROPIC_API_KEY (or OPENAI_API_KEY) and re-run.",
+                  file=sys.stderr)
+            print(f"  3. Pass --auto-fix 2 so the agent retries with "
+                  f"the parse error fed back in.", file=sys.stderr)
+            print(f"  4. Write {project.APP_FILE} by hand and re-run "
+                  f"`ail up` — the agent will skip authoring when the "
+                  f"file has content.", file=sys.stderr)
             return 1
         project.write_app_source(source)
         print(f"[{project.root.name}] wrote {project.app_path}", file=sys.stderr)

@@ -135,19 +135,34 @@ def _unescape(s: str) -> str:
              .replace("\\\\", "\\"))
 
 
+def _find_arrow(text: str) -> Optional[int]:
+    """Locate the first arrow separator. Accepts the unicode arrow →
+    as well as the ASCII fallbacks -> and =>, so users who don't have
+    a convenient way to type → don't have their tests silently
+    dropped."""
+    for arrow in ("→", "->", "=>"):
+        i = text.find(arrow)
+        if i >= 0:
+            return i
+    return None
+
+
 def _parse_test_bullet(text: str) -> Optional[TestCase]:
     """Parse one ## Tests bullet into a TestCase. Returns None if the
     bullet doesn't have the recognized shape."""
     # Find the first quoted string as input.
     m = re.search(r'[\"\u201c\u201d]([^\"\u201c\u201d]*)[\"\u201c\u201d]', text)
     if not m:
-        # Fall back to "input → ..." without quotes
-        if "→" in text:
-            inp, _, rest = text.partition("→")
-            input_text = inp.strip().strip("`").strip("'")
-            outcome = rest
-        else:
+        # Fall back to "input → ..." without quotes. Supports → / -> / =>.
+        arrow_at = _find_arrow(text)
+        if arrow_at is None:
             return None
+        inp = text[:arrow_at]
+        # Skip over the arrow glyph (length varies between unicode and ASCII).
+        rest_start = arrow_at + (1 if text[arrow_at] == "→" else 2)
+        rest = text[rest_start:]
+        input_text = inp.strip().strip("`").strip("'")
+        outcome = rest
     else:
         input_text = _unescape(m.group(1))
         outcome = text[m.end():]

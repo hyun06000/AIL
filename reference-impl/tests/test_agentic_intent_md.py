@@ -118,6 +118,21 @@ def test_no_title_falls_back_to_default_name():
     assert spec.name == "myapp"
 
 
+def test_ascii_arrow_accepted_in_test_bullets():
+    """Users without → on their keyboard should not lose tests silently."""
+    text = ('# x\n\nDoes a thing.\n\n## Tests\n'
+            '- 낇끌꿍깡 -> 에러\n'
+            '- foo => succeed\n'
+            '- "with quotes" → succeed\n')
+    spec = parse_intent_md(text)
+    assert len(spec.tests) == 3
+    assert spec.tests[0].input == "낇끌꿍깡"
+    assert spec.tests[0].expect_ok is False
+    assert spec.tests[1].input == "foo"
+    assert spec.tests[1].expect_ok is True
+    assert spec.tests[2].input == "with quotes"
+
+
 def test_test_input_unescapes_common_sequences():
     """Users typing \\n in INTENT.md almost always mean a real newline."""
     text = ('# x\n\nDoes a thing.\n\n## Tests\n'
