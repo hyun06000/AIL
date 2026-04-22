@@ -75,6 +75,29 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 ---
 
+## ROADMAP — 3층 비전 (HEAAL 패러다임을 끝까지 밀기)
+
+HEAAL은 언어 층 한 곳에서 끝나지 않는다. 하네스가 문법인 언어 위에, 하네스가 스케줄링인 런타임을 얹고, 하네스가 커널인 OS까지 가야 패러다임이 닫힌다. 세 층 모두 같은 원리: *constraint as construction, not configuration*.
+
+**L1 — AIL Language (현재 위치, v1.8.x)**
+- 문법 안에 harness가 들어감: `pure fn` 순도, `Result` 강제, `while` 부재, `evolve rollback_on` 필수.
+- 현재 초점: fine-tune 기준선 R3 (70%) + HEAAL 매니페스토 확산 + 외부 피드백 수렴.
+- 완료 조건: 저자 모델 독립적으로 AIL이 Python보다 안전한 코드를 생성한다는 것을 3+ 모델 가족에서 확증 (Claude Sonnet ✅, frontier others ?, mid-tier boundary ?).
+
+**L2 — AIRT Runtime (현재 비전 문서만, [`runtime/00-airt.md`](runtime/00-airt.md))**
+- 런타임 안에 harness가 들어감: 실행이 instruction sequence가 아니라 intent-graph walk. 전략 선택이 confidence와 제약으로 결정되고, 모든 결정이 ledger에 기록됨.
+- 현재 상태: `reference-impl/ail/runtime/executor.py`가 L2의 축소판. intent dispatch, confidence 전파, trace 원장, parallel execution은 동작. adaptive strategy catalog, capacity budgeting, 분산 execution은 아직.
+- 착수 조건: L1에서 "문법이 이미 harness다"가 입증된 뒤에만 시작. 지금은 추후.
+
+**L3 — HEAAOS (NOOS를 HEAAL 관점으로 리브랜딩 예정, [`os/00-noos.md`](os/00-noos.md))**
+- OS 안에 harness가 들어감: 기본 추상화가 file/process가 아니라 intent/context/capacity/authority. 커널이 모든 effect를 ledger에 정당화하고, capability를 intent에 바인딩.
+- 현재 상태: NOOS 비전 문서 4종 (`os/00-03`). HEAAL 매니페스토 이전에 쓰여 프레이밍이 오래됨. L2 착수 후 HEAAOS로 재작성 필요.
+- **이름 결정:** NOOS (Neural-Oriented OS)를 **HEAAOS (HEAAL Operating System)**로 교체. 이유: HEAAL이 프로젝트 전체의 북극성이 됐으므로 OS층도 그 이름 아래 통일.
+
+**층간 의존:** L1이 흔들리면 L2는 구축 근거가 없고, L2 없이는 L3가 L1 문법을 커널에서 강제할 수 없다. 위층으로 뛰지 말 것. L1 기준선 지표가 Python을 확실히 넘고, 3+ 모델 가족에서 HEAAL이 입증된 뒤 L2 착수.
+
+---
+
 ## NEXT — 선택지 (긴급도 순 아님, hyun06000 지시 대기)
 
 1. **dev → main 머지 + v1.8.6 태그.** 쌓인 변경을 안정화. `--save-source`, HEAAL 대시보드, `ail_parse_check`, parse_json이 아직 PyPI에 없음.
