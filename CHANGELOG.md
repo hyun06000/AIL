@@ -4,6 +4,87 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.8.7 — 2026-04-22
+
+Methodology correction + new boundary data. No grammar changes; spec
+freeze still in effect. The headline is honesty: a vacuous-truth bug
+in the HEAAL Score formula was caught and fixed before any of the
+inflated numbers went into a manifesto or a public talk. Some
+previously published scores moved (the AIL column unchanged in every
+row; the Python column rose by 1–10 points in three rows). The
+corrected scoring also lets us publish the mistral7b row, which
+identifies the empirical boundary of the grammar-floor claim.
+
+### Tooling correction
+
+- **`reference-impl/tools/heaal_score.py`** — per-program metrics
+  (Error Explicitness, Structural Safety, Loop Safety, Observability)
+  now use the **parsed** count as their denominator, not **N**.
+  Previously, when parse rate was 0, those rates defaulted to 100%
+  — a model that authored zero programs scored higher on safety
+  than a model that authored a few buggy ones. Vacuous truth.
+  Parse Success and Answer Correctness keep N as denominator since
+  they measure authoring-success-per-attempt.
+
+  The variable named `exec_success` was actually computed from
+  `answer_ok` (correct final answer). Relabeled the displayed metric
+  to **"Answer Correctness"** so the displayed name matches what
+  the code computes.
+
+  Full audit including before/after table for every published
+  score: [`docs/benchmarks/2026-04-22_score_audit.md`](docs/benchmarks/2026-04-22_score_audit.md).
+
+### Documentation corrections
+
+- **README.md, docs/why-ail.md, docs/heaal.md (+ ko/, ai.md mirrors)** —
+  the "Python omits error handling 42–86%" claim was based on the
+  old methodology. Corrected range under per-parsed denominator:
+  **12–70%** depending on author model, with a sharper observation
+  that *stronger models often omit more* (they attempt more ambitious
+  code with more failable calls and skip wrapping more of them). The
+  AIL number stays 0% on every tier where AIL parses — measured
+  constant across Anthropic, Alibaba, Meta, and a 7B fine-tune.
+- The headline R3 fine-tune row corrected from 87.7 / 48.5 / +39.2
+  to 87.7 / 58.0 / +29.7. Still well above Python; the gap shrank
+  honestly because Python's per-parsed safety properties are higher
+  than the old methodology credited.
+
+### New benchmark data — HEAAL boundary fully anchored
+
+- **Stage D (`llama3.1:8b-instruct`)** — confirms `anti_python` is a
+  frontier-only intervention on a third model family (Meta after
+  Anthropic Sonnet ✅ and Alibaba Qwen ✅). 45/50 AIL programs
+  bit-identical across default and anti_python runs. HEAAL Score:
+  AIL 74.3 vs Python 43.7 (+30.6) — the largest gap among parsed
+  tiers, demonstrating the grammar floor matters most when the
+  author model is weakest *but still produces parseable output*.
+  Writeup: [`docs/benchmarks/2026-04-22_heaal_D_llama8b_analysis.md`](docs/benchmarks/2026-04-22_heaal_D_llama8b_analysis.md).
+- **Stage D' (`mistral:7b-instruct`)** — identifies the boundary.
+  The model authors zero parseable AIL across both runs; instead it
+  emits Python wrapper code that imports the AIL interpreter and
+  embeds AIL as a string parameter. Under the corrected methodology
+  this honestly scores AIL 0.0 vs Python 54.9. The grammar floor
+  cannot lift programs that don't exist. The remedy for tiers below
+  the parse threshold is the AIL track (fine-tune the base, e.g.
+  `ail-coder:7b-v3`). Writeup:
+  [`docs/benchmarks/2026-04-22_heaal_D_mistral7b_analysis.md`](docs/benchmarks/2026-04-22_heaal_D_mistral7b_analysis.md).
+- **Boundary summary** — [`docs/benchmarks/2026-04-22_heaal_boundary_summary.md`](docs/benchmarks/2026-04-22_heaal_boundary_summary.md)
+  combines C+D+D'+E1 into a single cross-tier table with three
+  regimes and three remedies (frontier → `anti_python`, mid/small
+  with parse → grammar floor, below parse → fine-tune).
+
+### Forward-looking
+
+- **L2 design recorded.** [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md)
+  captures the 2026-04-22 design conversation about what an AIL
+  "project" should look like once it's no longer a one-shot CLI:
+  a folder with a single human-edited `INTENT.md` and an in-project
+  AI agent that owns `app.ail`, tests, ledger, and evolve state.
+  Two commands: `ail init`, `ail up`. No code yet — spec only,
+  pending L1 closure (now done).
+
+---
+
 ## v1.8.6 — 2026-04-22
 
 Small additive release. Makes the AI-written AIL program persistable
