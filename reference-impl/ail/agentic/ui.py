@@ -248,10 +248,17 @@ class FriendlyLogger(Logger):
         _w()
 
     def serving(self, host: str, port: int) -> None:
+        url = f"http://{host}:{port}/"
         _w(f"  Service is live")
-        _w(f"     http://{host}:{port}/")
-        _w(f"     Send text in the request body to get a result.")
-        _w(f"     Press Ctrl-C to stop.")
+        _w(f"     {url}")
+        _w(f"     Open that URL in a browser to use it — there's a")
+        _w(f"     text box waiting for you.")
+        _w()
+        _w(f"     Edit INTENT.md and save: the service updates itself.")
+        _w(f"     No restart. No re-run. The tab you just opened keeps")
+        _w(f"     working.")
+        _w()
+        _w(f"     Press Ctrl-C here to stop the service.")
         _w()
 
     def shutting_down(self) -> None:

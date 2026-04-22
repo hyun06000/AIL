@@ -168,22 +168,15 @@ Then:
 
 ```bash
 ail up word-counter
-# [word-counter] reading INTENT.md (2 behavior bullets, 2 tests)
-# [word-counter] app.ail empty — authoring via `ail ask`...
-# [word-counter] wrote /path/to/word-counter/app.ail
-# [word-counter] running 2 tests...
-#   [PASS] input='hello world' expect_ok=True ran_ok=True
-#   [PASS] input='' expect_ok=False ran_ok=False
-# [word-counter] tests: 2/2 passed
-# [word-counter] serving on http://127.0.0.1:8080/  (POST text body, Ctrl-C to stop)
-
-curl -X POST localhost:8080/ -d "the quick brown fox"
-# 4
-curl -X POST localhost:8080/ -d ""
-# empty input        (HTTP 500)
 ```
 
-Two commands, one editable Markdown file. The AI writes `app.ail`, runs the tests you declared, and starts a server. You never read AIL unless you want to. Every authoring decision, test run, and request is appended to `.ail/ledger.jsonl` for cross-session audit.
+`ail up` authors the program, runs the tests you declared, and starts a service with a browser UI at `http://127.0.0.1:8080/` — a text box, a Send button, a result area. Non-developers don't need to know what `curl` is.
+
+Open that URL in a browser, type "the quick brown fox", hit Send → `4`. Submit an empty input → you get the error message with HTTP 500 under the hood.
+
+For scripts and CLI lovers the same endpoint still accepts `POST /` with a raw text body: `curl -X POST localhost:8080/ -d "hello"`.
+
+Two commands, one editable Markdown file. The AI writes `app.ail`, runs the tests you declared, and starts a service. **Edit INTENT.md and save while the service is running — it re-reads the file, re-runs your tests, and hot-swaps the program. No restart.** Every authoring decision, test run, and request goes into `.ail/ledger.jsonl` for cross-session audit; failed authoring attempts land in `.ail/attempts/` so you (or a future meta-author AI) can see what the model tried.
 
 This is the L2 layer of the HEAAL paradigm — the harness becomes the project structure as well as the grammar. Design notes: [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md). Worked example: [`reference-impl/examples/agentic/word-counter/`](reference-impl/examples/agentic/word-counter/).
 

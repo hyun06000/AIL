@@ -168,22 +168,15 @@ ail init word-counter
 
 ```bash
 ail up word-counter
-# [word-counter] reading INTENT.md (2 behavior bullets, 2 tests)
-# [word-counter] app.ail empty — authoring via `ail ask`...
-# [word-counter] wrote /path/to/word-counter/app.ail
-# [word-counter] running 2 tests...
-#   [PASS] input='hello world' expect_ok=True ran_ok=True
-#   [PASS] input='' expect_ok=False ran_ok=False
-# [word-counter] tests: 2/2 passed
-# [word-counter] serving on http://127.0.0.1:8080/  (POST text body, Ctrl-C to stop)
-
-curl -X POST localhost:8080/ -d "the quick brown fox"
-# 4
-curl -X POST localhost:8080/ -d ""
-# empty input        (HTTP 500)
 ```
 
-명령 두 개, 편집할 마크다운 파일 하나. AI가 `app.ail`을 쓰고, INTENT.md에 적힌 테스트를 돌리고, 서버를 띄웁니다. 원하지 않으면 AIL 코드를 볼 일이 없습니다. 모든 저작 결정·테스트 실행·요청은 `.ail/ledger.jsonl`에 append되어 세션 간 감사가 가능합니다.
+`ail up`이 프로그램을 작성하고, INTENT.md에 적은 테스트를 돌리고, 브라우저 UI가 있는 서비스를 `http://127.0.0.1:8080/`에 띄웁니다 — 입력창, 보내기 버튼, 결과 영역. 비개발자는 `curl`이 뭔지 몰라도 됩니다.
+
+브라우저로 그 URL을 열어 "the quick brown fox"를 입력하고 보내기 → `4`. 빈 입력을 보내면 → 에러 메시지 (내부적으로 HTTP 500).
+
+스크립트 작성자는 같은 엔드포인트에 `POST /`로 raw 텍스트 body를 보내도 됩니다: `curl -X POST localhost:8080/ -d "hello"`.
+
+명령 두 개, 편집할 마크다운 파일 하나. AI가 `app.ail`을 쓰고, INTENT.md에 적힌 테스트를 돌리고, 서비스를 띄웁니다. **서비스가 떠 있는 동안 INTENT.md를 수정하고 저장하면 파일을 다시 읽고 테스트를 재실행해 프로그램을 hot-swap합니다. 재시작 필요 없습니다.** 모든 저작 결정·테스트 실행·요청은 `.ail/ledger.jsonl`에, 실패한 저자 시도는 `.ail/attempts/`에 저장됩니다 (개발자나 향후 메타-저자 AI가 검토할 수 있도록).
 
 이게 HEAAL 패러다임의 L2 층 — harness가 문법뿐 아니라 프로젝트 구조 자체가 됩니다. 설계 노트: [`runtime/01-agentic-projects.md`](../../runtime/01-agentic-projects.md). 동작하는 예제: [`reference-impl/examples/agentic/word-counter/`](../../reference-impl/examples/agentic/word-counter/).
 

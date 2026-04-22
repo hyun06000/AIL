@@ -53,8 +53,31 @@ def _make_handler(project: Project):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            if self.path in ("/", ""):
+                # Render the browser UI so a non-developer can type
+                # into a textarea instead of running curl.
+                from .web_ui import render_page, extract_preamble
+                try:
+                    intent_text = project.intent_path.read_text(encoding="utf-8")
+                except Exception:
+                    intent_text = ""
+                html = render_page(
+                    project_name=project.root.name,
+                    intent_preamble=extract_preamble(intent_text),
+                    host=self.server.server_address[0],
+                    port=self.server.server_address[1],
+                )
+                body = html.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                # Don't cache — INTENT.md edits should show on next load.
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             self._send_text(404, "POST / with the input as the body, "
-                                 "or GET /healthz\n")
+                                 "or open / in a browser.\n")
 
         def do_POST(self):  # noqa: N802 — stdlib name
             if self.path != "/":

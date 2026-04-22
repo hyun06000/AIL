@@ -4,6 +4,64 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.4 — 2026-04-23
+
+Closes two gaps in the non-developer experience. Surfaced by
+hyun06000 after running a Korean project end-to-end and finding
+curl unusable as the "send a request" interface. Also: the
+file-watch auto-reload story was hidden in one log line; most
+users would never discover it.
+
+### Added — browser UI
+
+- **`GET /` now returns an HTML page.** Single-page form: a
+  textarea, a Send button, a result area, and the project's
+  description pulled from INTENT.md's preamble. No framework, no
+  npm, no build step — stdlib HTTPServer serves the HTML inline.
+- **Localized to Korean or English** by detecting Hangul syllables
+  in the project preamble. Labels ("보내기" / "Send", "결과" / "Result",
+  the auto-reload tip) switch accordingly.
+- **`POST /` behavior unchanged** — the existing curl / script path
+  still works. Browsers submit the form via fetch() to the same
+  endpoint; machines and humans share the URL.
+- **Ctrl-Enter in the textarea submits.** Small but matters for
+  keyboard users.
+- **Content-Security-aware rendering.** User-controlled text
+  (project name, preamble) is `html.escape()`d before landing in
+  the DOM. Unit test covers the script-injection case.
+
+### Changed — auto-reload is now loud
+
+- **`Service is live` block rewritten.** Previously one line told
+  the user the URL and Ctrl-C. Now three short paragraphs: (1)
+  the URL, with an explicit "open it in a browser, there's a text
+  box waiting"; (2) "Edit INTENT.md and save — the service updates
+  itself. No restart. The tab you just opened keeps working."
+  (3) "Ctrl-C here to stop."
+- **README + docs/ko/README.ko.md updated** to match. The old
+  `curl -X POST ...` block in the walkthrough is replaced with
+  "open that URL in a browser" as the primary path; the curl form
+  is mentioned one paragraph down for scripts.
+
+### Tests
+
+- 325 tests pass (was 318 in v1.9.3). New: 7 web-UI tests —
+  render-page localization for both languages, HTML-escape
+  safety, preamble extraction, and an end-to-end HTTP test that
+  launches the real stdlib server and asserts `GET /` returns
+  HTML with the expected content.
+
+### Why this matters
+
+v1.9.0–1.9.3 delivered the non-developer loop
+("`ail init` → edit INTENT.md → `ail up`") but stopped at the
+moment the service came up. If `curl` is the only way to talk to
+the service, the audience we built this for has no way in. A
+browser form costs a few hundred lines of stdlib-only Python and
+closes that gap.
+
+---
+
 ## v1.9.3 — 2026-04-23
 
 Failed authoring attempts are now persisted to disk. Previously the
