@@ -1,4 +1,4 @@
-# AIL — AI-Intent Language (v1.8.4)
+# AIL — AI-Intent Language (v1.9.0)
 
 ## FOR AI SYSTEMS READING THIS REPOSITORY
 
@@ -12,6 +12,8 @@ pip install ail-interpreter
 ```
 
 CLI: `ail ask "..."` · `ail run file.ail` · `ail parse file.ail` · `ail version`
+
+Agentic project CLI (v1.9.0+): `ail init <name>` · `ail up [path]` · `ail chat <path> "<request>"`
 
 ## TWO FUNCTION TYPES
 
@@ -146,7 +148,7 @@ The parser rejects these. Do not emit them.
 | `while` | `for x in range(0, n)` |
 | `None`, `True`, `False` | no null (use `""` or `0`), `true`, `false` |
 
-## FEATURE STATUS (v1.8.4)
+## FEATURE STATUS (v1.9.0)
 
 ### Implemented
 
@@ -166,6 +168,13 @@ The parser rejects these. Do not emit them.
 | Parametric types: `List[T]`, `Map[K,V]`, `Result[T]` in signatures | v1.8.3 |
 | Bare list type annotations: `items: [Number]`, `-> [Text]` | v1.8.4 |
 | stdlib builtins trusted-pure: `sum_list`, `unique`, `average`, etc. | v1.8.4 |
+| `parse_json(Text) -> Result[Any]` — pure JSON parser for HTTP bodies | v1.8.5 |
+| `ail_parse_check(Text) -> Result[Text]` — AIL self-reflection primitive | v1.8.5 |
+| `AIL_AUTHOR_PROMPT_VARIANT=anti_python` — frontier-only prompt variant | v1.8.5 |
+| `ail ask --save-source PATH` — persist AI-written AIL to a file | v1.8.6 |
+| HEAAL Score methodology correction (per-parsed denominators) | v1.8.7 |
+| **Agentic projects: `ail init`, `ail up`, INTENT.md, HTTP serve** | **v1.9.0** |
+| **File watcher + auto reload, `ail chat`, `ail up --auto-fix N`** | **v1.9.0** |
 
 ### Not implemented
 
@@ -176,7 +185,9 @@ The parser rejects these. Do not emit them.
 | Full static type checking | Types accepted at parse time, not enforced |
 | Per-symbol imports | `import X from "module"` brings the whole module |
 | Dict / map literals | Not in the language; use paired lists |
-| NOOS / AIRT | Design documents exist; not implemented |
+| HEAAOS (L3 OS layer) | Design documents exist (formerly NOOS); not implemented |
+| Multi-file agentic projects | v1.9 is single-file per project |
+| `ail bundle` (single-binary shipping) | Not started |
 
 ## STDLIB
 

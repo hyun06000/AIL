@@ -2,7 +2,7 @@
 
 AI가 코드를 쓰고 사람은 원하는 것만 말하는 프로그래밍 언어. 키보드 앞의 사람이 아니라 언어 모델이 저자라는 전제로 처음부터 다시 설계했습니다.
 
-**v1.8.4** · `pip install ail-interpreter` · [English](../../README.md) · [AI/LLM 참조](../../README.ai.md)
+**v1.9.0** · `pip install ail-interpreter` · [English](../../README.md) · [AI/LLM 참조](../../README.ai.md)
 
 ---
 

@@ -186,7 +186,7 @@ This matters more than the list above.
 - **Tooling is thin.** No IDE plugin, no LSP, no debugger, no formatter.
 - **Ecosystem is tiny.** Three stdlib modules. Anything else you write inline.
 - **Performance is modest.** A tree-walking interpreter in Python. The Go runtime is still feature-subset.
-- **One kind of user so far.** ~0 external contributors or users as of v1.8.3 (April 2026).
+- **One kind of user so far.** ~0 external contributors or users as of v1.9.0 (April 2026).
 - **The design is opinionated.** No `while`, no classes, no OOP, no inheritance. Effects are authorization-gated. If your mental model insists on these, AIL will feel wrong — that's by design.
 
 ---

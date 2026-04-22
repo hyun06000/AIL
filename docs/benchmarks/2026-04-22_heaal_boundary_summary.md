@@ -95,8 +95,8 @@ The manifesto (`docs/heaal.md`) should be updated to reflect this. That edit is 
 - [x] HEAAL Score methodology corrected and audited; all dashboards and READMEs reflect the corrected numbers.
 - [x] Boundary table published with three regimes and three remedies.
 - [x] AIL track fine-tune (`ail-coder:7b-v3`) demonstrates the below-threshold remedy works.
-- [ ] Manifesto (`docs/heaal.md`) wording updated to reflect the boundary. (Small docs edit, can land immediately or in v1.8.7 release.)
-- [ ] HEAAL Score correction shipped to PyPI users via v1.8.7.
+- [x] Manifesto (`docs/heaal.md`) wording updated to reflect the boundary. (Landed 2026-04-22 alongside the score audit.)
+- [x] HEAAL Score correction shipped to PyPI users via v1.8.7 (2026-04-22).
 
 The unchecked items are small follow-ups, not new evidence. **L1 is closed for the purposes of L2 entry.**
 

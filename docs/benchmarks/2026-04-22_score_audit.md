@@ -90,7 +90,7 @@ The corrected claim is more honest and easier to defend in technical review. The
 - Stage D analysis (`2026-04-22_heaal_D_llama8b_analysis.md`) updated to reflect the +30.6 (was +32.1) gap and the corrected cross-tier table.
 - Stage D mistral analysis (`2026-04-22_heaal_D_mistral7b_analysis.md`) is published with the corrected methodology from the start.
 - `CHANGELOG.md` v1.8.5 entry left as-is for historical accuracy, with a footnote pointing to this audit.
-- v1.8.7 will ship the corrected `heaal_score.py` to PyPI users so anyone re-running the benchmark gets the corrected scoring by default.
+- v1.8.7 shipped the corrected `heaal_score.py` to PyPI users on 2026-04-22; anyone re-running the benchmark on an upgraded install gets the corrected scoring by default.
 
 ---
 
