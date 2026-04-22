@@ -90,6 +90,10 @@ def main(argv: list[str] | None = None) -> int:
              "declared tests on change without restarting the server.")
     p_up.add_argument("--retries", type=int, default=3,
         help="Max retries if the author emits invalid AIL (default 3)")
+    p_up.add_argument("--auto-fix", type=int, default=0, metavar="N",
+        help="If declared tests fail, hand the failures to the chat "
+             "backend and retry up to N times. Costs LLM calls — "
+             "default 0 (off).")
 
     p_chat = sub.add_parser("chat",
         help="Edit an agentic project in natural language. The AI updates "
@@ -170,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
             serve=not args.no_serve,
             port_override=args.port,
             watch=not args.no_watch,
+            auto_fix_attempts=args.auto_fix,
         )
 
     if args.cmd == "chat":

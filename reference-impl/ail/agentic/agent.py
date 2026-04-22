@@ -108,6 +108,105 @@ def _run_tests(project: Project, tests: list[TestCase]) -> tuple[int, int]:
     return passed, len(tests)
 
 
+def _diagnose_and_repair(project: Project, spec, *, max_attempts: int) -> int:
+    """When the declared tests fail against the current app.ail, ask the
+    chat backend to patch the program. Re-run tests; loop up to
+    `max_attempts` repair cycles.
+
+    Returns the number of tests that passed after the final repair
+    attempt. The caller decides whether that's good enough.
+    """
+    from .chat import chat_apply  # local import — chat is optional path
+    last_passed = 0
+    last_total = len(spec.tests)
+    for attempt in range(1, max_attempts + 1):
+        # Build the repair request from the most recent failures recorded
+        # in the ledger (the prior _run_tests call appended them).
+        failures = _recent_test_failures(project, limit=last_total)
+        if not failures:
+            return last_passed
+        request = _format_repair_request(failures)
+        print(f"[{project.root.name}] auto-fix attempt {attempt}/"
+              f"{max_attempts} — calling chat backend on {len(failures)} "
+              f"failing test(s)...", file=sys.stderr)
+        project.append_ledger({
+            "event": "auto_fix_attempt",
+            "attempt": attempt,
+            "failing_count": len(failures),
+        })
+        try:
+            result = chat_apply(project, request, rerun_tests=False)
+        except Exception as e:
+            print(f"[{project.root.name}] auto-fix call failed: "
+                  f"{type(e).__name__}: {e}", file=sys.stderr)
+            project.append_ledger({
+                "event": "auto_fix_call_failed",
+                "attempt": attempt,
+                "error": f"{type(e).__name__}: {e}",
+            })
+            return last_passed
+        if not result["changed"]:
+            print(f"[{project.root.name}] auto-fix: model declined to "
+                  f"change anything; giving up.", file=sys.stderr)
+            return last_passed
+        # Re-run the tests against the patched program.
+        last_passed, last_total = _run_tests(project, spec.tests)
+        project.append_ledger({
+            "event": "auto_fix_revalidated",
+            "attempt": attempt, "passed": last_passed, "total": last_total,
+        })
+        if last_passed == last_total:
+            print(f"[{project.root.name}] auto-fix succeeded after "
+                  f"{attempt} attempt(s)", file=sys.stderr)
+            return last_passed
+    return last_passed
+
+
+def _recent_test_failures(project: Project, *, limit: int) -> list[dict]:
+    """Read the tail of the ledger and return the most recent contiguous
+    block of test_run records, filtered to failures."""
+    import json as _json
+    if not project.ledger_path.exists():
+        return []
+    lines = project.ledger_path.read_text(encoding="utf-8").splitlines()
+    # Walk backwards collecting test_run records until we hit a non-test_run
+    # event (which marks the boundary of the most recent run).
+    block: list[dict] = []
+    for line in reversed(lines):
+        try:
+            rec = _json.loads(line)
+        except Exception:
+            continue
+        if rec.get("event") == "test_run":
+            block.append(rec)
+            if len(block) >= limit:
+                break
+        elif block:
+            # We've passed the start of the most recent test block.
+            break
+    block.reverse()
+    return [r for r in block if not r.get("passed")]
+
+
+def _format_repair_request(failures: list[dict]) -> str:
+    """Compose the natural-language message handed to chat_apply."""
+    lines = [
+        "The current app.ail fails some of the test cases declared in "
+        "INTENT.md's `## Tests` section. Update app.ail (and INTENT.md "
+        "if necessary) so all declared tests pass. Do not change the "
+        "test cases themselves — they are the contract from the user.",
+        "",
+        "Failing tests:",
+    ]
+    for f in failures:
+        inp = repr(f.get("input", ""))
+        expected = "succeed" if f.get("expect_ok") else "error"
+        observed = ("ran without error" if f.get("ran_ok")
+                    else (f.get("error") or "ran with error"))
+        lines.append(f"  - input={inp}, expected to {expected}, observed: {observed}")
+    return "\n".join(lines)
+
+
 def bring_up(
     project: Project,
     *,
@@ -116,6 +215,7 @@ def bring_up(
     serve: bool = True,
     port_override: Optional[int] = None,
     watch: bool = True,
+    auto_fix_attempts: int = 0,
 ) -> int:
     """Execute the v0 state machine for `ail up`. Returns process exit code.
 
@@ -151,9 +251,14 @@ def bring_up(
         passed, total = _run_tests(project, spec.tests)
         print(f"[{project.root.name}] tests: {passed}/{total} passed",
               file=sys.stderr)
+        if passed < total and auto_fix_attempts > 0:
+            passed = _diagnose_and_repair(
+                project, spec, max_attempts=auto_fix_attempts,
+            )
         if require_tests_pass and passed < total:
             print(f"[{project.root.name}] aborting — tests failed. "
-                  f"Edit INTENT.md or delete app.ail to re-author.",
+                  f"Edit INTENT.md or delete app.ail to re-author "
+                  f"(or pass --auto-fix N to let the agent retry).",
                   file=sys.stderr)
             return 2
     else:
