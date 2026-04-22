@@ -33,10 +33,18 @@ Design docs: [`runtime/00-airt.md`](runtime/00-airt.md), [`runtime/01-agentic-pr
 
 ### 1. L2 v2 — deeper agentic capability
 
-v0 (init/up/HTTP serve) and v1 (watcher + chat + auto-fix) close the non-developer loop. v2 sharpens what the agent can actually do.
+v0 (init/up/HTTP serve) and v1 (watcher + chat + auto-fix) close the non-developer loop. v2 sharpens what the agent can actually do — and adds the four primitives the news-dashboard case study (2026-04-23, `docs/case-studies/2026-04-23_news-dashboard.md`) showed are the binding constraint on real projects.
+
+The first six items below come from that case study, in the priority order it implied. The remainder are pre-existing v2 ideas.
+
+- **`perform clock.now() -> Result[Text]`** — pure-function-style time effect. Today AIL has no `now()`; authors hardcode literals like `"2024-01-15"` and the program is wrong forever. Smallest fix, highest payoff.
+- **Authoring prompt surfaces `perform http.get`** — the spec already has the effect; `_authoring_examples()` doesn't demonstrate it, so models default to delegating "fetch web data" to `intent` (which hallucinates the data from training). One example pair in the few-shot set fixes this.
+- **`perform schedule.every(seconds: Number) { ... }`** — declarative background polling. Unlocks the dashboard / monitor / cron-job project class. Requires a scheduler thread in the agentic runtime.
+- **Cross-request state effect** on top of `.ail/state/` — `perform state.read("k")` / `perform state.write("k", v)`, process-restart-safe. Lets a long-running service accumulate references / counts / running summaries instead of recomputing from scratch every request.
+- **HTML / layout output mode** — entries today must return Text; the browser UI shows it as monospace. Allow `entry main` to return rich layout (HTML, structured payload, or INTENT.md `## Layout` directives) so projects can express "left summary, right references" without leaving plain language.
+- **Input-aware UI rendering** — when `entry main` does not reference its `input` parameter, the friendly UI should hide the textarea. Currently a user types "안녕" and gets back unrelated content with no signal that input was ignored.
 
 - **Better autonomous diagnosis.** Current auto-fix hands the whole app.ail to the chat backend. v2 should isolate the failing test, propose the minimal patch, and re-run. Smaller context, faster cycle, lower cost per attempt.
-- **Cross-session evolve state.** `.ail/state/` is a directory in v1; v2 hooks the evolve runtime into it so `evolve retune` / `rollback_on` persist across process restarts — the MLOps differentiator we documented but haven't yet wired up end-to-end.
 - **Multi-file projects.** One `app.ail` per project today. v2 allows sub-modules / shared stdlib files for anything non-trivial.
 - **`ail bundle`.** Single-binary deliverable for true double-click distribution. PyInstaller-class work.
 - **Ledger viewer.** Optional web UI on a separate port showing authoring decisions, test runs, requests, evolve events. Not committed work.
