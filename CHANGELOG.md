@@ -4,6 +4,58 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.8.6 — 2026-04-22
+
+Small additive release. Makes the AI-written AIL program persistable
+from `ail ask`, and bundles the Stage C analysis that bounds when the
+`anti_python` authoring variant helps.
+
+### CLI
+
+- **`ail ask --save-source PATH`** — writes the AIL source the author
+  model produced to a file. The answer still goes to stdout; only
+  the program is written. Pass `-` to emit the source to stdout
+  after the answer instead of a file. Parent directories are
+  created as needed; trailing newline is normalized.
+
+  ```bash
+  ail ask "Sum 1 to 100" --save-source sum.ail
+  # 5050
+  # --- AIL saved to sum.ail ---
+  ail run sum.ail --input ""   # replay what the author wrote
+  ```
+
+  Six CLI unit tests covering file write, stdout `-`, parent-dir
+  creation, newline normalization, and the partial-source path when
+  `AuthoringError` is raised.
+
+### Documentation
+
+- **HEAAL Stage C analysis** — `docs/benchmarks/2026-04-22_heaal_C_qwen14b_analysis.md`
+  plus two dashboards. Running the base `qwen2.5-coder:14b` with
+  default vs `anti_python` prompts yields bit-identical AIL output
+  across all 50 programs. The anti_python variant is a
+  frontier-model intervention; at mid-tier coder bases it has no
+  measurable effect at temperature 0. AIL's grammar-enforced floor
+  still keeps the HEAAL Score at 80.9 vs Python 69.6 on this tier
+  with zero prompt work.
+- **`ail-mvp` install troubleshooting** — README now documents the
+  clean-uninstall path for users hitting `ModuleNotFoundError: No
+  module named 'ail_mvp'` from a pre-v1.8 stale editable install.
+- **`--show-source` visibility** — Quick start has a concrete
+  "Seeing the code the AI wrote" subsection with real output.
+- **Why-AIL discoverability** — dedicated top-level section plus a
+  Further Reading block linking the HEAAL manifesto, benchmarks,
+  and dashboards from the README entry points.
+
+### Internal
+
+- CLAUDE.md trimmed from 1469 to 143 lines. Forward-looking only;
+  session logs belong in git. Rule 5 reframed: CLAUDE.md is a NOW
+  + NEXT snapshot, not a diary.
+
+---
+
 ## v1.8.5 — 2026-04-22
 
 Additive release within the v1.8 grammar freeze (spec §2.5 permits
