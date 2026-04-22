@@ -470,6 +470,9 @@ Built-in effects:
   - `http.post(url: Text, body: Text) -> Record`
   - `file.read(path: Text) -> Text | Result-error`
   - `file.write(path: Text, content: Text) -> Result`
+  - `clock.now(format?: Text) -> Text` — ISO-8601 UTC by default
+    (`"iso"`), or seconds-since-epoch when called with `"unix"`.
+    Every returned value carries an effect-origin node.
   - `log(message: Any)` — stderr, returns nothing
   - `human_ask(question: Text) -> Text`
 

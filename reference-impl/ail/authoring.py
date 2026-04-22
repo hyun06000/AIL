@@ -443,6 +443,24 @@ def _build_authoring_goal() -> str:
         "you almost certainly want a hybrid program.\n\n"
         "WHEN UNSURE, prefer `fn`. Only reach for `intent` when the "
         "subtask genuinely cannot be expressed as computation.\n\n"
+        "FETCHING EXTERNAL DATA — if the task needs data from the "
+        "outside world (web APIs, files, current time), use the effect "
+        "system, NOT an `intent`. A common failure mode: the prompt "
+        "says 'search the web for X and summarize' and the author "
+        "writes `intent fetch_news(...)` which asks the LLM to invent "
+        "news it does not have. The LLM cannot fetch; it hallucinates. "
+        "Use `perform http.get(url: Text)` instead — it returns a "
+        "Record `{status, body, ok}` and an effect-origin node on "
+        "every byte, so the data is genuinely from the URL and "
+        "auditable. Then pass the body into an `intent` for the "
+        "summary / judgment step. Same pattern for `perform "
+        "file.read(path)` when the task references a local file. For "
+        "current time, use `perform clock.now()` — it returns an "
+        "ISO-8601 UTC Text. NEVER hardcode a timestamp literal like "
+        "\"2024-01-15 14:30:00\" even if no explicit time is mentioned: "
+        "an unchanging timestamp in a live service is always wrong. "
+        "Only use `intent` for the interpretation of fetched data, "
+        "never for the fetch itself.\n\n"
         "CRITICAL RULE: if you declare an `intent`, the entry MUST "
         "actually call it — either directly, or via a `fn` that calls "
         "it. An intent that is declared but never invoked is an "
@@ -1182,6 +1200,39 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
                 'entry main(x: Text) {\n'
                 '    text = "I love this"\n'
                 '    return join([to_text(word_count(text)), " ", classify_sentiment(text)], "")\n'
+                '}'
+            ),
+        ),
+        # External data — fetch via effect, interpret via intent. This
+        # is the pattern the news-dashboard case study (2026-04-23)
+        # showed was missing: without this example the model delegates
+        # "search the web for X" to an `intent`, which then
+        # hallucinates data the LLM doesn't actually have. Pair
+        # `perform http.get` (real data) with `intent` (summary) so
+        # the shape is explicit.
+        (
+            [{"prompt": "Fetch the JSON at https://api.example.com/status and tell me in one sentence whether the service is healthy"}],
+            (
+                'intent describe_health(status_json: Text) -> Text {\n'
+                '    goal: one_sentence_summary_of_whether_the_service_is_healthy\n'
+                '}\n'
+                'entry main(x: Text) {\n'
+                '    resp = perform http.get("https://api.example.com/status")\n'
+                '    if not resp.ok { return join(["fetch failed with status ", to_text(resp.status)], "") }\n'
+                '    return describe_health(resp.body)\n'
+                '}'
+            ),
+        ),
+        # Current time — pins `perform clock.now()` so authors don't
+        # hardcode "2024-01-15"-style literals. The news-dashboard
+        # case study showed Sonnet reaching for a literal because
+        # no clock primitive was demonstrated; this example fixes that.
+        (
+            [{"prompt": "Return the current time with a friendly greeting"}],
+            (
+                'entry main(x: Text) {\n'
+                '    now = perform clock.now()\n'
+                '    return join(["Hello! The current time is ", now], "")\n'
                 '}'
             ),
         ),

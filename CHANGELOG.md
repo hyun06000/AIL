@@ -4,6 +4,68 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.5 — 2026-04-23
+
+First two of the six L2 v2 primitives surfaced by the 2026-04-23
+news-dashboard case study (see
+`docs/case-studies/2026-04-23_news-dashboard.md`). Both are
+small-footprint and land together.
+
+### Added — `perform clock.now()` effect
+
+- **`perform clock.now() -> Text`** — ISO-8601 UTC by default
+  (`"2026-04-23T15:02:34Z"`). `perform clock.now("unix")` returns
+  seconds-since-epoch as Text. Every returned value carries an
+  effect-origin node, so `has_effect_origin(t)` is true and
+  provenance can distinguish a real timestamp from a hardcoded
+  literal.
+- Rejected by `pure fn` at parse time (structural purity preserved).
+- Rationale: the case study showed Sonnet generating
+  `current_time = "2024-01-15 14:30:00 KST"` as a hardcoded literal
+  because AIL had no clock primitive to call. An unchanging
+  timestamp in a live service is always wrong. This closes the gap.
+
+### Changed — authoring prompt steers fetches to effects, not intents
+
+- **`FETCHING EXTERNAL DATA` section added to the default authoring
+  goal.** Explicit rule: "if the task needs web data / files /
+  current time, use `perform http.get` / `perform file.read` /
+  `perform clock.now` — NOT an `intent`." The case study showed
+  models delegate "search the web for X" to `intent search_news(...)`
+  which then hallucinates news the LLM doesn't have. The new
+  section names the failure mode and prescribes the fix.
+- **Two new few-shot examples in `_authoring_examples()`:**
+  (1) `perform http.get` pattern paired with an `intent` for
+  interpretation — pins the "fetch via effect, interpret via
+  intent" shape.
+  (2) `perform clock.now()` pattern for prompts that mention
+  "current time" or "now".
+- Behavior change is prompt-only; the grammar is unchanged.
+
+### Fixed
+
+- Documentation drift: added `clock.now` to `reference_card.md` and
+  `spec/08-reference-card.ai.md` alongside the other effect
+  signatures.
+
+### Tests
+
+- 330 tests pass (was 325 in v1.9.4). New: 5 clock tests covering
+  default ISO-8601 shape, explicit `"iso"` arg, `"unix"` arg,
+  effect-origin carriage, and the purity-rejection contract when
+  `perform clock.now` appears inside a `pure fn` body.
+
+### Not yet — still open L2 v2 items
+
+Four of the six case-study gaps remain. Next candidates:
+
+  - `perform schedule.every(...)` for background polling (Gap 3)
+  - Cross-request state effect on `.ail/state/` (Gap 4)
+  - HTML / layout output mode (Gap 5)
+  - Input-aware UI rendering (Gap 6)
+
+---
+
 ## v1.9.4 — 2026-04-23
 
 Closes two gaps in the non-developer experience. Surfaced by

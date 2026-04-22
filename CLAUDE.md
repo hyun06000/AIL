@@ -57,13 +57,13 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 - `~/.pypirc` 직접 읽지 말 것 (transcript 노출). `twine`이 참조함.
 - PyPI는 yank만 가능, 삭제 불가. 버전·태그·CHANGELOG 일치 반드시 확인.
-- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.4. 다음은 최소 1.9.5.
+- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.5. 다음은 최소 1.9.6.
 
 ---
 
 ## NOW — 2026-04-22
 
-**버전:** v1.9.4 (main + PyPI v1.9.4). 서빙 모델: `ail-coder:7b-v3`.
+**버전:** v1.9.5 (main + PyPI v1.9.5). 서빙 모델: `ail-coder:7b-v3`.
 
 **트랙 분리됨** (상세: [`docs/heaal/README.md`](docs/heaal/README.md)):
 - **AIL 트랙** — 언어 자체. 기준선 R3/C4: AIL parse 80% / answer 70% vs Python 56%. 이미 Python 돌파.
@@ -78,7 +78,7 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 **점수 방법론 audit (2026-04-22):** `heaal_score.py`의 vacuous-truth 버그 발견 + 수정. 4개 program-property 메트릭을 `/N`이 아니라 `/parsed`로 계산. 발표된 점수 중 R3 v3 fine-tune의 Python이 48.5→58.0으로 정정 (Δ +39.2 → +29.7). AIL 점수는 모두 변동 없음. 전체 감사: [`docs/benchmarks/2026-04-22_score_audit.md`](docs/benchmarks/2026-04-22_score_audit.md).
 
-**PyPI 미배포 변경:** 없음. dev = main = PyPI 동기화됨. v1.9.4 = 브라우저 UI (GET / HTML, POST / 유지) + auto-reload 안내 prominence.
+**PyPI 미배포 변경:** 없음. dev = main = PyPI 동기화됨. v1.9.5 = L2 v2 6개 primitive 중 2개 — clock.now effect + authoring prompt가 http.get/clock.now로 steer.
 
 ---
 
