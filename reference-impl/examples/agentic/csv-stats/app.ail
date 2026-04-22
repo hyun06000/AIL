@@ -1,0 +1,55 @@
+// csv-stats — count, total, average of the second column.
+// No LLM calls; entirely pure fns. Result threading shows how AIL's
+// grammar makes "what about the bad rows?" un-skippable.
+
+pure fn parse_row(line: Text) -> Result[Number] {
+    parts = split(line, ",")
+    if length(parts) < 2 { return error("not a row") }
+    return to_number(get(parts, 1))
+}
+
+pure fn collect_values(lines: List[Text]) -> Result[List[Number]] {
+    out = []
+    skipped_header = false
+    for line in lines {
+        trimmed = trim(line)
+        if length(trimmed) == 0 {
+            // empty line: skip
+        } else {
+            r = parse_row(trimmed)
+            if is_ok(r) {
+                out = append(out, unwrap(r))
+            } else {
+                if not skipped_header {
+                    // Treat the very first un-parseable row as a header.
+                    skipped_header = true
+                } else {
+                    return error(join(["could not parse row: ", trimmed], ""))
+                }
+            }
+        }
+    }
+    if length(out) == 0 { return error("no numeric rows found") }
+    return ok(out)
+}
+
+pure fn sum_values(values: List[Number]) -> Number {
+    total = 0
+    for v in values { total = total + v }
+    return total
+}
+
+entry main(input: Text) {
+    if length(trim(input)) == 0 { return error("empty body") }
+    parsed = collect_values(split(input, "\n"))
+    if is_error(parsed) { return parsed }
+    values = unwrap(parsed)
+    n = length(values)
+    total = sum_values(values)
+    avg = total / n
+    return ok(join([
+        "count=", to_text(n), "\n",
+        "total=", to_text(total), "\n",
+        "average=", to_text(avg)
+    ], ""))
+}

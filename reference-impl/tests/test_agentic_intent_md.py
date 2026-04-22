@@ -116,3 +116,13 @@ def test_no_title_falls_back_to_default_name():
     text = "Just a description.\n\n## Tests\n- \"hi\" → ok\n"
     spec = parse_intent_md(text, default_name="myapp")
     assert spec.name == "myapp"
+
+
+def test_test_input_unescapes_common_sequences():
+    """Users typing \\n in INTENT.md almost always mean a real newline."""
+    text = ('# x\n\nDoes a thing.\n\n## Tests\n'
+            '- "a,1\\nb,2" → succeed\n'
+            '- "tab\\there" → succeed\n')
+    spec = parse_intent_md(text)
+    assert spec.tests[0].input == "a,1\nb,2"
+    assert spec.tests[1].input == "tab\there"

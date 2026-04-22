@@ -125,6 +125,16 @@ def _split_sections(body: str) -> dict[str, str]:
     return {k: "".join(v).strip() for k, v in out.items()}
 
 
+def _unescape(s: str) -> str:
+    """Interpret common backslash escapes in a quoted test input.
+    Users typing `"a,1\nb,2"` in Markdown almost always mean a real
+    newline; treating it literally would surprise them."""
+    return (s.replace("\\n", "\n")
+             .replace("\\t", "\t")
+             .replace("\\r", "\r")
+             .replace("\\\\", "\\"))
+
+
 def _parse_test_bullet(text: str) -> Optional[TestCase]:
     """Parse one ## Tests bullet into a TestCase. Returns None if the
     bullet doesn't have the recognized shape."""
@@ -139,7 +149,7 @@ def _parse_test_bullet(text: str) -> Optional[TestCase]:
         else:
             return None
     else:
-        input_text = m.group(1)
+        input_text = _unescape(m.group(1))
         outcome = text[m.end():]
 
     expect_ok = not any(w in outcome.lower() for w in _FAILURE_WORDS)

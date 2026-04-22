@@ -1,0 +1,16 @@
+// sentiment — fn for the deterministic part, intent for the judgment.
+
+pure fn count_words(s: Text) -> Number {
+    return length(split(trim(s), " "))
+}
+
+intent classify(text: Text) -> Text {
+    goal: positive_negative_or_neutral
+}
+
+entry main(input: Text) {
+    if length(trim(input)) == 0 { return error("empty input") }
+    n = count_words(input)
+    label = classify(input)
+    return ok(join([to_text(n), " words, sentiment: ", label], ""))
+}
