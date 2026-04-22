@@ -9,6 +9,7 @@ Design: runtime/01-agentic-projects.md.
 from .intent_md import IntentSpec, parse_intent_md, render_intent_template
 from .project import Project
 from .agent import bring_up
+from .chat import chat_apply
 
 __all__ = [
     "IntentSpec",
@@ -16,4 +17,5 @@ __all__ = [
     "render_intent_template",
     "Project",
     "bring_up",
+    "chat_apply",
 ]

@@ -91,6 +91,16 @@ def main(argv: list[str] | None = None) -> int:
     p_up.add_argument("--retries", type=int, default=3,
         help="Max retries if the author emits invalid AIL (default 3)")
 
+    p_chat = sub.add_parser("chat",
+        help="Edit an agentic project in natural language. The AI updates "
+             "INTENT.md and/or app.ail to match your request, then re-runs "
+             "the declared tests.")
+    p_chat.add_argument("path", help="Project directory")
+    p_chat.add_argument("request", help="Natural-language edit request "
+                                        "(quoted on the command line)")
+    p_chat.add_argument("--no-rerun", action="store_true",
+        help="Skip re-running the declared tests after the edit lands.")
+
     sub.add_parser("version", help="Print version")
 
     args = parser.parse_args(argv)
@@ -161,6 +171,31 @@ def main(argv: list[str] | None = None) -> int:
             port_override=args.port,
             watch=not args.no_watch,
         )
+
+    if args.cmd == "chat":
+        from .agentic import Project, chat_apply
+        try:
+            proj = Project.at(args.path)
+        except FileNotFoundError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        try:
+            result = chat_apply(proj, args.request, rerun_tests=not args.no_rerun)
+        except Exception as e:
+            print(f"chat failed: {type(e).__name__}: {e}", file=sys.stderr)
+            return 1
+        if not result["changed"]:
+            print("(no files changed)")
+        else:
+            print(f"changed: {', '.join(result['changed'])}")
+        if result.get("summary"):
+            print(f"summary: {result['summary']}")
+        if "tests" in result:
+            t = result["tests"]
+            print(f"tests: {t['passed']}/{t['total']} passed")
+            if t["passed"] < t["total"]:
+                return 2
+        return 0
 
     if args.cmd == "parse":
         source = Path(args.file).read_text(encoding="utf-8")
