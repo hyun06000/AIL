@@ -134,6 +134,59 @@ ail run sum.ail --input ""     # replay exactly what the author wrote
 
 Pass `--save-source -` to write the source to stdout after the answer instead of to a file.
 
+### From a one-shot answer to a running service
+
+`ail ask` is the smallest possible interface — one prompt, one answer. The next step is **agentic projects**: a folder with an `INTENT.md` that you describe in plain language, and an HTTP service that the AI authors, tests, and serves.
+
+```bash
+ail init word-counter
+# Initialized AIL project at /path/to/word-counter
+#   edit:  /path/to/word-counter/INTENT.md
+#   then:  ail up word-counter
+```
+
+Open `INTENT.md` in any editor and write what you want, in any language:
+
+```markdown
+# word-counter
+
+Counts words in incoming text. Empty input is an error, not a zero.
+
+## Behavior
+- Trim whitespace before counting
+- Empty input → error
+
+## Tests
+- "hello world" → succeed
+- "" → 에러
+
+## Deployment
+- 포트 8080
+```
+
+Then:
+
+```bash
+ail up word-counter
+# [word-counter] reading INTENT.md (2 behavior bullets, 2 tests)
+# [word-counter] app.ail empty — authoring via `ail ask`...
+# [word-counter] wrote /path/to/word-counter/app.ail
+# [word-counter] running 2 tests...
+#   [PASS] input='hello world' expect_ok=True ran_ok=True
+#   [PASS] input='' expect_ok=False ran_ok=False
+# [word-counter] tests: 2/2 passed
+# [word-counter] serving on http://127.0.0.1:8080/  (POST text body, Ctrl-C to stop)
+
+curl -X POST localhost:8080/ -d "the quick brown fox"
+# 4
+curl -X POST localhost:8080/ -d ""
+# empty input        (HTTP 500)
+```
+
+Two commands, one editable Markdown file. The AI writes `app.ail`, runs the tests you declared, and starts a server. You never read AIL unless you want to. Every authoring decision, test run, and request is appended to `.ail/ledger.jsonl` for cross-session audit.
+
+This is the L2 layer of the HEAAL paradigm — the harness becomes the project structure as well as the grammar. Design notes: [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md). Worked example: [`reference-impl/examples/agentic/word-counter/`](reference-impl/examples/agentic/word-counter/).
+
 ### Troubleshooting
 
 If `ail -h` errors with `ModuleNotFoundError: No module named 'ail_mvp'`, your environment has a stale editable install from a pre-v1.8 era when the package was named `ail-mvp`. Clean it out:
@@ -165,7 +218,9 @@ AIL has a `Result` type that is part of the grammar. Every failable operation �
 
 ## What the language has now
 
-AIL shipped `fn`, `intent`, `entry`, and the `Result` type in v1.0. Provenance, purity contracts, attempt blocks, implicit parallelism, effects, match with confidence guards, and runtime calibration landed over v1.2–v1.8. Math builtins and parametric types in v1.8.3, subscript sugar in v1.8.4. The work being queued for v1.8.5 is `parse_json` (so programs can read HTTP bodies without line-scanning), `ail_parse_check` (so AIL programs can evaluate other AIL programs' validity), and the `anti_python` authoring prompt variant that drives the HEAAL Score numbers above.
+AIL shipped `fn`, `intent`, `entry`, and the `Result` type in v1.0. Provenance, purity contracts, attempt blocks, implicit parallelism, effects, match with confidence guards, and runtime calibration landed over v1.2–v1.8. Math builtins and parametric types in v1.8.3, subscript sugar in v1.8.4. v1.8.5 added `parse_json` for HTTP response bodies, `ail_parse_check` for self-reflection, and the `anti_python` authoring prompt variant. v1.8.6 added `ail ask --save-source`. v1.8.7 corrected a vacuous-truth bug in the HEAAL Score formula and shipped boundary-anchored data across four model families.
+
+The current branch adds **`ail init` + `ail up`** — the L2 layer of the HEAAL paradigm, where an AIL "project" is a folder with one human-edited `INTENT.md` and an in-project AI agent that owns the program, the tests, and the cross-session ledger. See the [agentic project demo above](#from-a-one-shot-answer-to-a-running-service).
 
 A second runtime in Go lives in `go-impl/` and covers the core feature set — proof that AIL is defined by the spec, not by any particular implementation.
 
@@ -175,9 +230,10 @@ A second runtime in Go lives in `go-impl/` and covers the core feature set — p
 ail-project/
 ├── spec/                     # Language specification
 ├── reference-impl/           # Python interpreter (PyPI: ail-interpreter)
-│   ├── ail/                  # Parser, runtime, stdlib
-│   ├── examples/             # 16 example programs
+│   ├── ail/                  # Parser, runtime, stdlib, agentic projects
+│   ├── examples/             # Single-file examples + agentic/ project demos
 │   └── training/             # QLoRA pipeline for the fine-tuned model
+├── runtime/                  # AIRT (L2) design docs incl. agentic projects
 ├── go-impl/                  # Second interpreter in Go
 ├── docs/
 │   ├── heaal.md              # HEAAL manifesto (Opus 4)

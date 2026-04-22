@@ -17,8 +17,7 @@ v1 work. v0 is just the smallest closure of the design.
 from __future__ import annotations
 
 import sys
-import traceback
-from typing import Optional
+from typing import Any, Optional
 
 from .. import run as ail_run
 from ..authoring import ask, AuthoringError
@@ -54,17 +53,37 @@ def _author_app(project: Project, spec: IntentSpec, *, max_retries: int) -> str:
     return result.ail_source
 
 
+def _looks_like_error(value: Any) -> bool:
+    """Decide whether the program's return value represents an error.
+
+    Three signals AIL can use to communicate error from an entry main:
+      1. A Result-shaped dict with ok=False — the program returned
+         a Result error directly.
+      2. A string prefixed UNWRAP_ERROR: — `unwrap()` on an error
+         Result was hit at runtime (the runtime returns this sentinel
+         instead of raising).
+      3. A Python exception escaping ail_run() — handled by the caller.
+    """
+    if isinstance(value, dict) and value.get("_result") and not value.get("ok"):
+        return True
+    if isinstance(value, str) and value.startswith("UNWRAP_ERROR"):
+        return True
+    return False
+
+
 def _run_tests(project: Project, tests: list[TestCase]) -> tuple[int, int]:
     """Run every test case against the saved app.ail. Returns (passed, total).
 
     A test passes when the observed run shape (success / error) matches
-    `expect_ok`. Content is not validated in v0.
+    `expect_ok`. Content of the success-side value is not validated in
+    v0 — content matching needs an LLM judge and is deferred.
     """
     passed = 0
     for t in tests:
         try:
             result, _ = ail_run(str(project.app_path), input=t.input)
-            ran_ok = True
+            errored = _looks_like_error(result.value)
+            ran_ok = not errored
             value_repr = repr(result.value)[:200]
             err = None
         except Exception as e:

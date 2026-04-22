@@ -1,0 +1,31 @@
+// Generated to demonstrate the L2 v0 agentic project layout.
+// In a fresh `ail init`, this file is empty and the agent authors it
+// from INTENT.md on first `ail up`. Committed here so the example
+// runs without an API key on first try.
+
+pure fn count_words(s: Text) -> Number {
+    return length(split(trim(s), " "))
+}
+
+pure fn validate(input: Text) -> Result[Text] {
+    cleaned = trim(input)
+    if length(cleaned) == 0 {
+        return error("empty input")
+    }
+    if length(input) > 10000 {
+        return error("input too long")
+    }
+    return ok(cleaned)
+}
+
+// entry returns Result[Text] so the test runner and the HTTP server
+// can both see "this run produced an error" cleanly. The server maps
+// that to HTTP 500; the test runner counts it as expect_ok=False.
+entry main(input: Text) {
+    checked = validate(input)
+    if is_error(checked) {
+        return checked
+    }
+    n = count_words(unwrap(checked))
+    return ok(to_text(n))
+}

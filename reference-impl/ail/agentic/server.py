@@ -14,7 +14,25 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Optional
 
 from .. import run as ail_run
+from .agent import _looks_like_error
 from .project import Project
+
+
+def _render_value(value):
+    """Format an entry main() return value for HTTP response.
+
+    AIL programs that signal success-or-error with Result return a dict
+    shape; collapse it to the inner value (or error message) so HTTP
+    clients see plain text instead of language internals.
+    """
+    if isinstance(value, dict) and value.get("_result"):
+        if value.get("ok"):
+            return value.get("value", "")
+        return value.get("error", "error")
+    if isinstance(value, str) and value.startswith("UNWRAP_ERROR:"):
+        # Surface the inner message without the runtime sentinel prefix.
+        return value[len("UNWRAP_ERROR:"):].strip()
+    return value
 
 
 def _make_handler(project: Project):
@@ -48,7 +66,19 @@ def _make_handler(project: Project):
             try:
                 result, _trace = ail_run(str(project.app_path), input=body)
                 value = result.value
-                response = (str(value) + "\n").encode("utf-8")
+                if _looks_like_error(value):
+                    rendered = _render_value(value)
+                    project.append_ledger({
+                        "event": "request",
+                        "path": "/",
+                        "input_chars": len(body),
+                        "ok": False,
+                        "value_preview": str(rendered)[:200],
+                    })
+                    self._send_text(500, str(rendered) + "\n")
+                    return
+                rendered = _render_value(value)
+                response = (str(rendered) + "\n").encode("utf-8")
                 project.append_ledger({
                     "event": "request",
                     "path": "/",
