@@ -32,8 +32,10 @@ class Watcher:
 
     POLL_INTERVAL_S = 1.0
 
-    def __init__(self, project: Project):
+    def __init__(self, project: Project, logger=None):
+        from .ui import make_logger
         self.project = project
+        self.logger = logger or make_logger("compact")
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         # Initial mtimes — what we observed at start. The first time
@@ -95,10 +97,8 @@ class Watcher:
             self._on_app_changed()
 
     def _on_intent_changed(self, *, also_app: bool) -> None:
-        print(f"[watcher] INTENT.md changed — re-extracting tests"
-              + (" + app.ail changed" if also_app else ""),
-              file=sys.stderr)
         spec = self.project.read_intent()
+        self.logger.watcher_intent_changed(len(spec.tests), also_app)
         self.project.write_tests(spec)
         self.project.append_ledger({
             "event": "watcher_intent_changed",
@@ -109,7 +109,7 @@ class Watcher:
         self._revalidate(spec.tests, why="intent_md_edit")
 
     def _on_app_changed(self) -> None:
-        print("[watcher] app.ail changed — revalidating", file=sys.stderr)
+        self.logger.watcher_app_changed()
         spec = self.project.read_intent()
         self.project.append_ledger({"event": "watcher_app_changed"})
         self._revalidate(spec.tests, why="app_ail_edit")
@@ -117,12 +117,9 @@ class Watcher:
     def _revalidate(self, tests, *, why: str) -> None:
         if not tests:
             return
-        passed, total = _run_tests(self.project, tests)
+        passed, total = _run_tests(self.project, tests, self.logger)
         if passed < total:
-            print(f"[watcher] WARNING: {total - passed}/{total} tests "
-                  f"now failing — server keeps running, but new "
-                  f"requests may misbehave. Edit INTENT.md or app.ail "
-                  f"to fix.", file=sys.stderr)
+            self.logger.watcher_warning(total - passed, total)
         self.project.append_ledger({
             "event": "watcher_revalidated",
             "why": why, "passed": passed, "total": total,

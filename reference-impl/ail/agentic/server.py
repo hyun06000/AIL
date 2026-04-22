@@ -115,7 +115,7 @@ def _make_handler(project: Project):
 
 def serve_project(
     project: Project, *, port: int, host: str = "127.0.0.1",
-    watch: bool = True,
+    watch: bool = True, logger=None,
 ) -> int:
     """Block, serving the project until SIGINT. Returns exit code.
 
@@ -124,35 +124,30 @@ def serve_project(
     The HTTP server reads app.ail fresh on every request so the swap
     is automatic; the watcher's job is just to revalidate and warn.
     """
+    from .ui import make_logger
+    logger = logger or make_logger("friendly")
     handler = _make_handler(project)
     try:
         server = HTTPServer((host, port), handler)
     except OSError as e:
-        # Port collision is the common case. Fail loud, don't reassign.
-        print(f"could not bind {host}:{port} — {e}\n"
-              f"another `ail up` on the same port? change `## Deployment` "
-              f"in INTENT.md or pass --port to ail up.",
-              file=sys.stderr)
+        logger.port_bind_failed(host, port, str(e))
         return 3
 
     watcher = None
     if watch:
-        # Local import to avoid a cycle through agent.py at import time.
         from .watcher import Watcher
-        watcher = Watcher(project)
+        watcher = Watcher(project, logger=logger)
         watcher.start()
-        print(f"[{project.root.name}] watching INTENT.md and app.ail "
-              f"for edits", file=sys.stderr)
+        logger.watcher_watching()
 
     project.append_ledger({
         "event": "serve_start", "host": host, "port": port, "watch": watch,
     })
-    print(f"[{project.root.name}] serving on http://{host}:{port}/  "
-          f"(POST text body, Ctrl-C to stop)", file=sys.stderr)
+    logger.serving(host, port)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print(f"\n[{project.root.name}] shutting down", file=sys.stderr)
+        logger.shutting_down()
     finally:
         if watcher is not None:
             watcher.stop()

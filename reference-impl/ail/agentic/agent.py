@@ -19,10 +19,25 @@ from __future__ import annotations
 import sys
 from typing import Any, Optional
 
-from .. import run as ail_run
+from .. import _default_adapter, run as ail_run
 from ..authoring import ask, AuthoringError
 from .intent_md import IntentSpec, TestCase
 from .project import Project
+from .ui import Logger, make_logger
+
+
+def _describe_adapter() -> str:
+    """Identify the current author model so the log line makes clear
+    *which* model is doing the authoring. Non-developers otherwise
+    can't tell whether `ail up` used their paid API key or the local
+    fine-tune."""
+    try:
+        adapter = _default_adapter()
+    except Exception as e:
+        return f"(adapter unavailable: {type(e).__name__})"
+    name = getattr(adapter, "name", adapter.__class__.__name__)
+    model = getattr(adapter, "model", None)
+    return f"{name}/{model}" if model else name
 
 
 def _author_app(project: Project, spec: IntentSpec, *, max_retries: int) -> str:
@@ -33,7 +48,12 @@ def _author_app(project: Project, spec: IntentSpec, *, max_retries: int) -> str:
     program at least proves it parses + executes once.
     """
     goal = spec.authoring_goal()
-    project.append_ledger({"event": "author_start", "goal_chars": len(goal)})
+    adapter_desc = _describe_adapter()
+    project.append_ledger({
+        "event": "author_start",
+        "goal_chars": len(goal),
+        "author_model": adapter_desc,
+    })
     try:
         result = ask(goal, max_retries=max_retries, input_text="")
     except AuthoringError as e:
@@ -42,6 +62,7 @@ def _author_app(project: Project, spec: IntentSpec, *, max_retries: int) -> str:
             "event": "author_failed",
             "error": str(e),
             "partial_chars": len(partial),
+            "author_model": adapter_desc,
         })
         raise
     project.append_ledger({
@@ -71,13 +92,17 @@ def _looks_like_error(value: Any) -> bool:
     return False
 
 
-def _run_tests(project: Project, tests: list[TestCase]) -> tuple[int, int]:
+def _run_tests(project: Project, tests: list[TestCase],
+               logger: Optional[Logger] = None) -> tuple[int, int]:
     """Run every test case against the saved app.ail. Returns (passed, total).
 
     A test passes when the observed run shape (success / error) matches
     `expect_ok`. Content of the success-side value is not validated in
     v0 — content matching needs an LLM judge and is deferred.
     """
+    # The watcher and chat paths call this without a logger; use a
+    # default compact logger in that case so output doesn't vanish.
+    logger = logger or make_logger("compact")
     passed = 0
     for t in tests:
         try:
@@ -102,13 +127,63 @@ def _run_tests(project: Project, tests: list[TestCase]) -> tuple[int, int]:
             "value": value_repr,
             "error": err,
         })
-        status = "PASS" if ok else "FAIL"
-        print(f"  [{status}] input={t.input!r} expect_ok={t.expect_ok} "
-              f"ran_ok={ran_ok}", file=sys.stderr)
+        logger.test_result(
+            input_text=t.input, expect_ok=t.expect_ok,
+            ran_ok=ran_ok, passed=ok,
+        )
     return passed, len(tests)
 
 
-def _diagnose_and_repair(project: Project, spec, *, max_attempts: int) -> int:
+def _print_authoring_failure(project: Project, err: AuthoringError,
+                              adapter_desc: str,
+                              logger: Logger) -> None:
+    """Render an authoring failure in a way a non-developer can act on.
+
+    Calls diagnose_authoring_failure() to translate the parse error
+    into plain language in the user's own INTENT.md language. Falls
+    back to a concise static tip list if the diagnosis call itself
+    fails (network down, no API key at all, etc.).
+    """
+    from .diagnosis import diagnose_authoring_failure
+    intent_text = project.intent_path.read_text(encoding="utf-8")
+    last_src = err.partial.ail_source if err.partial else ""
+    errors = list(err.partial.errors) if err.partial else [str(err)]
+    project.append_ledger({
+        "event": "author_failed_diagnose_attempt",
+        "author_model": adapter_desc,
+        "errors": errors[-3:],
+        "last_source_chars": len(last_src),
+    })
+
+    diagnosis = None
+    try:
+        diagnosis = diagnose_authoring_failure(
+            intent_md=intent_text,
+            last_ail_source=last_src,
+            errors=errors,
+        )
+    except Exception as de:
+        project.append_ledger({
+            "event": "diagnose_failed",
+            "error": f"{type(de).__name__}: {de}",
+        })
+
+    if diagnosis and diagnosis.strip():
+        project.append_ledger({
+            "event": "diagnose_shown",
+            "chars": len(diagnosis),
+        })
+
+    logger.authoring_failed(
+        adapter_desc=adapter_desc,
+        diagnosis=diagnosis,
+        ledger_path=project.ledger_path,
+        attempts=len(errors),
+    )
+
+
+def _diagnose_and_repair(project: Project, spec, *, max_attempts: int,
+                          logger: Optional[Logger] = None) -> int:
     """When the declared tests fail against the current app.ail, ask the
     chat backend to patch the program. Re-run tests; loop up to
     `max_attempts` repair cycles.
@@ -117,18 +192,15 @@ def _diagnose_and_repair(project: Project, spec, *, max_attempts: int) -> int:
     attempt. The caller decides whether that's good enough.
     """
     from .chat import chat_apply  # local import — chat is optional path
+    logger = logger or make_logger("compact")
     last_passed = 0
     last_total = len(spec.tests)
     for attempt in range(1, max_attempts + 1):
-        # Build the repair request from the most recent failures recorded
-        # in the ledger (the prior _run_tests call appended them).
         failures = _recent_test_failures(project, limit=last_total)
         if not failures:
             return last_passed
         request = _format_repair_request(failures)
-        print(f"[{project.root.name}] auto-fix attempt {attempt}/"
-              f"{max_attempts} — calling chat backend on {len(failures)} "
-              f"failing test(s)...", file=sys.stderr)
+        logger.auto_fix_attempt(attempt, max_attempts, len(failures))
         project.append_ledger({
             "event": "auto_fix_attempt",
             "attempt": attempt,
@@ -137,8 +209,7 @@ def _diagnose_and_repair(project: Project, spec, *, max_attempts: int) -> int:
         try:
             result = chat_apply(project, request, rerun_tests=False)
         except Exception as e:
-            print(f"[{project.root.name}] auto-fix call failed: "
-                  f"{type(e).__name__}: {e}", file=sys.stderr)
+            logger.auto_fix_call_failed(f"{type(e).__name__}: {e}")
             project.append_ledger({
                 "event": "auto_fix_call_failed",
                 "attempt": attempt,
@@ -146,18 +217,15 @@ def _diagnose_and_repair(project: Project, spec, *, max_attempts: int) -> int:
             })
             return last_passed
         if not result["changed"]:
-            print(f"[{project.root.name}] auto-fix: model declined to "
-                  f"change anything; giving up.", file=sys.stderr)
+            logger.auto_fix_model_declined()
             return last_passed
-        # Re-run the tests against the patched program.
-        last_passed, last_total = _run_tests(project, spec.tests)
+        last_passed, last_total = _run_tests(project, spec.tests, logger)
         project.append_ledger({
             "event": "auto_fix_revalidated",
             "attempt": attempt, "passed": last_passed, "total": last_total,
         })
         if last_passed == last_total:
-            print(f"[{project.root.name}] auto-fix succeeded after "
-                  f"{attempt} attempt(s)", file=sys.stderr)
+            logger.auto_fix_succeeded(attempt)
             return last_passed
     return last_passed
 
@@ -216,66 +284,51 @@ def bring_up(
     port_override: Optional[int] = None,
     watch: bool = True,
     auto_fix_attempts: int = 0,
+    logger: Optional[Logger] = None,
+    log_style: str = "friendly",
 ) -> int:
     """Execute the v0 state machine for `ail up`. Returns process exit code.
 
     `serve=False` returns after authoring + tests (useful in CI / tests
     of the agent itself).
     """
-    spec = project.read_intent()
-    print(f"[{project.root.name}] reading INTENT.md "
-          f"({len(spec.behavior)} behavior bullets, {len(spec.tests)} tests)",
-          file=sys.stderr)
+    logger = logger or make_logger(log_style)
+    logger.header(project.root.name)
 
+    spec = project.read_intent()
+    logger.reading_intent(len(spec.behavior), len(spec.tests))
     project.write_tests(spec)
 
     # Author or reuse app.ail.
     if not project.read_app_source().strip():
-        print(f"[{project.root.name}] app.ail empty — authoring via "
-              f"`ail ask`...", file=sys.stderr)
+        adapter_desc = _describe_adapter()
+        logger.authoring_start(adapter_desc)
         try:
             source = _author_app(project, spec, max_retries=max_retries)
         except AuthoringError as e:
-            print(f"author failed: {e}", file=sys.stderr)
-            print(f"\nWhat to try:", file=sys.stderr)
-            print(f"  1. The task in INTENT.md may need `intent` (LLM "
-                  f"judgment) rather than `pure fn` (pure computation). "
-                  f"Add a line like 'Use a language model to analyze' "
-                  f"and re-run.", file=sys.stderr)
-            print(f"  2. Use a stronger author model — set "
-                  f"ANTHROPIC_API_KEY (or OPENAI_API_KEY) and re-run.",
-                  file=sys.stderr)
-            print(f"  3. Pass --auto-fix 2 so the agent retries with "
-                  f"the parse error fed back in.", file=sys.stderr)
-            print(f"  4. Write {project.APP_FILE} by hand and re-run "
-                  f"`ail up` — the agent will skip authoring when the "
-                  f"file has content.", file=sys.stderr)
+            _print_authoring_failure(project, e, adapter_desc, logger)
             return 1
         project.write_app_source(source)
-        print(f"[{project.root.name}] wrote {project.app_path}", file=sys.stderr)
+        logger.authoring_done(project.app_path)
     else:
-        print(f"[{project.root.name}] using existing app.ail "
-              f"({project.app_path.stat().st_size} bytes)", file=sys.stderr)
+        logger.using_existing(
+            project.app_path, project.app_path.stat().st_size,
+        )
 
     # Run tests.
     if spec.tests:
-        print(f"[{project.root.name}] running {len(spec.tests)} tests...",
-              file=sys.stderr)
-        passed, total = _run_tests(project, spec.tests)
-        print(f"[{project.root.name}] tests: {passed}/{total} passed",
-              file=sys.stderr)
+        logger.tests_start(len(spec.tests))
+        passed, total = _run_tests(project, spec.tests, logger)
+        logger.tests_summary(passed, total)
         if passed < total and auto_fix_attempts > 0:
             passed = _diagnose_and_repair(
-                project, spec, max_attempts=auto_fix_attempts,
+                project, spec, max_attempts=auto_fix_attempts, logger=logger,
             )
         if require_tests_pass and passed < total:
-            print(f"[{project.root.name}] aborting — tests failed. "
-                  f"Edit INTENT.md or delete app.ail to re-author "
-                  f"(or pass --auto-fix N to let the agent retry).",
-                  file=sys.stderr)
+            logger.tests_aborted()
             return 2
     else:
-        print(f"[{project.root.name}] no tests declared", file=sys.stderr)
+        logger.tests_summary(0, 0)
 
     if not serve:
         return 0
@@ -283,4 +336,4 @@ def bring_up(
     # Defer importing server so non-serving callers don't pay http stdlib cost.
     from .server import serve_project
     port = port_override if port_override is not None else spec.port
-    return serve_project(project, port=port, watch=watch)
+    return serve_project(project, port=port, watch=watch, logger=logger)

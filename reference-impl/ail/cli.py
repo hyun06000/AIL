@@ -94,6 +94,11 @@ def main(argv: list[str] | None = None) -> int:
         help="If declared tests fail, hand the failures to the chat "
              "backend and retry up to N times. Costs LLM calls — "
              "default 0 (off).")
+    p_up.add_argument("--log", choices=["friendly", "compact"],
+        default="friendly",
+        help="Output style. `friendly` (default) is for end users; "
+             "`compact` is the original v1.9.0 dev-style one-liners "
+             "useful for scripts and CI.")
 
     p_chat = sub.add_parser("chat",
         help="Edit an agentic project in natural language. The AI updates "
@@ -176,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
             port_override=args.port,
             watch=not args.no_watch,
             auto_fix_attempts=args.auto_fix,
+            log_style=args.log,
         )
 
     if args.cmd == "chat":
