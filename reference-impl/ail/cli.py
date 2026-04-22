@@ -84,6 +84,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Override the port from INTENT.md ## Deployment")
     p_up.add_argument("--no-serve", action="store_true",
         help="Author + run tests, then exit. Don't start the HTTP server.")
+    p_up.add_argument("--no-watch", action="store_true",
+        help="Skip the file-watch background loop. By default `ail up` "
+             "polls INTENT.md and app.ail for edits and re-runs the "
+             "declared tests on change without restarting the server.")
     p_up.add_argument("--retries", type=int, default=3,
         help="Max retries if the author emits invalid AIL (default 3)")
 
@@ -155,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
             max_retries=args.retries,
             serve=not args.no_serve,
             port_override=args.port,
+            watch=not args.no_watch,
         )
 
     if args.cmd == "parse":

@@ -115,6 +115,7 @@ def bring_up(
     require_tests_pass: bool = True,
     serve: bool = True,
     port_override: Optional[int] = None,
+    watch: bool = True,
 ) -> int:
     """Execute the v0 state machine for `ail up`. Returns process exit code.
 
@@ -164,4 +165,4 @@ def bring_up(
     # Defer importing server so non-serving callers don't pay http stdlib cost.
     from .server import serve_project
     port = port_override if port_override is not None else spec.port
-    return serve_project(project, port=port)
+    return serve_project(project, port=port, watch=watch)

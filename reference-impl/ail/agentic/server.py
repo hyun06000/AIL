@@ -113,8 +113,17 @@ def _make_handler(project: Project):
     return _Handler
 
 
-def serve_project(project: Project, *, port: int, host: str = "127.0.0.1") -> int:
-    """Block, serving the project until SIGINT. Returns exit code."""
+def serve_project(
+    project: Project, *, port: int, host: str = "127.0.0.1",
+    watch: bool = True,
+) -> int:
+    """Block, serving the project until SIGINT. Returns exit code.
+
+    If `watch` is True (default), a background thread polls INTENT.md
+    and app.ail for edits and re-runs the declared tests on change.
+    The HTTP server reads app.ail fresh on every request so the swap
+    is automatic; the watcher's job is just to revalidate and warn.
+    """
     handler = _make_handler(project)
     try:
         server = HTTPServer((host, port), handler)
@@ -126,8 +135,17 @@ def serve_project(project: Project, *, port: int, host: str = "127.0.0.1") -> in
               file=sys.stderr)
         return 3
 
+    watcher = None
+    if watch:
+        # Local import to avoid a cycle through agent.py at import time.
+        from .watcher import Watcher
+        watcher = Watcher(project)
+        watcher.start()
+        print(f"[{project.root.name}] watching INTENT.md and app.ail "
+              f"for edits", file=sys.stderr)
+
     project.append_ledger({
-        "event": "serve_start", "host": host, "port": port,
+        "event": "serve_start", "host": host, "port": port, "watch": watch,
     })
     print(f"[{project.root.name}] serving on http://{host}:{port}/  "
           f"(POST text body, Ctrl-C to stop)", file=sys.stderr)
@@ -136,6 +154,8 @@ def serve_project(project: Project, *, port: int, host: str = "127.0.0.1") -> in
     except KeyboardInterrupt:
         print(f"\n[{project.root.name}] shutting down", file=sys.stderr)
     finally:
+        if watcher is not None:
+            watcher.stop()
         server.server_close()
         project.append_ledger({"event": "serve_stop"})
     return 0
