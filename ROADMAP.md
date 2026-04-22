@@ -37,10 +37,10 @@ v0 (init/up/HTTP serve) and v1 (watcher + chat + auto-fix) close the non-develop
 
 The first six items below come from that case study, in the priority order it implied. The remainder are pre-existing v2 ideas.
 
-- **`perform clock.now() -> Result[Text]`** — pure-function-style time effect. Today AIL has no `now()`; authors hardcode literals like `"2024-01-15"` and the program is wrong forever. Smallest fix, highest payoff.
-- **Authoring prompt surfaces `perform http.get`** — the spec already has the effect; `_authoring_examples()` doesn't demonstrate it, so models default to delegating "fetch web data" to `intent` (which hallucinates the data from training). One example pair in the few-shot set fixes this.
+- ✅ **`perform clock.now() -> Text`** — shipped in v1.9.5. No more hardcoded `"2024-01-15"` literals.
+- ✅ **Authoring prompt surfaces `perform http.get`** — shipped in v1.9.5; verified by hyun06000's usd-now project where Sonnet picked the effect on the real exchangerate-api URL.
 - **`perform schedule.every(seconds: Number) { ... }`** — declarative background polling. Unlocks the dashboard / monitor / cron-job project class. Requires a scheduler thread in the agentic runtime.
-- **Cross-request state effect** on top of `.ail/state/` — `perform state.read("k")` / `perform state.write("k", v)`, process-restart-safe. Lets a long-running service accumulate references / counts / running summaries instead of recomputing from scratch every request.
+- ✅ **Cross-request state effect** — `perform state.read/write/has/delete` shipped in v1.9.8. Process-restart-safe under `.ail/state/keyval/`. Live-verified with the visit-counter example.
 - **HTML / layout output mode** — entries today must return Text; the browser UI shows it as monospace. Allow `entry main` to return rich layout (HTML, structured payload, or INTENT.md `## Layout` directives) so projects can express "left summary, right references" without leaving plain language.
 - **Input-aware UI rendering** — when `entry main` does not reference its `input` parameter, the friendly UI should hide the textarea. Currently a user types "안녕" and gets back unrelated content with no signal that input was ignored.
 

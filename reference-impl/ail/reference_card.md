@@ -473,6 +473,20 @@ Built-in effects:
   - `clock.now(format?: Text) -> Text` — ISO-8601 UTC by default
     (`"iso"`), or seconds-since-epoch when called with `"unix"`.
     Every returned value carries an effect-origin node.
+  - `state.read(key: Text) -> Result[Any]` — read a previously
+    stored value. error if the key is unset or invalid.
+  - `state.write(key: Text, value: Any) -> Result[Boolean]` —
+    atomic JSON write. value must serialize (Text/Number/Boolean/
+    list of those is fine).
+  - `state.has(key: Text) -> Boolean` — true if the key has a value.
+  - `state.delete(key: Text) -> Result[Boolean]` — ok(true) if
+    removed, ok(false) if not present.
+
+    Keys are alphanumeric plus `_ - .`; anything else is rejected.
+    State persists across requests inside an agentic project (under
+    `.ail/state/keyval/`). Outside an agentic project the state
+    effects return an explanatory error — set `AIL_STATE_DIR` to
+    enable manual use from `ail run`.
   - `log(message: Any)` — stderr, returns nothing
   - `human_ask(question: Text) -> Text`
 

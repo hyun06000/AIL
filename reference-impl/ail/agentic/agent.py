@@ -338,6 +338,18 @@ def bring_up(
     logger = logger or make_logger(log_style, language=lang)
     logger.header(project.root.name)
 
+    # Bind the state effect directory BEFORE tests run, so the test
+    # cases exercise the same persistent storage the served program
+    # will see. Use setdefault so an outer shell that pre-sets
+    # AIL_STATE_DIR (e.g. for isolated CI) still wins.
+    import os as _os
+    keyval_dir = project.state_dir / "state" / "keyval"
+    try:
+        keyval_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    _os.environ.setdefault("AIL_STATE_DIR", str(keyval_dir))
+
     spec = project.read_intent()
     logger.reading_intent(len(spec.behavior), len(spec.tests))
     project.write_tests(spec)

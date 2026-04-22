@@ -1,0 +1,15 @@
+// visit-counter — demonstrates cross-request state.
+//
+// The `visits` key holds a running count under .ail/state/keyval/.
+// Every request reads it (defaulting to 0 on first run), bumps it,
+// writes it back, and returns the new value. No intent, no LLM.
+
+entry main(input: Text) {
+    prior = perform state.read("visits")
+    n = 0
+    if is_ok(prior) { n = unwrap(prior) }
+    n = n + 1
+    w = perform state.write("visits", n)
+    if is_error(w) { return w }
+    return ok(join(["visit #", to_text(n)], ""))
+}

@@ -10,6 +10,7 @@ declared in `## Deployment`.
 |---|---|---|
 | [`word-counter/`](word-counter/) | None | Smallest possible agentic project — `Result` threading, HTTP 500 on validation error. README's headline demo. |
 | [`csv-stats/`](csv-stats/) | None | Pure-fn pipeline: parse a CSV body, skip the header, error on malformed rows. No LLM calls per request. |
+| [`visit-counter/`](visit-counter/) | None | Cross-request state — `perform state.read` / `state.write`. Each request increments a counter; the value survives process restart. L2 v2 primitive demo. |
 | [`sentiment/`](sentiment/) | Author + intent (Anthropic / OpenAI / Ollama) | The fn/intent split in one program — pure word count + LLM sentiment label. One model call per request. |
 
 ## Running

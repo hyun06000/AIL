@@ -140,6 +140,13 @@ def serve_project(
     project: Project, *, port: int, host: str = "127.0.0.1",
     watch: bool = True, logger=None,
 ) -> int:
+    # Make `perform state.read/write/has/delete` resolve to this
+    # project's .ail/state/keyval/ — outside an agentic context the
+    # state effects return an explanatory error instead of crashing.
+    import os as _os
+    keyval_dir = project.state_dir / "state" / "keyval"
+    keyval_dir.mkdir(parents=True, exist_ok=True)
+    _os.environ.setdefault("AIL_STATE_DIR", str(keyval_dir))
     """Block, serving the project until SIGINT. Returns exit code.
 
     If `watch` is True (default), a background thread polls INTENT.md

@@ -4,6 +4,96 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.8 — 2026-04-23
+
+Third of the six L2 v2 primitives surfaced by the 2026-04-23
+news-dashboard case study: **persistent cross-request state**. This
+closes Gap #4 — "each request recomputed everything from scratch"
+— and gives agentic projects a place to accumulate counts, store
+last-seen values, keep a running history, and implement
+retry / backoff state that survives process restart.
+
+### Added — `perform state.read/write/has/delete`
+
+Four new effects, all backed by per-key JSON files under
+`.ail/state/keyval/`:
+
+- `perform state.read(key: Text) -> Result[Any]` — returns the
+  stored value or `error("... not set")` if missing.
+- `perform state.write(key: Text, value: Any) -> Result[Boolean]` —
+  atomic write via temp-file + rename. Value must JSON-serialize
+  (Text, Number, Boolean, or list of those — the common case).
+- `perform state.has(key: Text) -> Boolean` — cheap existence check.
+- `perform state.delete(key: Text) -> Result[Boolean]` — ok(true)
+  if removed, ok(false) if not present.
+
+Keys are restricted to `[A-Za-z0-9_\-.]+`, so path-traversal-style
+inputs like `"../../etc/passwd"` get rejected with a clean
+`Result` error rather than escaping the state directory.
+
+### Runtime wiring
+
+- **Agentic server / bring_up now set `AIL_STATE_DIR`** to the
+  project's `.ail/state/keyval/` before tests run. Declared test
+  cases see the same persistent state the running service will,
+  so behaviors depending on state can be validated pre-serve.
+  Outside an agentic project the env var is unset and every state
+  effect returns an explanatory error rather than silently
+  succeeding into a temp dir.
+- **Tests share state with the service.** Running `ail up` against
+  a visit-counter INTENT.md declaring two successful test cases
+  means the counter is at `2` when the first real HTTP request
+  comes in. Users who want test isolation can explicitly clear
+  state or set `AIL_STATE_DIR` to a throwaway path.
+
+### Authoring prompt
+
+- **New PERSISTING STATE ACROSS REQUESTS section** in the default
+  authoring goal. Names the trigger words ("remember", "count",
+  "keep track of", "last", "history", "accumulate") and spells out
+  the default-if-missing pattern: `r = perform state.read("k"); n = 0;
+  if is_ok(r) { n = unwrap(r) }`.
+- **New few-shot example** pinning the state.read + state.write
+  round trip for visit-counter-style prompts.
+
+### New example project
+
+- `reference-impl/examples/agentic/visit-counter/` — a 10-line
+  agentic program that counts its own visits. Committed with a
+  pre-authored `app.ail` so the example runs without an LLM
+  key. Listed in the examples README as the state demo.
+
+### Reference card
+
+- `spec/08-reference-card.ai.md` and the bundled copy updated with
+  the four state signatures and a paragraph on the key whitelist
+  and `.ail/state/keyval/` layout.
+
+### Tests
+
+- 341 tests pass (was 331 in v1.9.7). New: 10 state-effect tests
+  covering the full round trip, cross-invocation persistence, the
+  missing-key error path, path-traversal rejection, atomic-write
+  leaves no `.tmp` leftover, list+number serialization, purity
+  rejection inside `pure fn`, and the no-state-dir case.
+
+### Live verification
+
+Launched the visit-counter example locally; POST `/` returned
+`visit #3`, `#4`, `#5` across three consecutive requests, and the
+on-disk `visits.json` ended at `5`. State survives Ctrl-C + restart
+because the file layout outlasts the process.
+
+### Remaining L2 v2 work
+
+Three of the six case-study gaps still open:
+
+  - `perform schedule.every(...)` for background polling (Gap 3)
+  - HTML / layout output mode (Gap 5)
+  - Input-aware UI rendering (Gap 6)
+
+---
+
 ## v1.9.7 — 2026-04-23
 
 Two fixes from hyun06000's `usd-now` test on v1.9.6. The headline:

@@ -447,10 +447,20 @@ class Executor:
             return self._file_write(args, kwargs, origin)
         if name == "clock.now":
             return self._clock_now(args, kwargs, origin)
+        if name == "state.read":
+            return self._state_read(args, kwargs, origin)
+        if name == "state.write":
+            return self._state_write(args, kwargs, origin)
+        if name == "state.has":
+            return self._state_has(args, kwargs, origin)
+        if name == "state.delete":
+            return self._state_delete(args, kwargs, origin)
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
-            f"file.read, file.write, clock.now, or a declared effect)"
+            f"file.read, file.write, clock.now, "
+            f"state.read, state.write, state.has, state.delete, "
+            f"or a declared effect)"
         )
 
     # --- clock effect (L2 case study 2026-04-23 — fills the "hardcoded
@@ -484,6 +494,144 @@ class Executor:
             # iso / default
             value = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         return ConfidentValue(value, 1.0, origin=origin)
+
+    # --- state effect (L2 v2 case study Gap #4 — cross-request memory).
+    # State is process-restart-safe key/value persistence. Each key maps
+    # to a JSON file under the directory pointed at by AIL_STATE_DIR
+    # (set by the agentic server to .ail/state/keyval/). Outside an
+    # agentic project the env var is unset and every state effect
+    # returns an explanatory error rather than crashing — a raw
+    # `ail run` doesn't get a state dir for free.
+    def _state_dir(self):
+        import os, pathlib
+        path = os.environ.get("AIL_STATE_DIR")
+        if not path:
+            return None
+        d = pathlib.Path(path)
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return None
+        return d
+
+    def _state_key_path(self, key: str):
+        # Restrict keys to a conservative character set so a stray
+        # "../" can't escape the state dir. Everything outside maps
+        # to None which becomes a clean error to the caller.
+        import re
+        if not isinstance(key, str) or not key:
+            return None
+        if not re.match(r"^[A-Za-z0-9_\-.]+$", key):
+            return None
+        d = self._state_dir()
+        if d is None:
+            return None
+        return d / f"{key}.json"
+
+    def _result_ok(self, value, origin):
+        return ConfidentValue(
+            {"_result": True, "ok": True, "value": value},
+            1.0, origin=origin,
+        )
+
+    def _result_err(self, message: str, origin):
+        return ConfidentValue(
+            {"_result": True, "ok": False, "error": message},
+            1.0, origin=origin,
+        )
+
+    def _state_read(self, args, kwargs, origin):
+        """state.read(key) -> Result[Any]"""
+        import json as _json
+        key = args[0].value if args else ""
+        path = self._state_key_path(key)
+        if path is None:
+            if not self._state_dir():
+                return self._result_err(
+                    "state directory not configured (set AIL_STATE_DIR or "
+                    "run inside an agentic project via `ail up`)", origin)
+            return self._result_err(
+                f"invalid state key: {key!r} "
+                "(letters, digits, _ - . only)", origin)
+        if not path.is_file():
+            return self._result_err(
+                f"state key {key!r} not set", origin)
+        try:
+            text = path.read_text(encoding="utf-8")
+            value = _json.loads(text)
+        except Exception as e:
+            return self._result_err(
+                f"could not read state {key!r}: "
+                f"{type(e).__name__}: {e}", origin)
+        return self._result_ok(value, origin)
+
+    def _state_write(self, args, kwargs, origin):
+        """state.write(key, value) -> Result[Boolean]
+
+        Atomic via write-temp-then-rename. Value must JSON-serialize;
+        AIL Text/Number/Boolean/List of those is fine."""
+        import json as _json
+        import os
+        if len(args) < 2:
+            return self._result_err(
+                "state.write needs (key, value)", origin)
+        key = args[0].value
+        value = args[1].value
+        path = self._state_key_path(key)
+        if path is None:
+            if not self._state_dir():
+                return self._result_err(
+                    "state directory not configured (set AIL_STATE_DIR or "
+                    "run inside an agentic project via `ail up`)", origin)
+            return self._result_err(
+                f"invalid state key: {key!r} "
+                "(letters, digits, _ - . only)", origin)
+        try:
+            payload = _json.dumps(value, ensure_ascii=False)
+        except (TypeError, ValueError) as e:
+            return self._result_err(
+                f"value for {key!r} is not serializable: "
+                f"{type(e).__name__}: {e}", origin)
+        try:
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_text(payload, encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError as e:
+            return self._result_err(
+                f"could not write state {key!r}: "
+                f"{type(e).__name__}: {e}", origin)
+        return self._result_ok(True, origin)
+
+    def _state_has(self, args, kwargs, origin):
+        """state.has(key) -> Boolean"""
+        key = args[0].value if args else ""
+        path = self._state_key_path(key)
+        if path is None:
+            return ConfidentValue(False, 1.0, origin=origin)
+        return ConfidentValue(path.is_file(), 1.0, origin=origin)
+
+    def _state_delete(self, args, kwargs, origin):
+        """state.delete(key) -> Result[Boolean]
+        Returns ok(true) if the key existed and was removed,
+        ok(false) if it did not exist, error(...) on permission /
+        I/O problems or invalid key."""
+        key = args[0].value if args else ""
+        path = self._state_key_path(key)
+        if path is None:
+            if not self._state_dir():
+                return self._result_err(
+                    "state directory not configured", origin)
+            return self._result_err(
+                f"invalid state key: {key!r}", origin)
+        if not path.is_file():
+            return self._result_ok(False, origin)
+        try:
+            path.unlink()
+        except OSError as e:
+            return self._result_err(
+                f"could not delete state {key!r}: "
+                f"{type(e).__name__}: {e}", origin)
+        return self._result_ok(True, origin)
 
     # --- effect implementations ---
 

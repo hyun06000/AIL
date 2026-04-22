@@ -473,6 +473,17 @@ def _build_authoring_goal() -> str:
         "an unchanging timestamp in a live service is always wrong. "
         "Only use `intent` for the interpretation of fetched data, "
         "never for the fetch itself.\n\n"
+        "PERSISTING STATE ACROSS REQUESTS — use `perform "
+        "state.read(key)` / `perform state.write(key, value)` / "
+        "`perform state.has(key)` / `perform state.delete(key)` when "
+        "the task says \"remember\", \"count\", \"keep track of\", "
+        "\"last\", \"history\", \"accumulate\". Values survive process "
+        "restarts (the agentic runtime stores them under "
+        "`.ail/state/keyval/`). state.read and state.write return "
+        "Result; state.has returns Boolean. Default-if-missing "
+        "pattern: `r = perform state.read(\"k\"); n = 0; if is_ok(r) "
+        "{ n = unwrap(r) }`. Without persistent state, every request "
+        "recomputes from scratch and cannot accumulate anything.\n\n"
         "CRITICAL RULE: if you declare an `intent`, the entry MUST "
         "actually call it — either directly, or via a `fn` that calls "
         "it. An intent that is declared but never invoked is an "
@@ -1245,6 +1256,24 @@ def _authoring_examples() -> list[tuple[list[Any], Any]]:
                 'entry main(x: Text) {\n'
                 '    now = perform clock.now()\n'
                 '    return join(["Hello! The current time is ", now], "")\n'
+                '}'
+            ),
+        ),
+        # Persistent state — pins the state.read default-if-missing
+        # pattern and state.write for the accumulate case. Before this
+        # example, models reached for `intent remember_X(...)` which
+        # (like the fetch case) cannot actually remember anything
+        # across requests.
+        (
+            [{"prompt": "Count how many times this endpoint has been called and return the total"}],
+            (
+                'entry main(x: Text) {\n'
+                '    prior = perform state.read("visits")\n'
+                '    n = 0\n'
+                '    if is_ok(prior) { n = unwrap(prior) }\n'
+                '    n = n + 1\n'
+                '    perform state.write("visits", n)\n'
+                '    return join(["visit #", to_text(n)], "")\n'
                 '}'
             ),
         ),
