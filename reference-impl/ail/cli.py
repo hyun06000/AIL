@@ -71,6 +71,22 @@ def main(argv: list[str] | None = None) -> int:
     p_parse = sub.add_parser("parse", help="Parse and print AST")
     p_parse.add_argument("file", help="Path to .ail source file")
 
+    p_init = sub.add_parser("init",
+        help="Scaffold a new agentic AIL project (creates folder + INTENT.md)")
+    p_init.add_argument("name",
+        help="Project directory name. The folder is created in the cwd.")
+
+    p_up = sub.add_parser("up",
+        help="Read INTENT.md, author/load app.ail, run tests, serve HTTP")
+    p_up.add_argument("path", nargs="?", default=".",
+        help="Project directory (default: current directory)")
+    p_up.add_argument("--port", type=int, default=None,
+        help="Override the port from INTENT.md ## Deployment")
+    p_up.add_argument("--no-serve", action="store_true",
+        help="Author + run tests, then exit. Don't start the HTTP server.")
+    p_up.add_argument("--retries", type=int, default=3,
+        help="Max retries if the author emits invalid AIL (default 3)")
+
     sub.add_parser("version", help="Print version")
 
     args = parser.parse_args(argv)
@@ -111,6 +127,35 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
         return 0
+
+    if args.cmd == "init":
+        from .agentic import Project
+        try:
+            proj = Project.init(args.name)
+        except FileExistsError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        except Exception as e:
+            print(f"Error: {type(e).__name__}: {e}", file=sys.stderr)
+            return 1
+        print(f"Initialized AIL project at {proj.root}")
+        print(f"  edit:  {proj.intent_path}")
+        print(f"  then:  ail up {args.name}")
+        return 0
+
+    if args.cmd == "up":
+        from .agentic import Project, bring_up
+        try:
+            proj = Project.at(args.path)
+        except FileNotFoundError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        return bring_up(
+            proj,
+            max_retries=args.retries,
+            serve=not args.no_serve,
+            port_override=args.port,
+        )
 
     if args.cmd == "parse":
         source = Path(args.file).read_text(encoding="utf-8")

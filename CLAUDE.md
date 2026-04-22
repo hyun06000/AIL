@@ -78,7 +78,7 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 **점수 방법론 audit (2026-04-22):** `heaal_score.py`의 vacuous-truth 버그 발견 + 수정. 4개 program-property 메트릭을 `/N`이 아니라 `/parsed`로 계산. 발표된 점수 중 R3 v3 fine-tune의 Python이 48.5→58.0으로 정정 (Δ +39.2 → +29.7). AIL 점수는 모두 변동 없음. 전체 감사: [`docs/benchmarks/2026-04-22_score_audit.md`](docs/benchmarks/2026-04-22_score_audit.md).
 
-**PyPI 미배포 변경:** 없음. dev = main = PyPI 동기화됨.
+**PyPI 미배포 변경:** L2 v0 (agentic projects) 첫 동작 코드 — `ail init <name>` + `ail up` + INTENT.md 파서 + Project 클래스 + 최소 HTTP 서버 + ledger.jsonl. 18개 단위 테스트, end-to-end smoke 통과 (실 LLM 호출 없이 사전 작성된 app.ail로). 다음 PyPI 태그(v1.8.8 또는 v1.9.0) 후보.
 
 ---
 
