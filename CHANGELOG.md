@@ -4,6 +4,80 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.0 — 2026-04-22
+
+First minor bump since v1.8.0 — adds the L2 layer of the HEAAL
+paradigm. AIL is no longer a one-shot CLI calculator; an "AIL
+project" is now a folder that an in-project AI agent owns. Two
+commands cover the non-developer path: `ail init <name>` and
+`ail up`. Everything else falls back to file editing the agent does
+or the user does, both updated by the watch loop or by `ail chat`.
+
+No grammar changes; v1.8 spec freeze still in effect.
+
+### Agentic projects (L2 v0)
+
+- **`ail init <name>`** — scaffolds a project folder with an
+  `INTENT.md` template (the only file the human edits) and an
+  empty `.ail/state/` directory plus an append-only ledger.
+- **`ail up [path]`** — reads INTENT.md, authors `app.ail` via the
+  existing `ask()` pipeline if empty, runs the test cases declared
+  under `## Tests`, then serves over HTTP. POST `/` runs
+  `entry main(input)` with the request body; GET `/healthz` returns
+  200. Port collision fails loudly. Test extraction handles English
+  (`## Tests`) and Korean (`## 테스트`) headers; quoted test inputs
+  interpret `\n` `\t` `\r` escapes.
+- **`.ail/ledger.jsonl`** — append-only record of every authoring
+  attempt, test run, request, watcher event, chat edit, and
+  auto-fix attempt. The L3-OS substrate begins here.
+- **Three example projects** under
+  `reference-impl/examples/agentic/`:
+  `word-counter/` (pure fn, headline demo), `csv-stats/` (pure-fn
+  pipeline with Result threading), `sentiment/` (fn + intent split,
+  needs an authoring backend). Each ships with a pre-authored
+  `app.ail` so the example runs without paying for an LLM call.
+
+### Agentic projects (L2 v1)
+
+- **File watcher + auto reload** — `ail up` polls INTENT.md and
+  app.ail in a daemon thread. Editor saves picked up in ~1s without
+  restarting the HTTP server. The handler reads app.ail fresh on
+  every request, so the swap is automatic; the watcher's job is to
+  re-run declared tests and warn (not abort) on failure. Opt out
+  with `ail up --no-watch`.
+- **`ail chat <path> "<request>"`** — natural-language project
+  edits. The author backend gets the current INTENT.md + current
+  app.ail + the user's request and returns updated whole-file
+  replacements for either or both, plus a one-sentence summary.
+  The agent saves the change and re-runs the declared tests.
+- **`ail up --auto-fix N`** — when declared tests fail, hand the
+  failures to the chat backend and retry up to N times before
+  aborting. Stops early if the model declines to change anything.
+  Default off (LLM cost is opt-in).
+
+### HTTP server polish
+
+- Result-shaped return values are unwrapped for HTTP clients
+  (success → inner value, error → message + HTTP 500). Agentic
+  programs that want to signal error use the idiomatic AIL pattern
+  (`return error(...)`) instead of returning sentinel strings.
+
+### Tests
+
+- 307 tests pass (was 269 before v1.9.0 work began). New: 18
+  agentic core, 5 watcher, 7 chat, 7 auto-fix.
+
+### Documentation
+
+- README + `docs/ko/README.ko.md` add a "From a one-shot answer to a
+  running service" section walking through `ail init` → edit
+  INTENT.md → `ail up` with real command output and curl examples.
+- `runtime/01-agentic-projects.md` is the design doc this work
+  implements; §6 v1 checklist is now ✅ for all three items
+  (file watch, chat, auto-fix).
+
+---
+
 ## v1.8.7 — 2026-04-22
 
 Methodology correction + new boundary data. No grammar changes; spec
