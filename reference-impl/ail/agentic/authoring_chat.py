@@ -833,9 +833,8 @@ evolve decide_step {{
 entry main(input: Text) {{
     guide_r = perform http.get("https://service.com/skill.md")
     if is_error(guide_r) {{ return "❌ guide load failed" }}
-    guide = slice(guide_r.body, 0, 6000)
 
-    plan = to_text(make_plan(guide))
+    plan = to_text(make_plan(guide_r.body))
     log = "=== Agent Log ===\\n✓ guide loaded\\n✓ plan ready\\n"
     history = "PLAN:\\n" + plan + "\\n\\n"
 
