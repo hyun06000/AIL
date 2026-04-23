@@ -75,6 +75,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "tests_aborted_1":   "Tests didn't pass — not starting the service.",
         "tests_aborted_2":   "Edit INTENT.md or app.ail, or re-run with --auto-fix N.",
         "watching":          "Watching INTENT.md and app.ail for edits.",
+        "schedule_armed":    "Recurring tick every {s:g}s — stored to .ail/ledger.jsonl.",
         "intent_changed":    "INTENT.md changed — re-reading ({t} tests){suffix}",
         "also_app":          " (app.ail changed too)",
         "app_changed":       "app.ail changed — re-checking",
@@ -126,6 +127,7 @@ _STRINGS: dict[str, dict[str, str]] = {
             "INTENT.md나 app.ail을 수정해 보거나, --auto-fix N 옵션을 붙여 "
             "다시 실행해 보세요.",
         "watching":          "INTENT.md와 app.ail의 변경을 지켜보는 중.",
+        "schedule_armed":    "{s:g}초마다 자동 실행 — 기록은 .ail/ledger.jsonl에 남아요.",
         "intent_changed":    "INTENT.md가 바뀌었어요 — 다시 읽는 중 (테스트 {t}개){suffix}",
         "also_app":          " (app.ail도 함께 바뀜)",
         "app_changed":       "app.ail이 바뀌었어요 — 다시 확인하는 중",
@@ -355,6 +357,10 @@ class FriendlyLogger(Logger):
         _w(f"  {self._s('watching')}")
         _w()
 
+    def schedule_armed(self, seconds: float) -> None:
+        _w(f"  {self._s('schedule_armed', s=seconds)}")
+        _w()
+
     def watcher_intent_changed(self, tests: int, also_app: bool) -> None:
         _w()
         suffix = self._s("also_app") if also_app else ""
@@ -471,6 +477,9 @@ class CompactLogger(Logger):
 
     def watcher_watching(self) -> None:
         _w(f"{self._tag()}watching INTENT.md and app.ail for edits")
+
+    def schedule_armed(self, seconds: float) -> None:
+        _w(f"{self._tag()}schedule every {seconds:g}s")
 
     def watcher_intent_changed(self, tests: int, also_app: bool) -> None:
         suffix = " + app.ail changed" if also_app else ""

@@ -487,6 +487,13 @@ Built-in effects:
     `.ail/state/keyval/`). Outside an agentic project the state
     effects return an explanatory error — set `AIL_STATE_DIR` to
     enable manual use from `ail run`.
+  - `schedule.every(seconds: Number) -> Result[Boolean]` — register
+    a recurring re-invocation of `entry main` inside an agentic
+    project. Call from inside the entry; the agentic runtime starts
+    a background thread that re-runs entry every N seconds. Pair with
+    `state.write` so each tick stores a result and GET / reads it.
+    Seconds in (0, 86400]. Outside `ail up` it returns an explanatory
+    error. Latest call wins.
   - `log(message: Any)` — stderr, returns nothing
   - `human_ask(question: Text) -> Text`
 

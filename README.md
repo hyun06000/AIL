@@ -217,6 +217,8 @@ Design notes: [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md)
 | `ail chat` | v1.9.0 | Natural-language edits to a running project |
 | `--auto-fix N` | v1.9.0 | Autonomous retry loop for failed authoring |
 | `clock.now` / `state.*` effects | v1.9.5–v1.9.8 | Stateful and time-aware programs |
+| Input-aware UI / HTML output mode | v1.9.9–v1.9.10 | Browser UI adapts to whether entry uses input / returns HTML |
+| `schedule.every` effect | v1.9.12 | Recurring `entry` re-invocation — dashboards and cron-style workloads |
 
 Standard library (written in AIL, not Python): `stdlib/core`, `stdlib/language`, `stdlib/utils`
 

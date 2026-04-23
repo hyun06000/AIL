@@ -455,12 +455,14 @@ class Executor:
             return self._state_has(args, kwargs, origin)
         if name == "state.delete":
             return self._state_delete(args, kwargs, origin)
+        if name == "schedule.every":
+            return self._schedule_every(args, kwargs, origin)
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
             f"file.read, file.write, clock.now, "
             f"state.read, state.write, state.has, state.delete, "
-            f"or a declared effect)"
+            f"schedule.every, or a declared effect)"
         )
 
     # --- clock effect (L2 case study 2026-04-23 — fills the "hardcoded
@@ -630,6 +632,64 @@ class Executor:
         except OSError as e:
             return self._result_err(
                 f"could not delete state {key!r}: "
+                f"{type(e).__name__}: {e}", origin)
+        return self._result_ok(True, origin)
+
+    # --- schedule effect (L2 v2 case study Gap #3 — recurring work).
+    # The effect only *registers* the cadence; the actual re-invocation
+    # loop lives in `agentic/server.py`, which polls the schedule file
+    # and owns the background thread. Outside an agentic project the
+    # env var is unset and the effect returns a clean error.
+    def _schedule_every(self, args, kwargs, origin):
+        """schedule.every(seconds: Number) -> Result[Boolean]
+
+        Registers "this endpoint should be re-invoked every N seconds".
+        The agentic server notices the registration (via a JSON file
+        pointed at by AIL_SCHEDULE_FILE) and runs the recurring
+        invocation in a background thread. Calling twice updates the
+        cadence; latest call wins. Outside `ail up` the effect returns
+        an error — there's nothing to drive the recurrence.
+
+        Seconds must be a positive number; hard-capped at 86400 (1 day)
+        to keep an author from accidentally scheduling something that
+        never fires during a debug session.
+        """
+        import json as _json
+        import os
+        if not args:
+            return self._result_err(
+                "schedule.every needs a seconds argument", origin)
+        raw = args[0].value
+        try:
+            seconds = float(raw)
+        except (TypeError, ValueError):
+            return self._result_err(
+                f"schedule.every: seconds must be a number (got {raw!r})",
+                origin)
+        if seconds <= 0:
+            return self._result_err(
+                "schedule.every: seconds must be > 0", origin)
+        if seconds > 86400:
+            return self._result_err(
+                "schedule.every: seconds capped at 86400 (1 day)", origin)
+
+        path_str = os.environ.get("AIL_SCHEDULE_FILE")
+        if not path_str:
+            return self._result_err(
+                "schedule.every: no scheduler running "
+                "(set AIL_SCHEDULE_FILE or run inside `ail up`)", origin)
+
+        import pathlib
+        path = pathlib.Path(path_str)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = _json.dumps({"seconds": seconds}, ensure_ascii=False)
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_text(payload, encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError as e:
+            return self._result_err(
+                f"schedule.every: could not write schedule file: "
                 f"{type(e).__name__}: {e}", origin)
         return self._result_ok(True, origin)
 

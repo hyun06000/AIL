@@ -12,6 +12,7 @@ declared in `## Deployment`.
 | [`csv-stats/`](csv-stats/) | None | Pure-fn pipeline: parse a CSV body, skip the header, error on malformed rows. No LLM calls per request. |
 | [`visit-counter/`](visit-counter/) | None | Cross-request state — `perform state.read` / `state.write`. Each request increments a counter; the value survives process restart. L2 v2 primitive demo. |
 | [`sentiment/`](sentiment/) | Author + intent (Anthropic / OpenAI / Ollama) | The fn/intent split in one program — pure word count + LLM sentiment label. One model call per request. |
+| [`news-ticker/`](news-ticker/) | None | Recurring work via `perform schedule.every(10)` + persistent `state.write` + HTML output mode. Three L2 v2 primitives composing in one dashboard. |
 
 ## Running
 

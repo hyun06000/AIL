@@ -217,6 +217,8 @@ ail up word-counter
 | `ail chat` | v1.9.0 | 자연어로 실행 중인 프로젝트 편집 |
 | `--auto-fix N` | v1.9.0 | 실패한 저작에 대한 자율 재시도 루프 |
 | `clock.now` / `state.*` effects | v1.9.5–v1.9.8 | 상태 보존 및 시간 인식 프로그램 |
+| Input-aware UI / HTML 출력 모드 | v1.9.9–v1.9.10 | 브라우저 UI가 entry의 input 사용 여부 / HTML 반환 여부에 맞춰 적응 |
+| `schedule.every` effect | v1.9.12 | entry 주기적 재호출 — 대시보드 / cron 스타일 작업 |
 
 표준 라이브러리 (Python이 아닌 AIL로 작성): `stdlib/core`, `stdlib/language`, `stdlib/utils`
 

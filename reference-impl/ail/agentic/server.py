@@ -184,6 +184,10 @@ def serve_project(
     keyval_dir = project.state_dir / "state" / "keyval"
     keyval_dir.mkdir(parents=True, exist_ok=True)
     _os.environ.setdefault("AIL_STATE_DIR", str(keyval_dir))
+    # `perform schedule.every(N)` writes to this file; the Scheduler
+    # below polls it and drives recurring entry invocations.
+    schedule_file = project.state_dir / "schedule.json"
+    _os.environ.setdefault("AIL_SCHEDULE_FILE", str(schedule_file))
     """Block, serving the project until SIGINT. Returns exit code.
 
     If `watch` is True (default), a background thread polls INTENT.md
@@ -207,6 +211,41 @@ def serve_project(
         watcher.start()
         logger.watcher_watching()
 
+    # Start the scheduler unconditionally — if the program never calls
+    # `perform schedule.every(...)`, the file stays absent and the
+    # scheduler thread idles at ~0.5s polls, cheap enough to ignore.
+    from .scheduler import Scheduler
+
+    def _invoke_scheduled_tick():
+        try:
+            result, _trace = ail_run(str(project.app_path), input="")
+            value = result.value
+            if _looks_like_error(value):
+                project.append_ledger({
+                    "event": "schedule_tick",
+                    "ok": False,
+                    "value_preview": str(_render_value(value))[:200],
+                })
+            else:
+                project.append_ledger({
+                    "event": "schedule_tick",
+                    "ok": True,
+                    "value_preview": str(value)[:200],
+                })
+        except Exception as e:
+            project.append_ledger({
+                "event": "schedule_tick",
+                "ok": False,
+                "error": f"{type(e).__name__}: {e}",
+            })
+
+    scheduler = Scheduler(
+        schedule_file=schedule_file,
+        invoke=_invoke_scheduled_tick,
+        logger=logger,
+    )
+    scheduler.start()
+
     project.append_ledger({
         "event": "serve_start", "host": host, "port": port, "watch": watch,
     })
@@ -216,6 +255,7 @@ def serve_project(
     except KeyboardInterrupt:
         logger.shutting_down()
     finally:
+        scheduler.stop()
         if watcher is not None:
             watcher.stop()
         server.server_close()

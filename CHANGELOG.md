@@ -4,6 +4,79 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.12 — 2026-04-23
+
+**Last of the six L2 v2 primitives surfaced by the 2026-04-23
+news-dashboard case study: `perform schedule.every(N)`.** Closes
+Gap #3 — a dashboard declared "refresh every 30 seconds" but had
+no way to express that. L2 v2 is now complete at 6/6.
+
+### Added — `perform schedule.every(seconds: Number) -> Result[Boolean]`
+
+Called from inside `entry main`. Registers "re-invoke this entry
+every N seconds"; the agentic runtime runs the recurring invocation
+in a background thread.
+
+```ail
+entry main(input: Text) {
+    perform schedule.every(30)              // register the cadence
+    // … fetch, compute, perform state.write(...) to persist …
+    return summary
+}
+```
+
+Each tick re-runs `entry main("")`, records the outcome to the
+ledger as `event: "schedule_tick"`, and continues on failure. Entry
+can persist tick results via `perform state.write(...)` so GET /
+reads the freshest value.
+
+### Semantics
+
+- Seconds must be in `(0, 86400]`. Zero/negative/over-a-day → clean
+  `Result-error`, not a crash.
+- Latest call wins. Re-invoking `schedule.every(N)` just updates
+  the cadence; the scheduler picks up the new value on its next
+  ~0.5s poll.
+- Outside `ail up` (no `AIL_SCHEDULE_FILE` env var) the effect
+  returns `error("no scheduler running …")` — an `ail run` of the
+  same program gets a clean error, not a silent no-op.
+- Scheduler thread swallows per-tick exceptions. A flaky upstream
+  doesn't stop the cadence.
+
+### Implementation
+
+- New `ail/agentic/scheduler.py` — `Scheduler` class, one thread per
+  project, polls the schedule file every 0.5s for cadence updates.
+- `serve_project` starts the scheduler unconditionally; idles cheaply
+  when no schedule is armed.
+- Logger gets `schedule_armed(seconds)` in English + Korean for the
+  friendly UI.
+- Added `schedule.every` to the authoring prompt so `ail ask` knows
+  when to reach for it ("every N seconds", "refresh every …",
+  "poll", "update periodically").
+
+### New example: `examples/agentic/news-ticker/`
+
+Three L2 v2 primitives composing in one dashboard: schedule.every
+(cadence) + state.write (persistence) + HTML output mode (inline
+rendering). A counter that ticks every 10 seconds in the background.
+
+### Tests
+
+- +11 tests in new `test_schedule_effect.py` — effect-level (write
+  the file, validate args, latest wins) and scheduler-level (fires
+  at cadence, stops cleanly, swallows exceptions, ignores malformed
+  files, picks up cadence changes). 412 passing total.
+
+### L2 v2 complete
+
+All six primitives from the 2026-04-23 news-dashboard case study
+have shipped: clock.now, http.get steering, state.*, input-aware
+UI, HTML output mode, schedule.every. Ready to roll v1.9.9–v1.9.12
+to PyPI.
+
+---
+
 ## v1.9.11 — 2026-04-23
 
 Trace transparency: `ail ask --show-source` now prints
