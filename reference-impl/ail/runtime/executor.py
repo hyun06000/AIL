@@ -1592,11 +1592,20 @@ class Executor:
         except Exception as e:
             last_err = f"DuckDuckGo: {type(e).__name__}: {e}"
 
-        return self._result_err(
-            "검색 결과를 가져오지 못했어요. "
-            "Google 검색 API 키를 설정하면 더 안정적으로 검색할 수 있어요. "
-            "(⚙ 설정에서 GOOGLE_SEARCH_API_KEY와 GOOGLE_SEARCH_CX를 추가하세요)",
-            origin)
+        google_key_set = bool(os.environ.get("GOOGLE_SEARCH_API_KEY", "")
+                              and os.environ.get("GOOGLE_SEARCH_CX", ""))
+        if google_key_set:
+            hint = (
+                "Google API 키가 설정되어 있지만 검색에 실패했어요 "
+                f"({last_err}). 키가 유효한지 확인해주세요."
+            )
+        else:
+            hint = (
+                "검색 결과를 가져오지 못했어요. "
+                "Google 검색 API 키를 설정하면 더 안정적으로 검색할 수 있어요. "
+                "(⚙ 설정에서 GOOGLE_SEARCH_API_KEY와 GOOGLE_SEARCH_CX를 추가하세요)"
+            )
+        return self._result_err(hint, origin)
 
     def _file_read(self, args: list[ConfidentValue],
                    kwargs: dict[str, ConfidentValue],

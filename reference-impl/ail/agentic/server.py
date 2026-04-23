@@ -547,6 +547,11 @@ def _make_handler(project: Project):
                     return
                 length = int(self.headers.get("Content-Length", "0") or "0")
                 run_input = self.rfile.read(length).decode("utf-8") if length else ""
+                # Re-load secrets each run so keys set via the settings
+                # panel are visible to effects (search.web, env.read, etc.)
+                # without requiring a server restart.
+                from .authoring_chat import load_project_secrets
+                load_project_secrets(project)
                 try:
                     result, trace = ail_run(str(program_path), input=run_input)
                     value = result.value
