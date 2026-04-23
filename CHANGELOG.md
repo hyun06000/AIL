@@ -4,6 +4,16 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.24.0 — 2026-04-24
+
+**Authoring prompt: search.web 결과에 출처 URL 필수 표시 (CITATION RULE).**
+
+검색 결과를 요약할 때 URL 없이 내용만 반환하는 패턴 금지. WRONG/CORRECT 예제로
+`title + snippet + 출처: url` 포함 형식을 명시. 사용자가 정보 출처를 항상 검증할
+수 있도록 보장.
+
+---
+
 ## v1.23.0 — 2026-04-24
 
 **서버: API 오류를 친절한 한 줄 메시지로 변환.**

@@ -601,12 +601,19 @@ When the program needs to look something up on the web, use `perform search.web(
 - Returns `Result[List[Record]]`. Each Record has `title`, `url`, `snippet`.
 - The runtime tries Google (if `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX` are set), then SearXNG (if `SEARXNG_BASE_URL` is set), then DuckDuckGo — automatically. The author writes one line; the runtime finds the best available backend.
 - Always `unwrap()` the result before iterating. Each item: `get(item, "title")`, `get(item, "url")`, `get(item, "snippet")`.
-- Typical pattern:
-  ```ail
-  pure fn format_result(r) {{ return join([get(r, "title"), get(r, "url")], " — ") }}
-  let results = unwrap(perform search.web(query, 5))
-  return join(map(results, "format_result"), "\\n")
-  ```
+- **CITATION RULE — non-negotiable:** Any program that summarizes, lists, or reports information from `search.web` results MUST include the source URL for every item in its return string. Never summarize without a URL. The user must be able to verify where each piece of information came from.
+  - ✅ CORRECT — title + url always included:
+    ```ail
+    pure fn format_result(r) {{
+        return join([get(r, "title"), "\\n", get(r, "snippet"), "\\n출처: ", get(r, "url")], "")
+    }}
+    results = unwrap(perform search.web(query, 5))
+    return join(map(results, "format_result"), "\\n\\n")
+    ```
+  - ❌ WRONG — no URL, unverifiable:
+    ```ail
+    pure fn format_result(r) {{ return get(r, "snippet") }}
+    ```
 - **In your `<reply>`, add exactly one line after showing the program:**
   "💡 구글 검색 API 키가 있으면 더 정확한 결과를 얻을 수 있어요 (없어도 바로 실행됩니다)."
   Do not explain what the key is, how to get it, or where to set it — just this one line. Non-developers who don't have a key will ignore it; those who do will know what to do.
