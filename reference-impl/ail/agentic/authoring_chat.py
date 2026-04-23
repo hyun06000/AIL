@@ -1122,6 +1122,30 @@ intent build_discussion_title() -> Text {{ goal: ... }}
 entry main(input: Text) {{
     token_r = perform env.read("GITHUB_TOKEN")
     if is_error(token_r) {{ return unwrap_error(token_r) }}
+    token = unwrap(token_r)
+    auth_headers = [["Authorization", join(["Bearer ", token], "")], ["Accept", "application/vnd.github+json"]]
+
+    # Step 1: get repo node ID
+    repo_r = perform http.graphql(
+        "https://api.github.com/graphql",
+        "query {{ repository(owner: \\"OWNER\\", name: \\"REPO\\") {{ id }} }}",
+        headers: auth_headers)
+    if is_error(repo_r) {{ return unwrap_error(repo_r) }}
+    repo_id = get(get(unwrap(repo_r), "repository"), "id")
+
+    # Step 2: get discussion category IDs — use node(id:) NOT repository(id:)
+    cat_r = perform http.graphql(
+        "https://api.github.com/graphql",
+        "query($r: ID!) {{ node(id: $r) {{ ... on Repository {{ discussionCategories(first: 10) {{ nodes {{ id name }} }} }} }} }}",
+        [["r", repo_id]],
+        headers: auth_headers)
+    if is_error(cat_r) {{ return unwrap_error(cat_r) }}
+    categories = get(get(get(unwrap(cat_r), "node"), "discussionCategories"), "nodes")
+    category_id = ""
+    for cat in categories {{
+        if get(cat, "name") == "Announcements" {{ category_id = get(cat, "id") }}
+        if get(cat, "name") == "General" {{ category_id = get(cat, "id") }}
+    }}
 
     title = build_discussion_title()
     body = build_discussion_body()
@@ -1129,8 +1153,7 @@ entry main(input: Text) {{
     plan = join([
         "GitHub Discussion으로 올릴 내용:",
         "",
-        join(["Repo: ", REPO_NAME], ""),
-        join(["Category: ", CATEGORY_NAME], ""),
+        join(["Repo: OWNER/REPO — Category: ", category_id], ""),
         join(["제목: ", title], ""),
         "",
         "본문:",
@@ -1141,28 +1164,20 @@ entry main(input: Text) {{
     approval = perform human.approve(plan)
     if is_error(approval) {{ return unwrap_error(approval) }}
 
-    # http.graphql handles: HTTP status, JSON parse, `errors` array,
-    # `data` presence-and-not-null. Returns ok(data) on full success
-    # or error(message) with a concrete reason on any failure —
-    # authors never touch the 200-with-errors trap again.
     r = perform http.graphql(
         "https://api.github.com/graphql",
         "mutation($repo: ID!, $cat: ID!, $t: String!, $b: String!) {{ createDiscussion(input: {{repositoryId: $repo, categoryId: $cat, title: $t, body: $b}}) {{ discussion {{ url }} }} }}",
-        [
-            ["repo", REPO_NODE_ID],
-            ["cat", CATEGORY_NODE_ID],
-            ["t", title],
-            ["b", body]
-        ],
-        headers: [
-            ["Authorization", join(["Bearer ", unwrap(token_r)], "")],
-            ["Accept", "application/vnd.github+json"]
-        ])
+        [["repo", repo_id], ["cat", category_id], ["t", title], ["b", body]],
+        headers: auth_headers)
     if is_error(r) {{ return unwrap_error(r) }}
     data = unwrap(r)
-    return join(["posted: ",
-        get(get(get(data, "createDiscussion"), "discussion"), "url")], "")
+    return join(["posted: ", get(get(get(data, "createDiscussion"), "discussion"), "url")], "")
 }}
+
+# KEY GitHub GraphQL RULES:
+# - GET repo node_id: repository(owner: "O", name: "N") {{ id }}
+# - GET categories by node_id: node(id: $r) {{ ... on Repository {{ discussionCategories... }} }}  ← NOT repository(id: $r)
+# - repository(id: ...) does NOT exist in GitHub API — always use node(id:) for ID-based lookup
 ```
 
 Key contrasts with the "bad old way":
