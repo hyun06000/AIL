@@ -461,12 +461,15 @@ class Executor:
             return self._schedule_every(args, kwargs, origin)
         if name == "env.read":
             return self._env_read(args, kwargs, origin)
+        if name == "human.approve":
+            return self._human_approve(args, kwargs, origin)
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
             f"http.post_json, file.read, file.write, clock.now, "
             f"state.read, state.write, state.has, state.delete, "
-            f"schedule.every, env.read, or a declared effect)"
+            f"schedule.every, env.read, human.approve, "
+            f"or a declared effect)"
         )
 
     # --- clock effect (L2 case study 2026-04-23 — fills the "hardcoded
@@ -669,6 +672,134 @@ class Executor:
             return self._result_err(
                 f"env var {name!r} is not set", origin)
         return self._result_ok(os.environ[name], origin)
+
+    # --- human.approve effect (L2 v3 — plan-validate-execute)
+    # Pauses the run on a structured plan review. The agentic server's
+    # UI polls .ail/approvals/pending.json, renders the plan text, and
+    # offers Approve / Decline. Outside an agentic project (no
+    # AIL_APPROVAL_DIR) the effect returns a clean error so `ail run`
+    # doesn't hang waiting for a UI that isn't there.
+    #
+    # Shape: perform human.approve(plan: Text) -> Result[Boolean]
+    #   - ok(true)   = user approved, program should continue with
+    #                  the side effect
+    #   - error(...) = user declined, timed out, or not in a UI
+    #                  context. Caller handles the Result normally.
+    #
+    # The file dance (as opposed to in-memory Event) is intentional:
+    # it makes the pending approval visible to any external observer,
+    # auditable in the ledger, and survives a refresh of the UI tab.
+    def _human_approve(self, args, kwargs, origin):
+        """human.approve(plan: Text) -> Result[Boolean]"""
+        import os
+        import json as _json
+        import pathlib
+        import uuid
+        import time as _time
+
+        if not args:
+            return self._result_err(
+                "human.approve needs a plan argument", origin)
+        plan = args[0].value
+        if not isinstance(plan, str) or not plan.strip():
+            return self._result_err(
+                "human.approve: plan must be a non-empty string "
+                "describing what's about to happen", origin)
+
+        dir_str = os.environ.get("AIL_APPROVAL_DIR")
+        if not dir_str:
+            return self._result_err(
+                "human.approve: no UI context "
+                "(AIL_APPROVAL_DIR unset — run inside `ail up`)",
+                origin)
+        approval_dir = pathlib.Path(dir_str)
+        try:
+            approval_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            return self._result_err(
+                f"human.approve: could not create approval dir: {e}",
+                origin)
+
+        approval_id = uuid.uuid4().hex
+        pending_path = approval_dir / "pending.json"
+        record = {
+            "id": approval_id,
+            "plan": plan,
+            "created_at": _time.time(),
+            "status": "pending",
+        }
+        try:
+            tmp = pending_path.with_suffix(".tmp")
+            tmp.write_text(
+                _json.dumps(record, ensure_ascii=False),
+                encoding="utf-8")
+            os.replace(tmp, pending_path)
+        except OSError as e:
+            return self._result_err(
+                f"human.approve: could not write approval record: {e}",
+                origin)
+
+        self.trace.record(
+            "human_approve_pending",
+            id=approval_id,
+            plan_preview=plan[:200],
+        )
+
+        # Poll for a decision. 10 minutes cap — a user who walks away
+        # gets a clean `error("timed out")` and the program returns
+        # instead of hanging the server forever. Polling interval is
+        # 250ms: fast enough to feel instant after the click, slow
+        # enough to be negligible overhead.
+        deadline = _time.monotonic() + 600.0
+        while _time.monotonic() < deadline:
+            try:
+                raw = pending_path.read_text(encoding="utf-8")
+                current = _json.loads(raw)
+            except (OSError, ValueError):
+                current = None
+            # Defend against the file being replaced by a different
+            # approval (shouldn't happen in single-run flow, but a
+            # racing second run would stomp us and we'd rather bail
+            # than silently read someone else's decision).
+            if current is None or current.get("id") != approval_id:
+                return self._result_err(
+                    "human.approve: pending record lost or replaced",
+                    origin)
+            status = current.get("status")
+            if status == "approved":
+                try:
+                    pending_path.unlink()
+                except OSError:
+                    pass
+                self.trace.record(
+                    "human_approve_decided",
+                    id=approval_id, decision="approved")
+                return self._result_ok(True, origin)
+            if status == "declined":
+                reason = current.get("reason") or "user declined"
+                try:
+                    pending_path.unlink()
+                except OSError:
+                    pass
+                self.trace.record(
+                    "human_approve_decided",
+                    id=approval_id, decision="declined",
+                    reason=reason)
+                return self._result_err(
+                    f"user declined: {reason}", origin)
+            _time.sleep(0.25)
+
+        # Timed out — remove the record so the next run starts clean.
+        try:
+            pending_path.unlink()
+        except OSError:
+            pass
+        self.trace.record(
+            "human_approve_decided",
+            id=approval_id, decision="timeout")
+        return self._result_err(
+            "human.approve: timed out waiting for decision "
+            "(10 minutes)", origin)
 
     # --- schedule effect (L2 v2 case study Gap #3 — recurring work).
     # The effect only *registers* the cadence; the actual re-invocation

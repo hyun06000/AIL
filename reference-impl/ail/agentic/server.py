@@ -10,7 +10,7 @@ for local development and small-traffic demos. Production hardening
 from __future__ import annotations
 
 import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
 
 from .. import run as ail_run
@@ -248,6 +248,46 @@ def _make_handler(project: Project):
             # inline (not attachment) so the browser can either
             # display it or save-as depending on how the link is
             # clicked. The UI triggers a download via blob anyway.
+            if self.path == "/authoring-approval-pending":
+                # UI polls this while a run is in-flight. Returns the
+                # current pending-approval record (id + plan) if the
+                # program is blocked inside `perform human.approve`,
+                # or 204 No Content otherwise. Idempotent, no side
+                # effects — safe to call every 500ms.
+                import json as _json
+                pending_path = (
+                    project.state_dir / "approvals" / "pending.json")
+                if not pending_path.is_file():
+                    self.send_response(204)
+                    self.end_headers()
+                    return
+                try:
+                    current = _json.loads(
+                        pending_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    self.send_response(204)
+                    self.end_headers()
+                    return
+                if current.get("status") != "pending":
+                    # Decided record lingering after decision — treat
+                    # as no-pending, the executor will clean it up.
+                    self.send_response(204)
+                    self.end_headers()
+                    return
+                body = _json.dumps({
+                    "id": current.get("id"),
+                    "plan": current.get("plan"),
+                    "created_at": current.get("created_at"),
+                }, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header(
+                    "Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             if self.path == "/authoring-chat-export":
                 from .authoring_chat import export_history_as_markdown
                 md = export_history_as_markdown(project)
@@ -576,6 +616,66 @@ def _make_handler(project: Project):
             # .ail/secrets.json (gitignored). Values are NEVER echoed,
             # logged, or appended to chat_history.jsonl. Ledger only
             # records that a name was set, not the value.
+            if self.path == "/authoring-approve":
+                # v1.16.0 plan-validate-execute: while a run is blocked
+                # inside `perform human.approve(plan)`, the UI POSTs
+                # here with {"id": "...", "decision": "approve"|"decline",
+                # "reason": "..."}. The executor's polling loop sees
+                # the status flip and returns ok(true) / error(...).
+                # ThreadingHTTPServer is what makes this work — this
+                # handler runs in a different thread than the blocked
+                # /authoring-run.
+                import json as _json
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                try:
+                    raw = self.rfile.read(length).decode("utf-8") if length else ""
+                    payload = _json.loads(raw)
+                except (ValueError, UnicodeDecodeError):
+                    self._send_text(400, "invalid json body\n")
+                    return
+                approval_id = str(payload.get("id", "")).strip()
+                decision = str(payload.get("decision", "")).strip()
+                reason = str(payload.get("reason", "")).strip()
+                if decision not in ("approve", "decline"):
+                    self._send_text(400,
+                        "decision must be 'approve' or 'decline'\n")
+                    return
+                pending_path = (
+                    project.state_dir / "approvals" / "pending.json")
+                try:
+                    current = _json.loads(
+                        pending_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    self._send_text(404, "no pending approval\n")
+                    return
+                if approval_id and current.get("id") != approval_id:
+                    self._send_text(409,
+                        "approval id mismatch (stale UI?)\n")
+                    return
+                current["status"] = (
+                    "approved" if decision == "approve" else "declined")
+                if reason:
+                    current["reason"] = reason
+                import os as _os
+                try:
+                    tmp = pending_path.with_suffix(".tmp")
+                    tmp.write_text(
+                        _json.dumps(current, ensure_ascii=False),
+                        encoding="utf-8")
+                    _os.replace(tmp, pending_path)
+                except OSError as e:
+                    self._send_text(500,
+                        f"could not write decision: {e}\n")
+                    return
+                project.append_ledger({
+                    "event": "human_approve",
+                    "id": current.get("id"),
+                    "decision": current["status"],
+                    "reason": reason or None,
+                })
+                self._send_text(200, "ok\n")
+                return
+
             if self.path == "/authoring-set-env":
                 import json as _json
                 length = int(self.headers.get("Content-Length", "0") or "0")
@@ -684,6 +784,13 @@ def serve_project(
     # below polls it and drives recurring entry invocations.
     schedule_file = project.state_dir / "schedule.json"
     _os.environ.setdefault("AIL_SCHEDULE_FILE", str(schedule_file))
+    # `perform human.approve(plan)` writes its pending record to
+    # this directory. The authoring UI polls it and surfaces an
+    # approve/decline card; without the env var the effect returns
+    # a clean "no UI context" error.
+    approval_dir = project.state_dir / "approvals"
+    approval_dir.mkdir(parents=True, exist_ok=True)
+    _os.environ.setdefault("AIL_APPROVAL_DIR", str(approval_dir))
     # v1.13.0: load any chat-entered secrets into env. `setdefault`
     # semantics: an explicit shell export still wins over the stored
     # value. File is gitignored by the scaffolder.
@@ -700,7 +807,7 @@ def serve_project(
     logger = logger or make_logger("friendly")
     handler = _make_handler(project)
     try:
-        server = HTTPServer((host, port), handler)
+        server = ThreadingHTTPServer((host, port), handler)
     except OSError as e:
         logger.port_bind_failed(host, port, str(e))
         return 3

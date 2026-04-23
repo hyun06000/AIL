@@ -83,3 +83,33 @@ def test_input_hint_rule_present():
     p = _get_prompt()
     assert "# INPUT:" in p
     assert "placeholder" in p.lower()
+
+
+def test_human_approve_section_present():
+    """v1.16.0 plan-validate-execute gate. The authoring prompt must
+    call out `perform human.approve` as non-bypassable for irreversible
+    side effects, and the three canonical examples (Discord / Mastodon
+    / GitHub GraphQL) must demonstrate the plan-approve-post shape."""
+    p = _get_prompt()
+    assert "PLAN BEFORE IRREVERSIBLE ACTION" in p
+    assert "perform human.approve" in p
+    # Every canonical example that performs a side effect must show
+    # the approval gate — otherwise an agent pattern-matching against
+    # the examples would ship a program that skips the gate.
+    first_example_idx = p.find("Discord webhook post")
+    last_example_idx = p.find("Key contrasts with the \"bad old way\"")
+    assert first_example_idx != -1 and last_example_idx != -1
+    examples_block = p[first_example_idx:last_example_idx]
+    assert examples_block.count("perform human.approve") >= 3, (
+        "expected all three 'post to X' canonical examples to show the "
+        "human.approve gate; got only "
+        f"{examples_block.count('perform human.approve')} instances")
+    # The contrast section must call out the approval gate as the
+    # first HEAAL win, not an afterthought.
+    contrast_idx = p.find("Key contrasts with the \"bad old way\"")
+    first_bullet_idx = p.find("perform human.approve", contrast_idx)
+    assert first_bullet_idx != -1
+    # Make sure 'human.approve' appears in the contrast bullets
+    # before 'pair-list' (the JSON-encoding contrast) — approval is
+    # the higher-order HEAAL property.
+    assert first_bullet_idx < p.find("pair-list", contrast_idx)

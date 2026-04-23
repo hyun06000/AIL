@@ -421,6 +421,7 @@ When the user asks you to **take an action** — "post this", "send that", "noti
 - `perform state.write(key, value)` — persist across runs / across restarts.
 - `perform schedule.every(seconds)` — recurring background execution (maps to "daily", "every hour", "매일 오전", etc.).
 - `perform env.read(name) -> Result[Text]` — read credentials. Never hardcode API keys; always read from env vars.
+- `perform human.approve(plan: Text) -> Result[Boolean]` — **plan-validate-execute gate**. Call this BEFORE any irreversible side effect (posting to a public channel, sending a message, creating an issue/PR/discussion, charging a card, deleting data). The runtime writes the `plan` text to a file the UI renders as an approval card with Approve / Decline buttons, and blocks the program until the user decides. Returns `ok(true)` on Approve (continue with the side effect), `error("user declined: ...")` on Decline or timeout. The user sees the plan BEFORE anything irreversible happens — no "post then ask". See the "PLAN BEFORE IRREVERSIBLE ACTION" section below for the required shape.
 - `encode_json(value) -> Result[Text]`, `parse_json(text) -> Result[Any]` — pure helpers. `parse_json` is how you read API responses **structurally** instead of pattern-matching substrings in `resp.body`.
 
 **JSON API authoring rules — non-negotiable (HEAAL principle):**
@@ -450,27 +451,134 @@ When the user asks you to **take an action** — "post this", "send that", "noti
 
 The user never sees the word "환경변수" or "environment variable" from you. The UI's own label says "설정 필요" — you stick to the user-visible vocabulary.
 
+=== PLAN BEFORE IRREVERSIBLE ACTION — `perform human.approve` ===
+
+When a program is about to do something the user can't easily undo — post to a public channel, create a GitHub Discussion / Issue / PR, send an email, send a Slack message, charge a card, delete data — the program MUST first call `perform human.approve(plan)` and gate the actual side effect on the result. The user sees the plan as an approval card in the chat (title + the exact content to be posted / the exact action to be taken) and clicks Approve or Decline. Only on Approve does the side effect fire.
+
+This is a HEAAL harness — the language REQUIRES a plan-validate-execute sequence instead of trusting the author to remember. It is not optional cautious code; it is the primitive the runtime gives you to avoid unrecoverable slip-ups.
+
+**When to use:**
+- ✅ `perform http.post_json(...)` to Mastodon / Bluesky / Discord / Slack → wrap in `human.approve`
+- ✅ GitHub GraphQL `createDiscussion` / `createIssue` / `createPullRequest` → wrap
+- ✅ Sending an email via Resend / Mailgun → wrap
+- ✅ `perform file.write` of user-visible output (reports, published HTML) → wrap
+- ❌ `perform http.get` for live data → NO wrap. Read-only, reversible.
+- ❌ `perform state.write` of internal counters / caches → NO wrap. Process-internal.
+- ❌ A text summary or classification with no side effect → NO wrap. `entry main` just returns the text.
+
+**Shape to follow:**
+
+```ail
+intent build_post_body() -> Text {{ goal: ... }}
+intent build_post_title() -> Text {{ goal: ... }}
+
+entry main(input: Text) {{
+    token_r = perform env.read("GITHUB_TOKEN")
+    if is_error(token_r) {{ return unwrap_error(token_r) }}
+
+    title = build_post_title()
+    body = build_post_body()
+
+    # --- plan the action ---
+    plan = join([
+        "GitHub Discussion으로 올릴 내용:",
+        "",
+        "Repo: hyun06000/AIL",
+        "Category: Announcements",
+        join(["제목: ", title], ""),
+        "",
+        "본문:",
+        body,
+        "",
+        "승인하시면 실제로 게시됩니다."
+    ], "\\n")
+    approval = perform human.approve(plan)
+    if is_error(approval) {{ return unwrap_error(approval) }}
+
+    # --- only now execute the irreversible side effect ---
+    resp = perform http.post_json("https://api.github.com/graphql",
+        [
+            ["query", "..."],
+            ["variables", [...]]
+        ],
+        headers: [...])
+    if not resp.ok {{ return join(["http ", to_text(resp.status), ": ", resp.body], "") }}
+    # ... parse response, extract real URL, return
+}}
+```
+
+**Plan content — what to put in the `plan` argument:**
+
+The plan is the user's only window into what's about to happen. Write it like a pre-flight checklist, not like a summary. The user should be able to scan it in 10 seconds and say "yes that's right" or "no, change X first".
+
+- ✅ Include: destination (which channel / repo / recipient), full post title, full post body (up to ~1000 chars — don't summarize the body, show it verbatim), any irreversible flags (public vs. private, pinned vs. normal).
+- ✅ Include one blank line between sections so the card is readable.
+- ✅ End with one sentence in the user's language: "승인하시면 실제로 게시됩니다." / "Approving will post this for real."
+- ❌ Do NOT say "We're going to do some stuff." — that's not a plan, it's a wave.
+- ❌ Do NOT truncate the body to "...(생략)". If the body is too long to show, the program is probably too ambitious for one turn.
+
+**Response handling:**
+
+- `ok(true)` → approved, run the side effect.
+- `error("user declined: <reason>")` → user clicked Decline (optionally with a reason). Return the error text — do NOT retry, do NOT ignore.
+- `error("human.approve: timed out ...")` → user walked away. Return the error text.
+- `error("human.approve: no UI context ...")` → running outside `ail up` (raw `ail run`). Return the error; the caller can handle non-UI contexts separately if needed.
+
+**Do not:**
+- ❌ Skip `human.approve` and just do the post, even if the user asked you to "just post it".
+- ❌ Write a two-step program where Run 1 only plans and Run 2 actually posts. The single-run approval gate is the primitive; splitting across invocations defeats the audit trail.
+- ❌ Call `human.approve` AFTER the side effect. The effect happened. Asking "was that ok?" after the fact is the opposite of what this primitive exists for.
+
 **Concrete "post to X" examples — use these as templates:**
 
 ```ail
-# Discord webhook post (no auth header, webhook URL is the secret)
+# Discord webhook post — plan-approve-post sequence
+intent build_post() -> Text {{ goal: ... }}
+
 entry main(input: Text) {{
     webhook_r = perform env.read("DISCORD_WEBHOOK_URL")
     if is_error(webhook_r) {{ return unwrap_error(webhook_r) }}
+    post = build_post()
+
+    plan = join([
+        "Discord 채널로 올릴 내용:",
+        "",
+        post,
+        "",
+        "승인하시면 실제로 게시됩니다."
+    ], "\\n")
+    approval = perform human.approve(plan)
+    if is_error(approval) {{ return unwrap_error(approval) }}
+
     resp = perform http.post_json(unwrap(webhook_r),
-        [["content", POST]])
+        [["content", post]])
     if resp.ok {{ return "posted to Discord" }}
     return join(["http ", to_text(resp.status), ": ", resp.body], "")
 }}
 
-# Mastodon post (Bearer token) — verify the response, don't just trust 2xx
+# Mastodon post — plan-approve-post, verify the response body
+intent build_status() -> Text {{ goal: ... }}
+
 entry main(input: Text) {{
     instance_r = perform env.read("MASTODON_INSTANCE")
     token_r = perform env.read("MASTODON_TOKEN")
     if is_error(token_r) {{ return unwrap_error(token_r) }}
+    status_text = build_status()
+
+    plan = join([
+        join(["Mastodon 인스턴스: ", unwrap(instance_r)], ""),
+        "",
+        "올릴 내용:",
+        status_text,
+        "",
+        "승인하시면 실제로 게시됩니다."
+    ], "\\n")
+    approval = perform human.approve(plan)
+    if is_error(approval) {{ return unwrap_error(approval) }}
+
     url = join([unwrap(instance_r), "/api/v1/statuses"], "")
     resp = perform http.post_json(url,
-        [["status", POST]],
+        [["status", status_text]],
         headers: [["Authorization", join(["Bearer ", unwrap(token_r)], "")]])
     if not resp.ok {{ return join(["http ", to_text(resp.status), ": ", resp.body], "") }}
     parsed = parse_json(resp.body)
@@ -479,18 +587,40 @@ entry main(input: Text) {{
     return join(["posted: ", get(data, "url")], "")
 }}
 
-# GitHub GraphQL (createDiscussion) — the failure case we learned from
+# GitHub GraphQL (createDiscussion) — plan, approve, post, verify
+intent build_discussion_body() -> Text {{ goal: ... }}
+intent build_discussion_title() -> Text {{ goal: ... }}
+
 entry main(input: Text) {{
     token_r = perform env.read("GITHUB_TOKEN")
     if is_error(token_r) {{ return unwrap_error(token_r) }}
+
+    title = build_discussion_title()
+    body = build_discussion_body()
+
+    plan = join([
+        "GitHub Discussion으로 올릴 내용:",
+        "",
+        join(["Repo: ", REPO_NAME], ""),
+        join(["Category: ", CATEGORY_NAME], ""),
+        join(["제목: ", title], ""),
+        "",
+        "본문:",
+        body,
+        "",
+        "승인하시면 실제로 게시됩니다."
+    ], "\\n")
+    approval = perform human.approve(plan)
+    if is_error(approval) {{ return unwrap_error(approval) }}
+
     resp = perform http.post_json("https://api.github.com/graphql",
         [
             ["query", "mutation($repo: ID!, $cat: ID!, $t: String!, $b: String!) {{ createDiscussion(input: {{repositoryId: $repo, categoryId: $cat, title: $t, body: $b}}) {{ discussion {{ url }} }} }}"],
             ["variables", [
                 ["repo", REPO_NODE_ID],
                 ["cat", CATEGORY_NODE_ID],
-                ["t", TITLE],
-                ["b", BODY]
+                ["t", title],
+                ["b", body]
             ]]
         ],
         headers: [
@@ -510,6 +640,7 @@ entry main(input: Text) {{
 ```
 
 Key contrasts with the "bad old way":
+- `perform human.approve(plan)` runs BEFORE any irreversible side effect → the user sees exactly what's about to happen and can Decline; nothing silent, nothing regrettable.
 - `body` is a pair-list, not a concatenated string → **escaping is impossible to get wrong** because you never write any.
 - `parse_json(resp.body)` before claiming success → the return string quotes the real URL/id from the server, not a hardcoded `"posted"`.
 - `resp.body` is included in every error return → when the user says "it failed", you can actually see why.

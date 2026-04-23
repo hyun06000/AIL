@@ -57,15 +57,15 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 - `~/.pypirc` 직접 읽지 말 것 (transcript 노출). `twine`이 참조함.
 - PyPI는 yank만 가능, 삭제 불가. 버전·태그·CHANGELOG 일치 반드시 확인.
-- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0–1.12.6, 1.13.0–1.13.4, 1.14.0, 1.15.0–1.15.4 (로컬). PyPI는 1.10.1.
+- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0–1.12.6, 1.13.0–1.13.4, 1.14.0, 1.15.0–1.15.4, 1.16.0 (로컬). PyPI는 1.10.1.
 
 ---
 
 ## NOW — 2026-04-23
 
-**버전:** v1.15.4 (dev 로컬, main 미머지). PyPI는 v1.10.1에 멈춰 있음 — v1.11.0~v1.15.4 누적 미배포, hyun06000 승인 대기.
+**버전:** v1.16.0 (dev 로컬, main 미머지). PyPI는 v1.10.1에 멈춰 있음 — v1.11.0~v1.16.0 누적 미배포, hyun06000 승인 대기.
 
-**서빙 모델:** `ail-coder:7b-v3`. 테스트 **515 passing** (v1.15.0 `test_json_effects.py` 11 + v1.15.2 `test_input_hint.py` 9 + v1.15.3 `test_authoring_prompt_structure.py` 5).
+**서빙 모델:** `ail-coder:7b-v3`. 테스트 **521 passing** (v1.15.0 json 11 + v1.15.2 input-hint 9 + v1.15.3 prompt-structure 6 + v1.16.0 human-approve 5).
 
 ### 두 벤치마크 트랙 (둘 다 stable — 후속 실험은 대기 중)
 

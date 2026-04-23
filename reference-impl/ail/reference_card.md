@@ -546,6 +546,17 @@ Built-in effects:
     `state.write` so each tick stores a result and GET / reads it.
     Seconds in (0, 86400]. Outside `ail up` it returns an explanatory
     error. Latest call wins.
+  - `human.approve(plan: Text) -> Result[Boolean]` — **plan-validate-
+    execute gate**. The runtime writes `plan` to a pending-approval
+    record that the agentic UI surfaces as an Approve / Decline card,
+    and blocks the program until the user decides. ok(true) on
+    Approve; error("user declined: ...") on Decline; error on
+    10-minute timeout; error("no UI context") outside `ail up`.
+    Call this BEFORE any irreversible side effect (`http.post_json`
+    to a public channel, sending mail, creating issues/PRs/
+    discussions, etc.). The authoring prompt enforces use for the
+    irreversible-effect class; the effect itself is the grammatical
+    hook that makes the gate non-bypassable.
   - `log(message: Any)` — stderr, returns nothing
   - `human_ask(question: Text) -> Text`
 

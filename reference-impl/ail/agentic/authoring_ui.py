@@ -578,6 +578,34 @@ def render_authoring_page(
         placeholder.textContent = '실행 중…';
         thread.appendChild(placeholder);
         scrollBottom();
+
+        // Approval polling. While the run is in-flight, poll for any
+        // `perform human.approve(plan)` pending on the server. When
+        // one appears, render a card with the plan text + Approve /
+        // Decline buttons. Clicking either posts the decision, which
+        // unblocks the server-side executor. The run keeps going and
+        // may hit more approvals — so we keep polling until `fire`
+        // returns.
+        const shownApprovals = new Set();
+        let pollTimer = null;
+        const poll = async () => {{
+          try {{
+            const resp = await fetch('/authoring-approval-pending');
+            if (resp.status !== 200) return;
+            const rec = await resp.json();
+            if (!rec || !rec.id) return;
+            if (shownApprovals.has(rec.id)) return;
+            shownApprovals.add(rec.id);
+            renderApprovalCard(rec);
+          }} catch (e) {{
+            // Transient network error during a run is common (the
+            // polling request races the run-completion response).
+            // Swallow quietly.
+          }}
+        }};
+        pollTimer = setInterval(poll, 500);
+        poll();  // immediate first check
+
         try {{
           const url = '/authoring-run?program=' + encodeURIComponent(selected);
           const r = await fetch(url, {{
@@ -599,9 +627,83 @@ def render_authoring_page(
           placeholder.remove();
           addError('네트워크 오류: ' + e.message);
         }} finally {{
+          if (pollTimer) clearInterval(pollTimer);
           runBtn.disabled = false;
         }}
       }};
+
+      function renderApprovalCard(rec) {{
+        const box = document.createElement('div');
+        box.className = 'run-result';
+        box.style.background = '#fffbeb';
+        box.style.borderColor = '#fde68a';
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.style.color = '#b45309';
+        label.textContent = '⏸ 승인 대기 / Approval needed';
+        box.appendChild(label);
+        const planPre = document.createElement('pre');
+        planPre.textContent = rec.plan || '';
+        box.appendChild(planPre);
+        const btnRow = document.createElement('div');
+        btnRow.style.display = 'flex';
+        btnRow.style.gap = '8px';
+        btnRow.style.marginTop = '8px';
+        const approveBtn = document.createElement('button');
+        approveBtn.className = 'run-inline';
+        approveBtn.style.background = '#047857';
+        approveBtn.textContent = '✅ 승인 / Approve';
+        const declineBtn = document.createElement('button');
+        declineBtn.className = 'run-inline';
+        declineBtn.style.background = '#b91c1c';
+        declineBtn.textContent = '❌ 거절 / Decline';
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'status';
+        statusSpan.style.marginLeft = '8px';
+        btnRow.appendChild(approveBtn);
+        btnRow.appendChild(declineBtn);
+        btnRow.appendChild(statusSpan);
+        box.appendChild(btnRow);
+        thread.appendChild(box);
+        scrollBottom();
+
+        const decide = async (decision) => {{
+          approveBtn.disabled = true;
+          declineBtn.disabled = true;
+          statusSpan.textContent = '전송 중…';
+          try {{
+            const r = await fetch('/authoring-approve', {{
+              method: 'POST',
+              headers: {{ 'Content-Type': 'application/json' }},
+              body: JSON.stringify({{
+                id: rec.id,
+                decision: decision,
+              }}),
+            }});
+            if (!r.ok) {{
+              const msg = await r.text();
+              statusSpan.textContent = '✗ ' + msg;
+              approveBtn.disabled = false;
+              declineBtn.disabled = false;
+              return;
+            }}
+            label.textContent = decision === 'approve'
+              ? '✅ 승인됨 / Approved'
+              : '❌ 거절됨 / Declined';
+            label.style.color = decision === 'approve'
+              ? '#047857' : '#b91c1c';
+            statusSpan.textContent = '';
+            btnRow.removeChild(approveBtn);
+            btnRow.removeChild(declineBtn);
+          }} catch (e) {{
+            statusSpan.textContent = '✗ ' + e.message;
+            approveBtn.disabled = false;
+            declineBtn.disabled = false;
+          }}
+        }};
+        approveBtn.onclick = () => decide('approve');
+        declineBtn.onclick = () => decide('decline');
+      }}
       runBtn.onclick = fire;
       dynSlot.appendChild(runBtn);
       }}  // end renderDynamic

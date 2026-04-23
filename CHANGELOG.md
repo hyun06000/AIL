@@ -4,6 +4,113 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.16.0 — 2026-04-23
+
+**`perform human.approve(plan)` — HEAAL plan-validate-execute gate.**
+
+hyun06000: *"계획을 세우고 검증받는 단계가 필요할 거 같은데 그게
+LLM의 성능을 높이는 방법이니까. 프롬프트로 유도할지 언어 안에 장치로
+녹여둘지."*
+
+Judgment: **language, not prompt.** Prompt convention breaks across
+models and leaves no audit trail. Grammar-level would require
+breaking the v1.8 freeze without benchmark data. L2 runtime primitive
+is the right fit — same class as `env.read`, `state.*`,
+`http.post_json`, `schedule.every` — closes the class of
+"program silently did the irreversible thing" by making the approval
+gate non-bypassable in code, and writes the decision to the ledger.
+
+### New effect
+
+```ail
+perform human.approve(plan: Text) -> Result[Boolean]
+```
+
+Writes `plan` to `<project>/.ail/approvals/pending.json` with a
+unique id and status=pending, then polls that file for a decision.
+The authoring UI notices the pending record via a new polling
+endpoint, renders an Approve / Decline card with the plan text,
+and — when the user clicks — POSTs the decision back. The executor
+reads the updated status and returns:
+
+- `ok(true)` on Approve → continue with the side effect
+- `error("user declined: <reason>")` on Decline → caller returns
+  the error normally
+- `error("human.approve: timed out waiting ...")` after 10 min
+  → clean abort; caller returns the error
+- `error("human.approve: no UI context ...")` when running outside
+  `ail up` → same
+
+Trace records `human_approve_pending` and `human_approve_decided`
+events; project ledger records the decision for audit.
+
+### Server
+
+- Switched `HTTPServer` → `ThreadingHTTPServer`. Required so
+  `/authoring-approve` (decision) can execute in a separate thread
+  while `/authoring-run` is blocked inside the executor's polling
+  loop.
+- Sets `AIL_APPROVAL_DIR` for run threads so the effect finds its
+  directory.
+- New endpoints:
+  - `GET /authoring-approval-pending` — returns the current
+    pending approval record (id + plan) if any; 204 otherwise.
+    Idempotent, polled every 500ms by the UI while a run is
+    in-flight.
+  - `POST /authoring-approve` — body `{id, decision: "approve"|
+    "decline", reason?}`. Writes the decision to the pending file
+    and appends a `human_approve` event to the ledger.
+
+### UI
+
+- Authoring run widget now polls `/authoring-approval-pending`
+  every 500ms while a run is in-flight (existing pendingBubble
+  behavior unchanged).
+- When a pending approval appears, renders a yellow card with the
+  plan text + ✅ Approve / ❌ Decline buttons. Multiple approvals
+  in one run are shown sequentially.
+
+### Authoring prompt
+
+- New primitive listed in the side-effects section with a pointer
+  to the PLAN-BEFORE-IRREVERSIBLE-ACTION section.
+- New section `=== PLAN BEFORE IRREVERSIBLE ACTION ===` — defines
+  when to use (post / create / send / delete), when NOT to
+  (http.get, state internal), plan-content rules, and an anti-
+  pattern list ("call human.approve AFTER the side effect" —
+  forbidden; "split into two-run plan-then-execute flow" —
+  forbidden).
+- The three canonical "post to X" examples (Discord, Mastodon,
+  GitHub GraphQL) rewritten to include the `human.approve` gate
+  before the HTTP call.
+- Contrast section leads with the approval gate ("not silent, not
+  regrettable") above the JSON-encoding contrasts.
+
+### Tests
+
+- `tests/test_human_approve.py` (5): approve unblocks; decline
+  surfaces as error with reason; no-UI context returns clean error;
+  empty plan rejected; pending record shape (id + plan + created_at
+  + status).
+- `tests/test_authoring_prompt_structure.py::test_human_approve_section_present`
+  — locks in the prompt section, that every canonical example
+  shows the gate, and that the gate is the leading contrast bullet.
+
+515 → 521 tests passing.
+
+### Not a grammar change
+
+Runtime effect only — no new keyword, no parser change. v1.8
+grammar freeze stands. (Reference card adds the new effect to the
+built-in effects list.)
+
+### Restart required
+
+`ail up` processes started before this commit hold the old module
+in memory. Ctrl+C and restart.
+
+---
+
 ## v1.15.4 — 2026-04-23
 
 **Two chained bugs: `!` in prompt → parse fails → textarea with no hint.**
