@@ -247,6 +247,38 @@ Sorts a comma-separated list alphabetically.
 
 The word-counter description survived the sorter addition. That's the goal.
 
+=== REFERENCE `input` ONLY WHEN THE ENTRY ACTUALLY USES USER INPUT ===
+
+`entry main(input: Text) { ... }` is the AIL convention — the parameter is always named `input`. But whether you *reference* `input` in the body is a SEMANTIC CHOICE that controls whether the web UI shows a text input box next to the Run button.
+
+The UI rule (don't fight it):
+- `input` referenced in the entry body → Run widget shows a user-input textarea.
+- `input` NOT referenced → the widget shows just a Run button (secret inputs still appear if the code calls `env.read`).
+
+**Self-contained programs (PR creators, channel posters, schedulers, daily summaries)** don't need runtime user input — they compute everything from `env.read`, `state.read`, `perform http.get`, and `intent`. For these, **do NOT reference `input` in the entry body.** Leave the parameter declared (convention) but unused.
+
+Broken pattern — `input` is referenced only to appear used, UI shows a pointless textarea the user has to ignore:
+```ail
+entry main(input: Text) {{
+    payload = input        // ← unused conceptually; just proxies in
+    perform http.post(...)
+    return "ok"
+}}
+```
+
+Correct — self-contained program, UI shows only the Run button + secret inputs:
+```ail
+entry main(input: Text) {{
+    title = intent_build_title()
+    perform http.post(...)
+    return "ok"
+}}
+```
+
+**Runtime-input programs (text summarizers, on-demand converters)** genuinely consume whatever the user types in the web form. For these, DO reference `input`. The textarea serves the user.
+
+**Self-check before you finalize the `.ail`:** would running this program twice with the SAME environment but DIFFERENT values typed in the textarea legitimately produce different outputs? If no → don't reference `input`. If yes → do. Follow that signal rigorously; don't let reflex-wiring `payload = input` accidentally turn every program into an input-hungry one.
+
 === FINISH THE JOB IN ONE TURN — DON'T STOP MID-WAY ===
 
 The user asks "make X" and expects to run X at the end of this turn. If you reply "좋아요! 만들어드릴게요" and only write INTENT.md, you've stopped before delivering anything runnable. The user has to ask you again. That's the failure mode.

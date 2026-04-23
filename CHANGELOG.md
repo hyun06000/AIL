@@ -4,6 +4,40 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.13.4 — 2026-04-23
+
+**Don't reference `input` unless the entry actually uses it.**
+
+Field test: user's PR-bot program showed BOTH the `GITHUB_TOKEN`
+secret input AND a user-input textarea, even though the bot was
+fully self-contained (no user input needed). Agent had written
+something like `payload = input` — a reflex assignment that made
+the entry technically reference `input`, which the UI treats as
+"show the textarea."
+
+**Prompt now teaches the semantic distinction:**
+
+- `entry main(input: Text)` is the convention (parameter name).
+- Whether you *reference* `input` in the body is a CHOICE that
+  directly controls the UI.
+- Self-contained programs (PR creators, channel posters,
+  schedulers, daily jobs) — do NOT reference `input`. UI shows
+  only Run + secret inputs.
+- Runtime-input programs (summarizers, on-demand converters) —
+  reference `input`. UI shows the textarea.
+- **Self-check:** "would running this twice with the same env but
+  different textarea values legitimately produce different
+  outputs?" If no → don't reference. If yes → do.
+
+Broken pattern (`payload = input`) shown as anti-example with the
+corrected version alongside.
+
+### Tests
+
++1 test. 526 passing (+1 from 525).
+
+---
+
 ## v1.13.3 — 2026-04-23
 
 Three related "agent doesn't actually do the work" fixes. Common

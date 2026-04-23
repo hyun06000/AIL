@@ -1012,6 +1012,28 @@ def test_active_program_marker_updated_on_write(tmp_path):
         == "second.ail"
 
 
+def test_prompt_teaches_input_reference_decision(tmp_path):
+    """v1.13.4 — user bug: a PR-bot (self-contained, token-driven)
+    still showed the user-input textarea next to the Run button
+    because the agent wrote `payload = input` unnecessarily. Prompt
+    must teach: reference `input` only when the entry legitimately
+    consumes runtime user input."""
+    proj = Project.init(tmp_path / "inputsense")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "", "app.ail": ""},
+        history=[],
+        user_message="PR 자동 생성봇 만들어줘",
+    )
+    assert "REFERENCE `input` ONLY WHEN" in prompt
+    # Self-check rule present.
+    assert "self-check" in prompt.lower() or "Self-check" in prompt
+    # Broken pattern example (payload = input anti-pattern).
+    assert "payload = input" in prompt
+    # Correct-vs-broken framing.
+    assert "Self-contained programs" in prompt
+
+
 def test_prompt_demands_finishing_the_job_in_one_turn(tmp_path):
     """v1.13.3 — two consecutive field tests where agent:
     1. Wrote INTENT.md only, never app.ail, never ready_to_run.
