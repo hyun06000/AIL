@@ -1,12 +1,35 @@
-// AIL이 AIL을 홍보하는 에이전트. Discord webhook 한 개, 초안 1슬롯.
+// ail-herald — AIL과 HEAAL을 자기 자신으로 홍보하는 대화형 에이전트.
 //
-// 세 경로:
-//   POST body="draft"   → intent로 초안 생성, state에 저장, 텍스트 반환
-//   POST body="publish" → 저장된 초안을 Discord에 POST, 결과 반환
-//   POST body=""(기본) → 저장된 초안 조회
+// 중요한 설계 원칙: 사용자가 아무것도 설정 안 했다고 가정하고 시작.
+// "웹훅이 뭐예요?"부터 시작하는 비개발자를 위해 필요한 모든 걸
+// 대화로 이끌어냄.
 //
-// 승인 경계: 사람이 "publish"를 명시적으로 보낼 때만 실제 게시가 일어남.
-// 그 전까지는 draft만 반복 생성/조회 가능.
+// 프로토콜: entry main이 list of [key, value] pairs를 반환.
+// 이 프로젝트의 view.html이 JSON을 파싱해서 메시지/버튼/입력필드로 렌더.
+//
+// 지원 key:
+//   message       — 사용자에게 보일 본문 (plain text or light markdown)
+//   action        — "라벨|input_value" 형식의 버튼. 클릭 시 POST body=input_value
+//   input         — "placeholder|input_prefix" 형식의 텍스트 입력.
+//                   사용자가 제출하면 POST body=<input_prefix><입력값>
+//   meta          — "key=value" 추가 정보 (디버깅/상태 확인용)
+//
+// 상태 전이 (state.write "step"에 저장):
+//   start
+//     → channel:draft_only  (글만 받기)
+//     → channel:discord     (디스코드 온보딩으로 진입)
+//   discord:intro
+//     → discord:howto       (웹훅 만드는 법 설명)
+//   discord:howto
+//     → discord:paste       (URL 붙여넣기 받기)
+//   discord:paste
+//     → url:<URL>           (저장하고 ready로)
+//   discord:ready / draft_only:ready
+//     → action:draft        (초안 생성)
+//   drafted
+//     → action:publish      (디스코드로 게시, ready만)
+//     → action:draft        (다시 생성)
+//     → action:reset        (처음으로)
 
 intent write_promo_post() -> Text {
     goal: a short promotional post about the AIL programming language and the HEAAL paradigm
@@ -20,8 +43,38 @@ intent write_promo_post() -> Text {
     }
 }
 
+// ---------- state helpers ----------
+
+fn get_step() -> Text {
+    r = perform state.read("step")
+    if is_ok(r) { return unwrap(r) }
+    return "start"
+}
+
+fn set_step(step: Text) -> Text {
+    perform state.write("step", step)
+    return step
+}
+
+fn get_draft() -> Text {
+    r = perform state.read("current_draft")
+    if is_ok(r) { return unwrap(r) }
+    return ""
+}
+
+fn get_webhook() -> Text {
+    // In-project stored webhook (from UI paste). Falls back to env var
+    // for CI/advanced use.
+    r = perform state.read("discord_webhook")
+    if is_ok(r) { return unwrap(r) }
+    e = perform env.read("AIL_HERALD_DISCORD_WEBHOOK")
+    if is_ok(e) { return unwrap(e) }
+    return ""
+}
+
+// ---------- Discord posting ----------
+
 pure fn escape_json_text(s: Text) -> Text {
-    // Minimal JSON-string escape so content survives as a single field.
     a = replace(s, "\\", "\\\\")
     b = replace(a, "\"", "\\\"")
     c = replace(b, "\n", "\\n")
@@ -32,49 +85,171 @@ pure fn build_discord_body(content: Text) -> Text {
     return join(["{\"content\": \"", escape_json_text(content), "\"}"], "")
 }
 
-fn current_draft() -> Text {
-    r = perform state.read("current_draft")
-    if is_ok(r) { return unwrap(r) }
-    return ""
-}
-
-fn save_draft(content: Text) -> Text {
-    perform state.write("current_draft", content)
-    now = perform clock.now("iso")
-    perform state.write("drafted_at", now)
-    return content
-}
-
-fn post_to_discord(content: Text) -> Text {
-    webhook_r = perform env.read("AIL_HERALD_DISCORD_WEBHOOK")
-    if is_error(webhook_r) {
-        return unwrap_error(webhook_r)
-    }
-    url = unwrap(webhook_r)
+fn post_to_discord(url: Text, content: Text) -> Text {
     body = build_discord_body(content)
     resp = perform http.post(url, body, headers: [["Content-Type", "application/json"]])
     if resp.ok {
         now = perform clock.now("iso")
         perform state.write("last_published_at", now)
-        perform state.write("last_published_content", content)
-        return "posted"
+        return "ok"
     }
-    return join(["http error ", to_text(resp.status), ": ", resp.body], "")
+    return join(["http ", to_text(resp.status)], "")
 }
 
+// ---------- screen renderers ----------
+// 각 함수는 list-of-pairs를 반환해서 UI를 구성.
+
+pure fn screen_start() -> [Any] {
+    return [
+        ["message", "안녕하세요. 저는 ail-herald예요. AIL 언어와 HEAAL 패러다임을 홍보하는 글을 대신 써드려요.\n\n어떻게 할까요?"],
+        ["action", "글만 받을래요 (내가 직접 어디든 올릴게요)|channel:draft_only"],
+        ["action", "Discord 서버에 자동으로 올려주세요|channel:discord_intro"]
+    ]
+}
+
+pure fn screen_discord_intro() -> [Any] {
+    return [
+        ["message", "Discord에 올리려면 \"웹훅\" 하나가 필요해요.\n\n웹훅이 뭐냐면: Discord 서버의 특정 채널로 메시지를 보낼 수 있는 비밀 주소예요. 그 주소만 알면 프로그램이 그 채널에 글을 쓸 수 있어요. 5분이면 만들 수 있어요."],
+        ["action", "만드는 법 알려주세요|channel:discord_howto"],
+        ["action", "이미 있어요|channel:discord_paste"],
+        ["action", "← 다시 고를게요|channel:reset"]
+    ]
+}
+
+pure fn screen_discord_howto() -> [Any] {
+    return [
+        ["message", "Discord 웹훅 만드는 법:\n\n1. 본인이 관리자인 Discord 서버를 여세요. 서버가 없으면 왼쪽 \"+\" 버튼으로 새로 만드세요 (\"내가 쓸 서버\" 같이).\n\n2. 글을 올릴 채널 이름에 마우스를 올려두고 톱니바퀴 아이콘(채널 설정)을 클릭하세요.\n\n3. 왼쪽 메뉴에서 \"연동(Integrations)\" 클릭.\n\n4. \"웹후크(Webhooks)\" → \"새 웹후크\" 버튼.\n\n5. 이름은 아무거나 OK (예: \"ail-herald\"). \"웹후크 URL 복사\" 버튼을 눌러 복사하세요.\n\n이제 복사한 URL을 붙여넣어 주세요 ↓"],
+        ["action", "준비됐어요, 붙여넣을게요|channel:discord_paste"],
+        ["action", "← 뒤로|channel:discord_intro"]
+    ]
+}
+
+pure fn screen_discord_paste() -> [Any] {
+    return [
+        ["message", "복사한 웹훅 URL을 여기 붙여넣어 주세요. \"https://discord.com/api/webhooks/...\" 로 시작하는 주소예요."],
+        ["input", "https://discord.com/api/webhooks/... 여기에 붙여넣기|url:"],
+        ["action", "← 뒤로|channel:discord_howto"]
+    ]
+}
+
+pure fn screen_discord_ready() -> [Any] {
+    return [
+        ["message", "✓ Discord 웹훅 연결됨. 이제 홍보 글을 써볼게요."],
+        ["action", "첫 초안 써주세요|action:draft"],
+        ["action", "← 채널 바꾸기|channel:reset"]
+    ]
+}
+
+pure fn screen_draft_only_ready() -> [Any] {
+    return [
+        ["message", "글을 써드릴게요. 맘에 들면 복사해서 원하는 곳에 올리세요."],
+        ["action", "첫 초안 써주세요|action:draft"],
+        ["action", "← 채널 바꾸기|channel:reset"]
+    ]
+}
+
+fn screen_drafted(step: Text) -> [Any] {
+    draft = get_draft()
+    base = [
+        ["message", "초안이 준비됐어요. 읽어보고 맘에 드는지 확인하세요."],
+        ["draft", draft]
+    ]
+    if step == "discord:ready" {
+        base = append(base, ["action", "이대로 Discord에 게시|action:publish"])
+    }
+    base = append(base, ["action", "다시 써주세요 (다른 버전)|action:draft"])
+    base = append(base, ["action", "← 처음으로|channel:reset"])
+    return base
+}
+
+pure fn screen_posted() -> [Any] {
+    return [
+        ["message", "✓ Discord에 게시 완료. 채널에서 확인해보세요."],
+        ["action", "새 초안 쓰기|action:draft"],
+        ["action", "← 처음으로|channel:reset"]
+    ]
+}
+
+pure fn screen_error(detail: Text) -> [Any] {
+    return [
+        ["message", join(["문제가 생겼어요: ", detail], "")],
+        ["action", "← 처음으로|channel:reset"]
+    ]
+}
+
+// ---------- entry ----------
+
 entry main(input: Text) {
-    if input == "draft" {
-        content = write_promo_post()
-        save_draft(content)
-        return content
+    // ----- navigation commands (no state change to draft) -----
+    if input == "channel:reset" {
+        perform state.delete("step")
+        perform state.delete("current_draft")
+        return screen_start()
     }
-    if input == "publish" {
-        draft = current_draft()
-        if length(draft) == 0 {
-            return error("no draft to publish — POST 'draft' first")
+    if input == "channel:draft_only" {
+        set_step("draft_only:ready")
+        return screen_draft_only_ready()
+    }
+    if input == "channel:discord_intro" {
+        set_step("discord:intro")
+        return screen_discord_intro()
+    }
+    if input == "channel:discord_howto" {
+        set_step("discord:howto")
+        return screen_discord_howto()
+    }
+    if input == "channel:discord_paste" {
+        set_step("discord:paste")
+        return screen_discord_paste()
+    }
+
+    // ----- webhook URL submission -----
+    if starts_with(input, "url:") {
+        url = slice(input, 4, length(input))
+        if length(url) < 30 {
+            return screen_error("URL이 너무 짧아요. Discord 웹훅 주소가 맞는지 확인해주세요.")
         }
-        result = post_to_discord(draft)
-        return result
+        if not starts_with(url, "https://discord.com/api/webhooks/") {
+            return screen_error("Discord 웹훅 주소는 'https://discord.com/api/webhooks/'로 시작해야 해요.")
+        }
+        perform state.write("discord_webhook", url)
+        set_step("discord:ready")
+        return screen_discord_ready()
     }
-    return current_draft()
+
+    // ----- draft action -----
+    if input == "action:draft" {
+        content = write_promo_post()
+        perform state.write("current_draft", content)
+        return screen_drafted(get_step())
+    }
+
+    // ----- publish action -----
+    if input == "action:publish" {
+        draft = get_draft()
+        if length(draft) == 0 {
+            return screen_error("먼저 초안을 만들어주세요.")
+        }
+        url = get_webhook()
+        if length(url) == 0 {
+            return screen_error("Discord 웹훅이 설정 안 됐어요. 채널을 다시 골라주세요.")
+        }
+        result = post_to_discord(url, draft)
+        if result == "ok" {
+            set_step("posted")
+            return screen_posted()
+        }
+        return screen_error(join(["Discord 게시 실패: ", result], ""))
+    }
+
+    // ----- default: render current step -----
+    step = get_step()
+    if step == "start" { return screen_start() }
+    if step == "draft_only:ready" { return screen_draft_only_ready() }
+    if step == "discord:intro" { return screen_discord_intro() }
+    if step == "discord:howto" { return screen_discord_howto() }
+    if step == "discord:paste" { return screen_discord_paste() }
+    if step == "discord:ready" { return screen_discord_ready() }
+    if step == "posted" { return screen_posted() }
+    return screen_start()
 }

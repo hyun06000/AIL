@@ -4,6 +4,76 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.11.1 — 2026-04-23
+
+**ail-herald becomes a real onboarding agent.** Field feedback from
+hyun06000 (non-Discord user): the v1.11.0 release presumed the user
+knew what a webhook was and had already created one. That's a hole
+in the "agent for non-programmers" claim. A true agent negotiates
+its requirements from zero, in plain language, before asking for
+anything.
+
+### Rewritten — `examples/agentic/ail-herald/` as a conversational
+state machine
+
+No preconfig required. Open the page and the agent introduces
+itself in Korean, then offers two paths:
+
+- **글만 받기 (draft-only)** — zero setup, intent writes a promo
+  post, user copies it wherever.
+- **Discord에 올리기 (auto-post)** — the agent checks for a stored
+  webhook URL; if absent, walks the user through creating one:
+  1. "웹훅이 뭐냐면..." (what a webhook is, in one paragraph)
+  2. Step-by-step UI for creating the webhook in Discord
+  3. Paste field for the URL, with format validation
+  4. Saves to state; next visit skips onboarding
+  5. Draft → Approve → Publish flow
+
+Every screen has a "← 뒤로" / "← 처음으로" button; nothing is a
+dead end.
+
+### New UI protocol
+
+`entry main` returns a list of `[key, value]` pairs. The bundled
+`view.html` parses the JSON and renders messages, drafts, action
+buttons, and text inputs generically — no AIL code generates HTML.
+
+Supported keys:
+
+- `message` — plain text (Korean or English) to display
+- `draft` — the current draft, rendered in a code-style block
+- `action` — `"label|input_value"` button; click sends POST body
+- `input` — `"placeholder|input_prefix"` text input; submit sends
+  POST body = `<prefix><value>`
+
+This is a small, generic protocol that a future generic "agent
+UI" could reuse.
+
+### State machine
+
+Stored in `state.write("step", ...)`:
+`start → discord:intro → discord:howto → discord:paste →
+discord:ready → drafted → posted`, or shorter
+`start → draft_only:ready → drafted`. Reset button wipes state
+cleanly.
+
+### No new AIL primitives
+
+Everything in v1.11.1 is composition of what already existed
+(state.*, env.read, http.post with headers, intent, clock.now).
+No parser/executor changes.
+
+### Tests
+
+462 passing (unchanged from v1.11.0). Smoke tests:
+
+- Full conversation from start → Discord intro → howto → paste →
+  bad URL rejection → reset → draft-only → draft.
+- End-to-end Discord publish against a local mock webhook;
+  verified correct Content-Type + JSON body.
+
+---
+
 ## v1.11.0 — 2026-04-23
 
 **Self-promotion agent.** AIL written in AIL promoting AIL. The

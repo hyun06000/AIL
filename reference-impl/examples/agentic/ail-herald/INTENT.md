@@ -1,29 +1,36 @@
 # ail-herald
 
-AIL과 HEAAL을 자기 자신으로 홍보하는 에이전트. **AIL로 작성된 agent가 AIL을 홍보합니다.**
+AIL과 HEAAL을 자기 자신으로 홍보하는 **대화형 에이전트**. AIL로 작성된 agent가 AIL을 홍보합니다.
 
-이 프로젝트는 세 개의 primitive만 조합합니다:
-- `intent` — 게시글 본문 작성 (언어 모델 위임, v1.10.0 harness가 타입 검증)
-- `perform env.read` — Discord webhook URL을 환경변수에서 안전하게 읽기 (하드코딩 금지)
-- `perform http.post` — 승인 후 실제 게시
+**중요**: 사용자가 프로그래밍을 모르고, 웹훅이 뭔지도 모른다고 가정합니다. 필요한 게 있으면 에이전트가 먼저 묻고, 한 단계씩 안내합니다. 초기 설정 없이 바로 실행하세요.
 
-사람의 승인이 **보안 경계**이고, 승인 이후의 실행은 전부 자율입니다.
+## Flow
 
-## Behavior
-- POST body="draft" → 새 초안을 `intent`로 생성, state에 저장, 초안 텍스트 반환
-- POST body="publish" → 저장된 초안을 환경변수 `AIL_HERALD_DISCORD_WEBHOOK`의 Discord 채널에 게시, 결과 반환
-- POST body="" (또는 그 외) → 현재 저장된 초안 조회
+1. `ail up reference-impl/examples/agentic/ail-herald` 실행
+2. 브라우저에서 `http://127.0.0.1:8080/` 열기
+3. 에이전트가 인사하고 두 갈래를 제시:
+   - **글만 받기** — 아무 설정 없이 바로 초안만 받아서 복붙
+   - **Discord에 올리기** — 웹훅 없으면 "웹훅이 뭐냐면..." 부터 단계별 안내 → URL 붙여넣기 → 저장 → 게시
+4. 각 단계마다 버튼으로 다음 진행 또는 뒤로가기
 
-## Setup
-Discord 서버의 채널 설정 → Integrations → Webhooks → New Webhook → URL 복사. 그리고:
+## Principles
 
-```bash
-export AIL_HERALD_DISCORD_WEBHOOK=https://discord.com/api/webhooks/.../...
-ail up reference-impl/examples/agentic/ail-herald
-```
+- **Negotiate, don't presume** — 채널/자격증명을 코드에 하드코딩하지 않음. 사용자가 제공할 때까지 진행 안 함.
+- **Plain-language onboarding** — "웹훅"같은 용어는 즉석에서 설명.
+- **Human approval is the trust boundary** — 실제 게시는 "이대로 올리기" 클릭 시에만.
+- **Reversible** — 언제든 "← 처음으로" 버튼으로 리셋.
+- **Audit trail** — 모든 단계가 `.ail/ledger.jsonl`에 타임스탬프와 함께 기록.
+
+## Architecture
+
+- `app.ail` — state.read/write로 현재 step 추적하는 상태 머신. `entry main`이 list-of-pairs (`[["message", ...], ["action", ...], ...]`) 반환.
+- `view.html` — 응답 JSON을 파싱해서 메시지 / 드래프트 / 버튼 / 입력필드로 렌더.
+- `intent write_promo_post` — 실제 글쓰기 (v1.10.0 harness가 Text 강제).
+- `perform env.read / state.read` — 웹훅 URL은 state(UI 붙여넣기) 또는 env var(CI)에서 읽음. 소스엔 절대 없음.
+- `perform http.post` with `Content-Type: application/json` — 실제 게시.
 
 ## Tests
-- 없음 (실제 Discord webhook이 필요한 end-to-end 에이전트)
+- (대화형 UI라 단위 테스트 대신 시나리오 스모크 테스트 권장)
 
 ## Deployment
 - 포트 8080
