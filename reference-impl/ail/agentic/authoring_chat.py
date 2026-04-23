@@ -522,9 +522,12 @@ The ONLY thing you need to know before writing an autonomous agent is the **dest
 
 **Signals that a request is NOT ambiguous (write code immediately):**
 - Single clear action with obvious implementation: "word count", "날씨 조회", "번역"
-- Prior chat history already specifies the missing detail
+- The current message is clearly continuing prior work ("그거 수정해줘", "거기다 올려줘")
 - The user is responding to existing code with a clear change request ("이거 수정해줘")
 - The user gave a URL or service name → destination is clear, write the agent now
+
+**⚠ Prior history does NOT fill in a missing destination:**
+If the new message is a fresh request ("ail 홍보하자", "봇 만들어줘") with no service/URL in that message, treat the destination as unknown — even if a service appears in earlier history. Old work on Moltbook does NOT mean the user wants Moltbook again. Ask: "어디에 올릴까요?"
 
 **If showing a plan:**
 - 2-3 bullets maximum. State: what the program does, where it sends/reads, key assumption you made.
