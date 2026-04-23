@@ -23,38 +23,27 @@ def _render_value(value):
 
     AIL programs that signal success-or-error with Result return a dict
     shape; collapse it to the inner value (or error message) so HTTP
-    clients see plain text instead of language internals.
+    clients see plain text instead of language internals. Plain dict/
+    list returns are re-formatted as pretty-printed JSON so a user who
+    opens / in a browser sees readable structure instead of Python's
+    repr syntax (`{'k': 'v'}` with single quotes).
     """
     if isinstance(value, dict) and value.get("_result"):
         if value.get("ok"):
-            return value.get("value", "")
+            return _render_value(value.get("value", ""))
         return value.get("error", "error")
     if isinstance(value, str) and value.startswith("UNWRAP_ERROR:"):
         # Surface the inner message without the runtime sentinel prefix.
         return value[len("UNWRAP_ERROR:"):].strip()
+    if isinstance(value, (dict, list)):
+        import json as _json
+        try:
+            return _json.dumps(value, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            return str(value)
     return value
 
 
-def _looks_like_html(value) -> bool:
-    """True if the rendered value opens with an HTML document or fragment.
-
-    Used to decide between `text/plain` and `text/html` on the response.
-    Keep the check cheap and precise: the first non-whitespace characters
-    must be `<!doctype` (case-insensitive), `<html`, or a tag-like token
-    `<word`. Anything else — JSON, numbers, prose that happens to contain
-    `<3` — stays plain text.
-    """
-    if not isinstance(value, str):
-        return False
-    s = value.lstrip()
-    if not s.startswith("<"):
-        return False
-    head = s[:16].lower()
-    if head.startswith("<!doctype") or head.startswith("<html"):
-        return True
-    # Bare fragment like "<div>..." or "<ul>..." — first char after `<`
-    # must start a tag name (letter). Rules out `<3`, `< 5`, `<-- ...`.
-    return len(s) >= 2 and s[1].isalpha()
 
 
 def _make_handler(project: Project):
@@ -76,8 +65,31 @@ def _make_handler(project: Project):
                 self.wfile.write(body)
                 return
             if self.path in ("/", ""):
-                # Render the browser UI so a non-developer can type
-                # into a textarea instead of running curl.
+                # If the project has a view.html, serve it as the
+                # dashboard page. The page's client-side JS is expected
+                # to POST to / for data from entry main. This keeps
+                # AIL code focused on computation and HTML markup in
+                # its own file, editable without touching .ail sources.
+                view_path = project.root / "view.html"
+                if view_path.is_file():
+                    try:
+                        body = view_path.read_bytes()
+                    except OSError as e:
+                        self._send_text(500,
+                            f"could not read view.html: {e}\n")
+                        return
+                    self.send_response(200)
+                    self.send_header(
+                        "Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+
+                # No view.html — render the default textarea UI so a
+                # non-developer can type into a box instead of running
+                # curl.
                 from .web_ui import render_page, extract_preamble, entry_uses_input
                 try:
                     intent_text = project.intent_path.read_text(encoding="utf-8")
@@ -128,26 +140,16 @@ def _make_handler(project: Project):
                     self._send_text(500, str(rendered) + "\n")
                     return
                 rendered = _render_value(value)
-                is_html = _looks_like_html(rendered)
-                # HTML responses go out byte-exact (no trailing newline)
-                # so the browser doesn't see stray whitespace before
-                # <!doctype>. Plain text keeps the terminal-friendly \n.
-                if is_html:
-                    response = str(rendered).encode("utf-8")
-                    content_type = "text/html; charset=utf-8"
-                else:
-                    response = (str(rendered) + "\n").encode("utf-8")
-                    content_type = "text/plain; charset=utf-8"
+                response = (str(rendered) + "\n").encode("utf-8")
                 project.append_ledger({
                     "event": "request",
                     "path": "/",
                     "input_chars": len(body),
                     "ok": True,
-                    "output_mode": "html" if is_html else "text",
                     "value_preview": str(value)[:200],
                 })
                 self.send_response(200)
-                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
                 self.send_header("Content-Length", str(len(response)))
                 self.end_headers()
                 self.wfile.write(response)

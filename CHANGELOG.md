@@ -4,6 +4,79 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.13 — 2026-04-23
+
+**Architectural correction.** v1.9.10 made the agentic server detect
+HTML strings returned from `entry main` and serve them with
+`Content-Type: text/html`. Field testing with a Korean news-dashboard
+project showed this pattern was wrong: it pushed HTML templating
+into AIL code, encouraged LLM authors to emit `{"key": "value"}`
+record dumps as the response, and mixed computation with presentation.
+
+AIL is AIL. HTML is a separate file.
+
+### Removed
+
+- `_looks_like_html()` in `server.py`.
+- HTML Content-Type branch in POST /.
+- `innerHTML` / `.result.html` rendering in the default textarea UI.
+- The HTML-in-entry guidance paragraph in the authoring prompt.
+
+### Added — `view.html` file-based dashboards
+
+If a project has a `view.html` file next to `app.ail`, the agentic
+server serves it verbatim on GET /. The file's own JS is expected to
+`fetch('/', {method:'POST'})` for data from `entry main`.
+
+```
+news-ticker/
+├── INTENT.md
+├── app.ail            # entry returns structured data
+└── view.html          # served on GET /; fetches POST / for data
+```
+
+Projects without a `view.html` still get the built-in textarea UI
+(unchanged).
+
+### Added — JSON pretty-print for record / list returns
+
+`_render_value()` now detects dict and list returns and serializes
+them via `json.dumps(indent=2, ensure_ascii=False)` instead of
+Python's `str()` which produces unreadable `{'key': 'value'}` repr
+syntax. Unicode (Korean, etc.) stays readable.
+
+`Result[T]` wrappers recurse into the inner value so
+`ok({"n": 7})` prints as valid JSON rather than Python repr.
+
+### Rewrote `news-ticker` example
+
+- `app.ail` now returns a structured record via state (no HTML
+  inline).
+- `view.html` is the dashboard; its JS fetches POST / for data and
+  auto-refreshes every 10 seconds.
+
+### Authoring prompt updates
+
+Teaches the author model the revised rules:
+
+- `entry main` returns data (Text / Number / list / Record / Result),
+  not HTML markup.
+- If the project has `view.html`, the server uses that file; AIL
+  keeps its hands off HTML.
+- Never include raw fetched content (RSS XML, HTTP response bodies,
+  full upstream JSON) in the output — summarize and return only what
+  the caller needs.
+
+### Tests
+
+- Removed the HTML-detection tests (feature gone).
+- Added `view.html` file-serving + default-fallback tests.
+- Added JSON pretty-print tests (dict, list, nested Result, Unicode,
+  non-serializable fallback).
+- 414 passing total.
+
+---
+
 ## v1.9.12 — 2026-04-23
 
 **Last of the six L2 v2 primitives surfaced by the 2026-04-23

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>news ticker</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+           sans-serif; max-width: 560px; margin: 48px auto; padding: 0 24px;
+           color: #111; }
+    h2 { margin: 0 0 12px 0; }
+    .card { padding: 20px; border: 1px solid #e5e7eb; border-radius: 10px;
+            background: #fff; }
+    .n { font-size: 32px; font-weight: 600; }
+    .muted { color: #6b7280; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>news ticker</h2>
+    <div>ticks seen: <span class="n" id="n">…</span></div>
+    <div class="muted" id="status">loading…</div>
+  </div>
+  <script>
+    async function refresh() {
+      const r = await fetch("/", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+        body: "",
+      });
+      const text = await r.text();
+      try {
+        const data = JSON.parse(text);
+        document.getElementById("n").textContent = data.ticks;
+        document.getElementById("status").textContent =
+          data.armed ? "refreshing every 10 seconds" :
+                       "schedule unavailable";
+      } catch (e) {
+        document.getElementById("status").textContent = "error: " + text;
+      }
+    }
+    refresh();
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>

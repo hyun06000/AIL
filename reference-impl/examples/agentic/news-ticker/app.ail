@@ -1,31 +1,17 @@
-// Demonstrates schedule.every + state.write + HTML output composing.
-// Each request arms a 10-second schedule (idempotent), reads the
-// current tick counter from state, and returns an HTML snippet the
-// browser UI renders inline.
-
-pure fn page(n: Number, armed: Text) -> Text {
-    return join(["<div><h2>news ticker</h2><p>ticks seen: <b>",
-                 to_text(n),
-                 "</b></p><p><small>",
-                 armed,
-                 "</small></p></div>"], "")
-}
+// entry returns structured data. Presentation lives in view.html;
+// the client fetches POST / to get this record and renders it.
 
 entry main(input: Text) {
-    // Register the cadence. Safe to call on every request — latest wins.
+    // Arm the recurring tick (latest call wins; idempotent).
     a = perform schedule.every(10)
-    armed_msg = "refreshing every 10 seconds"
-    if is_error(a) {
-        armed_msg = "schedule unavailable — run under ail up"
-    }
+    armed = is_ok(a)
 
-    // Read / bump the counter. On a tick, this runs in the scheduler
-    // thread with input="" and persists the update.
+    // Read / bump the counter.
     prior = perform state.read("tick_count")
     n = 0
     if is_ok(prior) { n = unwrap(prior) }
     n = n + 1
     perform state.write("tick_count", n)
 
-    return page(n, armed_msg)
+    return {"ticks": n, "armed": armed}
 }

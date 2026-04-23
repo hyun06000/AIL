@@ -254,10 +254,6 @@ def render_page(
     }}
     .result.empty {{ color: var(--muted); font-style: italic; }}
     .result.err {{ color: var(--err); background: #fef2f2; }}
-    .result.html {{
-      font-family: inherit; white-space: normal; background: #fff;
-      padding: 0; border: 1px solid var(--border);
-    }}
     .tip {{
       font-size: 13px; color: var(--muted); line-height: 1.5;
     }}
@@ -316,18 +312,7 @@ def render_page(
         const text = await r.text();
         if (r.ok) {{
           resultEl.classList.remove("empty", "err");
-          const ct = (r.headers.get("Content-Type") || "").toLowerCase();
-          if (ct.indexOf("text/html") !== -1) {{
-            // entry returned HTML — render it, don't escape it.
-            // The author is an LLM the user is running locally; the
-            // output is no more dangerous than the JS they chose to
-            // serve. This is the same trust boundary as `ail run`.
-            resultEl.innerHTML = text;
-            resultEl.classList.add("html");
-          }} else {{
-            resultEl.classList.remove("html");
-            resultEl.textContent = text;
-          }}
+          resultEl.textContent = text;
           statusEl.textContent = "";
         }} else {{
           resultEl.classList.remove("empty");
