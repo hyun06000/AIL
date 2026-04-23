@@ -768,82 +768,127 @@ An agent is NOT a script with steps pre-decided by the author. An agent is an au
 ```ail
 entry main(input: Text) {{
     guide = perform http.get("https://service.com/skill.md")
-    endpoint = extract_endpoint(guide.body)   # author pre-decided this step is needed
-    payload = build_payload(input)            # author pre-decided this format
-    result = perform http.post_json(endpoint, payload)  # author pre-decided this order
-    post = compose_post(result.body)
-    perform http.post_json(post_url, post)
+    endpoint = extract_endpoint(guide.body)   // author pre-decided this step
+    payload = build_payload(input)
+    result = perform http.post_json(endpoint, payload)
 }}
 ```
-This is a script. The author is the decision-maker. The intent blocks are just text transformers. If any assumption is wrong, the program breaks.
+This is a script. The author is the decision-maker. If any assumption is wrong, the program breaks.
 
-✅ **CORRECT — intent-driven agent (intent model decides):**
+❌ **WRONG — intent declared inside entry block (ParseError!):**
 ```ail
 entry main(input: Text) {{
-    # 1. Gather context: give the agent everything it needs to know
-    guide_r = perform http.get("https://service.com/skill.md")
-    current_state = unwrap_or(perform state.read("agent_state"), "new")
-
-    # 2. Let the intent model decide what to do next
-    intent decide_next_action(guide: Text, state: Text, goal: Text) -> Text {{
-        goal: "Read the service guide and current agent state. Decide the single best next action to take toward the goal. Return JSON: {{action: 'register'|'post'|'wait', endpoint: '...', payload: {{...}}, reasoning: '...'}}"
+    intent decide(...) -> Text {{   // PARSE ERROR — intent must be at TOP LEVEL
+        goal: "..."
     }}
-    decision_json = decide_next_action(guide_r.body, current_state, "Register and promote AIL/HEAAL")
-    decision = unwrap(parse_json(decision_json))
-
-    # 3. Entry executes whatever the intent decided
-    if decision.action == "register" {{
-        result_r = perform http.post_json(decision.endpoint, decision.payload)
-        result = unwrap(parse_json(result_r.body))
-        perform state.write("agent_state", "registered")
-        perform state.write("api_key", result.token)
-        log = "✓ 등록 완료: " + result.token[:8] + "...\\n"
-    }}
-    if decision.action == "post" {{
-        api_key = unwrap(perform state.read("api_key"))
-        headers = {{"Authorization": "Bearer " + api_key}}
-        result_r = perform http.post_json(decision.endpoint, decision.payload, headers)
-        perform state.write("agent_state", "active")
-        log = "✓ 포스트 게시 완료\\n"
-    }}
-    perform schedule.every(86400)
-    return log
 }}
 ```
 
-**Why this matters:**
-- The intent model reads the actual guide and figures out the endpoint, payload format, auth scheme — the author doesn't need to pre-decide these
-- If the service changes its API, the intent model adapts; a hardcoded script breaks
-- The agent is truly autonomous: give it goal + context, it figures out the path
-
-**For more complex agents — use `ail.run` so the intent model can execute its own tool calls:**
+❌ **WRONG — record literal syntax (doesn't exist in AIL!):**
 ```ail
-intent plan_action(guide: Text, state: Text, goal: Text) -> Text {{
-    goal: "Write an AIL snippet (just the body, no entry) that performs the correct next action. Use perform http.post_json / perform state.write etc. as needed."
-}}
-action_code = plan_action(guide_r.body, current_state, "...")
-result = perform ail.run("entry main(input: Text) {{\\n" + action_code + "\\n}}")
+headers = {{"Authorization": "Bearer " + key}}  // PARSE ERROR — no record literals in AIL
 ```
-This gives the intent model actual tool execution power, not just text output.
+Use `parse_json` instead: `headers = unwrap(parse_json("{{\"Authorization\": \"Bearer " + key + "\"}}"))`
+
+✅ **CORRECT — bounded agent loop with evolve safety (validated pattern):**
+
+`intent` at TOP LEVEL. `for range(N)` = hard bound. `evolve rollback_on` = semantic safety. `starts_with` = signal detection. `to_text` = defensive coercion.
+
+```ail
+// INPUT: 비워두세요. 에이전트가 스스로 판단합니다.
+
+// ── TOP LEVEL: intent + evolve ──
+intent decide_next_action(guide: Text, state: Text) -> Text {{
+    goal: "State machine:\\n- state 'new_agent' → return REGISTER: <json>\\n- state 'registered' → return POST: <json>\\n- state 'posted' → return DONE: <summary>\\nNEVER repeat a completed action. Follow the state exactly."
+}}
+
+evolve decide_next_action {{
+    metric: confidence(sampled: 1.0)
+    when confidence < 0.5 {{
+        retune confidence_threshold: within [0.3, 0.8]
+    }}
+    rollback_on: confidence < 0.15
+    history: keep_last 5
+}}
+
+entry main(input: Text) {{
+    guide_r = perform http.get("https://service.com/skill.md")
+    if is_error(guide_r) {{ return "❌ guide load failed" }}
+
+    state_r = perform state.read("agent_state")
+    state = unwrap_or(state_r, "new_agent")
+    api_key = unwrap_or(perform state.read("api_key"), "")
+    log = ""
+
+    for step in range(10) {{
+        decision = decide_next_action(guide_r.body, state)
+        decision_str = to_text(decision)   // defensive: prevents NoneType crash on slice
+        log = log + "step " + to_text(step) + ": " + slice(decision_str, 0, 60) + "\\n"
+
+        if starts_with(decision_str, "DONE") {{
+            perform state.write("agent_state", "done")
+            return log + "\\n✅ " + slice(decision_str, 5, length(decision_str))
+        }}
+
+        if starts_with(decision_str, "REGISTER") {{
+            if state != "new_agent" {{
+                log = log + "  ⚠ already registered, skipping\\n"
+            }}
+            if state == "new_agent" {{
+                payload_json = slice(decision_str, 9, length(decision_str))
+                parsed_r = parse_json(payload_json)
+                if is_ok(parsed_r) {{
+                    result_r = perform http.post_json(
+                        "https://service.com/api/agents",
+                        unwrap(parsed_r)
+                    )
+                    if is_error(result_r) {{ return log + "\\n❌ network error" }}
+                    if result_r.ok == false {{
+                        return log + "\\n❌ HTTP " + to_text(result_r.status)
+                    }}
+                    body_r = parse_json(result_r.body)
+                    if is_ok(body_r) {{
+                        api_key = to_text(unwrap(body_r).api_key)
+                        perform state.write("api_key", api_key)
+                    }}
+                    perform state.write("agent_state", "registered")
+                    state = "registered"
+                    log = log + "  ✓ registered\\n"
+                }}
+            }}
+        }}
+
+        if starts_with(decision_str, "POST") {{
+            payload_json = slice(decision_str, 5, length(decision_str))
+            parsed_r = parse_json(payload_json)
+            if is_ok(parsed_r) {{
+                auth_json = "{{\"Authorization\": \"Bearer " + api_key + "\"}}"
+                headers = unwrap(parse_json(auth_json))
+                perform http.post_json(
+                    "https://service.com/api/posts",
+                    unwrap(parsed_r),
+                    headers
+                )
+                perform state.write("agent_state", "posted")
+                state = "posted"
+                log = log + "  ✓ posted\\n"
+            }}
+        }}
+    }}
+
+    perform schedule.every(3600)
+    return log + "\\n⚠ max steps reached, retrying in 1h"
+}}
+```
+
+**The three rules that make this work:**
+1. `intent` + `evolve` at TOP LEVEL — never inside `entry` or `for`
+2. `to_text(decision)` before any `slice`/`starts_with` — prevents NoneType crash
+3. `is_ok(parsed_r)` / `result_r.ok == false` guards — `is_error` only catches network errors, not HTTP 4xx/5xx
 
 **RECURRING AUTONOMOUS AGENTS — `perform schedule.every`:**
 
-When the user wants an agent that acts on its own on a schedule ("매일 한 번 포스트", "every hour", "자동으로 돌아가게", "자율적으로 활동"), combine the intent-driven pattern above with scheduling:
-
-```ail
-// INPUT: 첫 실행에만 필요한 설정 값을 입력하세요 (이후엔 schedule.every가 자동 재실행해요)
-entry main(input: Text) {{
-    guide_r = perform http.get("https://service.com/skill.md")
-    current_state = unwrap_or(perform state.read("agent_state"), "new")
-    intent decide_next_action(guide: Text, state: Text) -> Text {{
-        goal: "Based on guide and state, decide: register (if new), post (if registered), or wait. Return JSON with action + payload."
-    }}
-    decision = unwrap(parse_json(decide_next_action(guide_r.body, current_state)))
-    # ... execute decision ...
-    perform schedule.every(86400)
-    return log
-}}
-```
+When the user wants an agent that acts on its own on a schedule ("매일 한 번 포스트", "every hour", "자동으로 돌아가게", "자율적으로 활동"), add `perform schedule.every(N)` at the end of the loop (before return). The pattern above already shows this.
 
 **Critical rules for autonomous agents:**
 - `entry main(input: Text)` — ALWAYS declare `input`. Run button always appears; input lets user pass config on first run.
