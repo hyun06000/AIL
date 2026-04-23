@@ -791,7 +791,15 @@ entry main(input: Text) {{
 ```ail
 headers = {{"Authorization": "Bearer " + key}}  // PARSE ERROR — no record literals in AIL
 ```
-Use `parse_json` instead: `headers = unwrap(parse_json("{{\"Authorization\": \"Bearer " + key + "\"}}"))`
+❌ **WRONG — parse_json for headers (unnecessary, error-prone):**
+```ail
+headers = unwrap(parse_json("{{\"Authorization\": \"Bearer " + key + "\"}}"))  // PARSE ERROR in AIL
+```
+✅ **CORRECT — headers as pair list:**
+```ail
+auth_header = join(["Bearer ", api_key], "")
+perform http.post_json(url, payload, [["Authorization", auth_header]])
+```
 
 ✅ **CORRECT — bounded agent loop with evolve safety (validated pattern):**
 
@@ -866,12 +874,11 @@ entry main(input: Text) {{
             payload_json = slice(decision_str, 5, length(decision_str))
             parsed_r = parse_json(payload_json)
             if is_ok(parsed_r) {{
-                auth_json = "{{\"Authorization\": \"Bearer " + api_key + "\"}}"
-                headers = unwrap(parse_json(auth_json))
+                auth_header = join(["Bearer ", api_key], "")
                 perform http.post_json(
                     "https://service.com/api/posts",
                     unwrap(parsed_r),
-                    headers
+                    [["Authorization", auth_header]]
                 )
                 perform state.write("agent_state", "posted")
                 state = "posted"
