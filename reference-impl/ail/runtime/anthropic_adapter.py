@@ -39,12 +39,39 @@ class AnthropicAdapter:
         import anthropic
         client = anthropic.Anthropic(api_key=self._api_key)
 
+        # Authoring chat: use goal as system prompt directly — no JSON wrapper.
+        # The goal text already contains the full XML protocol spec.
+        if context.get("_intent_name") == "__authoring_chat__":
+            user_msg = inputs.get("user_message", "(no input)")
+            resp = client.messages.create(
+                model=self.model,
+                max_tokens=8192,
+                system=goal,
+                messages=[
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": "<reply>"},  # prefill forces XML output
+                ],
+            )
+            text = "<reply>" + "".join(
+                block.text for block in resp.content if getattr(block, "type", None) == "text"
+            ).strip()
+            return ModelResponse(
+                value=text,
+                confidence=0.9,
+                model_id=resp.model,
+                raw={
+                    "stop_reason": resp.stop_reason,
+                    "input_tokens": getattr(resp.usage, "input_tokens", None),
+                    "output_tokens": getattr(resp.usage, "output_tokens", None),
+                },
+            )
+
         system = self._build_system_prompt(goal, constraints, context, expected_type, examples)
         user = self._build_user_prompt(inputs)
 
         resp = client.messages.create(
             model=self.model,
-            max_tokens=2048,
+            max_tokens=8192,
             system=system,
             messages=[{"role": "user", "content": user}],
         )

@@ -65,7 +65,7 @@ class AuthoringChat:
                 "do not emit ready_to_run until the relevant .ail program is coherent",
             ],
             context={"_intent_name": "__authoring_chat__"},
-            inputs={},
+            inputs={"user_message": user_message},
             expected_type="Text",
             examples=None,
         )
