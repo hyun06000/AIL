@@ -297,6 +297,8 @@ def render_authoring_page(
                 placeholder="메시지 입력 후 Enter로 전송 (Shift+Enter 줄바꿈)"
                 autocomplete="off" spellcheck="false"></textarea>
       <button type="submit" class="send" id="send">전송</button>
+      <button type="button" class="send" id="cancel-chat"
+              style="display:none;background:#b91c1c;">중단</button>
     </form>
   </div>
 
@@ -304,7 +306,9 @@ def render_authoring_page(
     const thread = document.getElementById('thread');
     const msgEl = document.getElementById('msg');
     const sendBtn = document.getElementById('send');
+    const cancelBtn = document.getElementById('cancel-chat');
     const hint = document.getElementById('hint');
+    let currentAbortController = null;
 
     // Multi-program state (v1.13.1). These MUST be declared before the
     // history replay below, because addAgent() → addRunWidget() reads
@@ -987,6 +991,8 @@ def render_authoring_page(
 
       sendBtn.disabled = true;
       msgEl.disabled = true;
+      cancelBtn.style.display = '';
+      currentAbortController = new AbortController();
 
       // Placeholder "…" bubble while waiting.
       const pendingTurn = document.createElement('div');
@@ -1004,6 +1010,7 @@ def render_authoring_page(
           method: 'POST',
           headers: {{ 'Content-Type': 'text/plain; charset=utf-8' }},
           body: userText,
+          signal: currentAbortController.signal,
         }});
         pendingTurn.remove();
         const text = await r.text();
@@ -1035,16 +1042,26 @@ def render_authoring_page(
         addAgent(data.reply || '(empty)', data.files || [], data.action || null);
       }} catch (e) {{
         pendingTurn.remove();
-        addError('네트워크 오류: ' + e.message);
+        if (e.name === 'AbortError') {{
+          addError('중단됨 / Cancelled');
+        }} else {{
+          addError('네트워크 오류: ' + e.message);
+        }}
       }} finally {{
         sendBtn.disabled = false;
         msgEl.disabled = false;
+        cancelBtn.style.display = 'none';
+        currentAbortController = null;
         msgEl.value = '';
         msgEl.style.height = 'auto';
         msgEl.focus();
         scrollBottom();
       }}
     }}
+
+    cancelBtn.addEventListener('click', () => {{
+      if (currentAbortController) currentAbortController.abort();
+    }});
 
     function onSend(e) {{
       e.preventDefault();
