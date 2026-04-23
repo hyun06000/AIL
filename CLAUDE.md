@@ -57,13 +57,13 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 - `~/.pypirc` 직접 읽지 말 것 (transcript 노출). `twine`이 참조함.
 - PyPI는 yank만 가능, 삭제 불가. 버전·태그·CHANGELOG 일치 반드시 확인.
-- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0 (로컬). PyPI는 1.10.1.
+- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0, 1.12.1 (로컬). PyPI는 1.10.1.
 
 ---
 
 ## NOW — 2026-04-23
 
-**버전:** v1.12.0 (main = dev = origin, PyPI는 v1.10.1 상태). 서빙 모델: `ail-coder:7b-v3`.
+**버전:** v1.12.1 (main = dev = origin, PyPI는 v1.10.1 상태). 서빙 모델: `ail-coder:7b-v3`.
 
 **두 트랙 (상세: [`docs/heaal/README.md`](docs/heaal/README.md)):**
 - **AIL 트랙** — 언어 자체. R3/C4 기준선 AIL parse 80% / answer 70% vs Python 56%. Python 돌파 후 stable.
@@ -107,6 +107,7 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 - **v1.11.0 — 자기홍보 agent `ail-herald`** (AIL로 작성된 AIL 홍보 에이전트, Discord webhook). env.read + http.post headers 지원.
 - **v1.11.1 — ail-herald 대화형 온보딩 리라이트.** 사용자가 "웹훅이 뭐예요"부터 시작해도 에이전트가 단계별 안내 (차원/자격증명을 presume하지 않음). list-of-pairs UI 프로토콜, state-driven conversation flow. 새 AIL primitive 없음.
 - **v1.12.0 — `ail init` 진입점 재설계.** 프로젝트 scaffold 후 자동으로 authoring chat 서버 시작 + 브라우저 오픈. 사용자가 채팅으로 설명하면 에이전트가 INTENT.md / app.ail 점진적으로 작성, "실행해보기" 버튼으로 service UI로 handoff. `authoring_chat.py` + `authoring_ui.py`, XML 응답 프로토콜(`<reply>`, `<file path="...">`, `<action>`), file-write safety(경로/확장자/크기), chat history 지속. Claude Code의 패턴을 AIL 프로젝트 저작에 가져옴.
+- **v1.12.1 — authoring agent가 HEAAL / AIL 정체성을 알게 됨.** hyun06000 field test: "HEAAL이 뭐야?" → agent 모른다고 대답 + 웹검색 거부. 시스템 프롬프트에 PROJECT IDENTITY (AIL/HEAAL 한 문단) + KNOWLEDGE & RESEARCH 가이드 (모르는 주제면 "I can't search" 대신 "perform http.get로 가져오는 프로그램을 작성해드릴까요?" 제안) 추가.
 
 ---
 

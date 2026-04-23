@@ -4,6 +4,52 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.12.1 — 2026-04-23
+
+**Field-test fix.** hyun06000 opened `ail init` and asked the
+authoring agent "what is HEAAL?". The agent said it didn't know and
+refused to web-search — even though AIL itself has `perform
+http.get`, which the agent could have proposed as a program.
+
+Both failures traced to the authoring system prompt:
+
+1. It only included the AIL *language* reference card. No project
+   identity (what AIL is, what HEAAL means). The agent couldn't
+   answer AIL/HEAAL meta-questions from the prompt alone.
+2. It gave no guidance on "unknown topic" requests, so the LLM
+   defaulted to "I can't search" instead of the HEAAL-aligned move:
+   propose authoring a small AIL program that fetches and
+   summarizes.
+
+### Fixed — authoring agent system prompt
+
+Added two sections:
+
+**PROJECT IDENTITY** — a paragraph on AIL (`ail-interpreter` on
+PyPI, GitHub repo) and HEAAL as a paradigm (grammar-level harness,
+vs. Python + AGENTS.md / linters / pre-commit). Lists the five
+concrete safety properties: no `while`, required `Result`, static
+`pure fn`, `intent` as the only LLM path, `perform env.read` for
+credentials.
+
+**KNOWLEDGE + RESEARCH** — instructs the agent that when asked about
+something it doesn't know (current news, live data, tool state), it
+should NOT decline. Instead, propose authoring a small AIL program
+using `perform http.get` + `intent` to fetch and summarize. Example
+snippet included in-line.
+
+Also: explicitly tells the agent it's been given the AIL/HEAAL
+identity in the prompt — don't claim ignorance of what you were
+just told.
+
+### Tests
+
++1 test in `test_authoring_chat.py` pinning the prompt content so
+future changes can't silently drop HEAAL identity or the research
+guidance. 483 passing (+1 from 482).
+
+---
+
 ## v1.12.0 — 2026-04-23
 
 **Primary entry point redesign: `ail init` launches a conversational

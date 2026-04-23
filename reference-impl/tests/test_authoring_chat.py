@@ -233,6 +233,31 @@ def test_two_turn_conversation_reaches_ready_to_run(tmp_path):
     assert project_is_fresh(proj) is False  # entry present
 
 
+def test_prompt_includes_heaal_identity_and_research_guidance(tmp_path):
+    """v1.12.1 regression — agent claimed ignorance of HEAAL and
+    refused to web-search, even though AIL has perform http.get. The
+    system prompt must teach both: (a) AIL/HEAAL identity directly,
+    (b) how to offer http.get + intent when asked about unknowns."""
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "", "app.ail": ""},
+        history=[],
+        user_message="what is HEAAL?",
+    )
+    # Identity block exists.
+    assert "AI-Intent Language" in prompt
+    assert "ail-interpreter" in prompt
+    assert "HEAAL" in prompt
+    # Safety properties the agent should know.
+    assert "No `while` keyword" in prompt
+    assert "`Result` type required" in prompt
+    assert "`pure fn` statically verified" in prompt
+    # Research guidance (the v1.12.1 fix).
+    assert "perform http.get" in prompt
+    assert "propose" in prompt.lower() or "suggest" in prompt.lower()
+
+
 def test_history_persists_across_instances(tmp_path):
     proj = Project.init(tmp_path / "demo")
     c1 = AuthoringChat(
