@@ -4,6 +4,141 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.13.1 — 2026-04-23
+
+Five field-test corrections that shift the agent from "chatty
+assistant" to "actual driver":
+
+### Multi-program projects
+
+**Problem.** v1.13.0 agent overwrote `app.ail` every turn. A user
+who asked "make a word counter" and later "now add a sorter" lost
+the first program — there's no space for *independent* programs
+in the same project.
+
+**Fix.** A project now holds many `.ail` files. The agent is
+taught:
+
+- NEW use case → NEW descriptively-named file (`word_counter.ail`,
+  `news_fetcher.ail`). Do NOT overwrite an unrelated existing file.
+- EDIT/FIX → update the existing file by its current name.
+- `app.ail` is just a conventional first name with no special
+  status; pick descriptive names for the rest.
+
+State view now lists every `.ail` in the project with a parse
+status so the agent knows what's there. `.ail/active_program`
+marker tracks the last-written file so the Run widget defaults to
+it. `POST /authoring-run?program=FILENAME` selects explicitly,
+with path-traversal rejection.
+
+UI: when ≥ 2 programs exist, the Run widget renders a program
+selector; each option's input-usage and env-requirement come from
+the response so the widget recomputes per-program.
+
+### JSON-envelope stripping in run results
+
+**Problem.** LLM intent responses sometimes slip through
+`{"value": "...markdown..."}` envelopes that `parse_value_confidence`
+didn't unwrap (nested or edge shapes). The final UI showed
+pretty-printed JSON wrapping markdown instead of just markdown.
+
+**Fix.** `_render_value` now peels `{"value": X}` and
+`{"value": X, "confidence": N}` envelopes recursively (capped at 6
+levels). A dict with other keys (real structured data) is
+preserved and pretty-printed as before.
+
+### Anti-interrogation prompt rewrite
+
+**Problem.** hyun06000 feedback: *"써보니까 사람한테 물어보고
+요구하는게 너무 많다. 인간의 개입을 최소화하는게 이 프로젝트의
+목적임을 명명백백하게 알릴 필요가 있겠어. 너무 많은걸 물어보다보니
+그냥 성능나쁜 챗봇이 되어 버렸어."*
+
+The agent was clarifying-question-first by default — asking about
+Korean vs English, error handling shape, port numbers, tone, output
+format. All defaultable. All interrogation.
+
+**Fix.** New **DEFAULT AGGRESSIVELY** section in the prompt. The
+framing flipped:
+
+- The project's premise is MINIMIZING human involvement. The
+  second-turn-clarifier is the failure mode this project exists to
+  kill.
+- Agent should only ask for: **secrets** (and even then write code
+  with `env.read` first and let the masked UI input collect the
+  value), **permissions** (access the human must grant), **genuinely
+  weighty irreversible choices** where every default would be wrong.
+- Explicit DO-NOT-ASK-ABOUT list: language, error handling shape,
+  port, output format, tone/style, "should I add X?", "fn or intent?".
+- Old rule "ask one question at a time" removed — it was the wrong
+  default.
+
+### INTENT.md accumulative, not rewritten
+
+**Problem.** hyun06000: *"INTENT.md도 계속 덮어쓰는것 같은데? 이러면
+목적성이 계속 바뀌어서 곤란해. 하나의 챗 세션은 계속해서 필요한
+정보들을 누적할 수 있어야 해."*
+
+Agent was re-drafting INTENT.md around just the latest request,
+losing prior context. The project's purpose seemed to mutate
+turn-by-turn.
+
+**Fix.** Prompt now has an **"INTENT.md IS CUMULATIVE MEMORY"**
+section. Rules: don't rewrite from scratch. First turn creates a
+skeleton. New program → append a `### filename.ail — purpose`
+subsection under `## Programs`. Program refinement → update just
+that subsection. Project-wide constraints → top-level, then leave
+alone. Turn skipping — omit `<file path="INTENT.md">` when nothing
+would change. Example evolution from turn 1 (word counter only) to
+turn 2 (word counter + sorter) included.
+
+### No terminal, no env-var talk — UI handles secrets
+
+**Problem.** hyun06000: *"env.read를 유저가 업데이트 할 수 있는 툴이
+아직 구현 안 된건가? 나한테 환경변수를 등록하라고 하네. 비개발자는
+환경변수가 뭔지도 몰라서 이러면 곤란한 상황이 될 수 있어."*
+
+The masked-input UI landed in v1.13.0 but the agent prompt still let
+the LLM tell users "set the DISCORD_WEBHOOK_URL environment variable"
+or "export in terminal". Non-programmers have no mental model for
+that.
+
+**Fix.** Prompt is explicit — `Never say` and `Say instead` lists
+included verbatim. Agent MUST NOT mention terminals, exports, shell,
+.env files, environment variables. Instead: write `env.read("NAME")`
+in the code, and in `<reply>` point the user to where to GET the
+credential ("Discord 서버 설정 → ..."), knowing the UI auto-surfaces
+the masked input. User vocabulary only.
+
+UI label changed from "환경변수 필요" to "**설정 필요 / This program
+needs:**". Placeholder changed from "값 붙여넣기" to "여기에 붙여넣으세요".
+ail-promoter's error messages rewritten to match.
+
+### Tests
+
++9 tests:
+
+- `list_project_programs` discovers multiple `.ail` files (1).
+- Turn response includes `programs` + `active_program` (1).
+- `/authoring-run?program=X` selects the right file (1).
+- `/authoring-run` rejects path traversal in the program param (1).
+- `active_program` marker updates on each write (1).
+- Prompt teaches multi-program naming + don't-overwrite (1).
+- Prompt pushes toward aggressive defaults (1).
+- `_render_value` strips value-envelope wrappers (1).
+- Prompt teaches INTENT.md is cumulative (1).
+- Prompt bans terminal/env-var vocabulary (1).
+
+517 passing (+10 from 507).
+
+### Why these three together
+
+The common thread is the same user complaint: the agent doesn't
+feel like an agent. It overwrites, it wraps, it asks. v1.13.1
+stops all three.
+
+---
+
 ## v1.13.0 — 2026-04-23
 
 **The self-promotion agent, plus the infrastructure that makes it

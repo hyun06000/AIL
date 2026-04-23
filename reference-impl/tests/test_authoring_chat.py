@@ -256,6 +256,28 @@ def test_chat_ui_enter_sends_shift_enter_newlines(tmp_path):
     assert "Shift+Enter" in html
 
 
+def test_prompt_never_tells_user_to_use_terminal_for_secrets(tmp_path):
+    """v1.13.1 — user complaint: agent was telling them to `export`
+    env vars in terminal. Non-programmers don't know terminals or
+    env vars. The chat UI has a masked input — agent must route
+    users there, never to a shell."""
+    proj = Project.init(tmp_path / "noterm")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "", "app.ail": ""},
+        history=[],
+        user_message="post to Discord",
+    )
+    # Explicit anti-terminal phrasing.
+    assert "Never say" in prompt
+    assert "export DISCORD_WEBHOOK_URL" in prompt or "export " in prompt
+    # Explicit user-vocabulary guidance.
+    assert "설정 필요" in prompt
+    # Don't-mention-env-variable framing.
+    assert "환경변수" in prompt  # as anti-pattern to avoid
+    assert "shell profile" in prompt or "shell" in prompt.lower()
+
+
 def test_prompt_teaches_agent_to_take_actions_not_refuse(tmp_path):
     """v1.12.7 — field test: user asked 'post to communities', agent
     replied 'I can't post on your behalf'. Wrong — AIL has http.post
@@ -577,10 +599,14 @@ def test_chat_ui_renders_inline_run_widget_not_one_shot_button(tmp_path):
             "action": "ready_to_run",
         }],
     )
-    # The `addRunWidget` function exists and is wired to both actions.
-    # v1.13.0 adds envRequiredForNext as a third arg.
-    assert "addRunWidget(false, inputUsedForNext, envRequiredForNext)" in html
-    assert "addRunWidget(true, inputUsedForNext, envRequiredForNext)" in html
+    # The `addRunWidget` function exists and is wired to both
+    # actions. v1.13.1 simplified the signature — the widget now
+    # pulls programs/env/input from module-level state set by the
+    # latest /authoring-chat response.
+    assert "addRunWidget(false)" in html
+    assert "addRunWidget(true)" in html
+    assert "programsForNext" in html
+    assert "activeProgramForNext" in html
     # No more one-way-trip redirect to /authoring-complete from a
     # button click — that endpoint is gone from the UI JS.
     assert "authoring-complete" not in html
@@ -836,6 +862,241 @@ def test_chat_ui_renders_env_secret_input_widget(tmp_path):
     assert "authoring-set-env" in html
     assert "env-block" in html
     assert "type = 'password'" in html or "type = \"password\"" in html
+
+
+# ---------- v1.13.1: multi-program support ----------
+
+
+def test_list_project_programs_discovers_multiple_ail_files(tmp_path):
+    from ail.agentic.authoring_chat import list_project_programs
+    proj = Project.init(tmp_path / "multi")
+    (proj.root / "app.ail").write_text(
+        'entry main(input: Text) { return "app" }', encoding="utf-8")
+    (proj.root / "sorter.ail").write_text(
+        'entry main(input: Text) { return "sort" }', encoding="utf-8")
+    (proj.root / "notes.md").write_text("irrelevant", encoding="utf-8")
+
+    programs = list_project_programs(proj)
+    names = [p["name"] for p in programs]
+    assert "app.ail" in names
+    assert "sorter.ail" in names
+    assert len(programs) == 2
+    # Each entry carries metadata the UI needs.
+    for p in programs:
+        assert "input_used" in p
+        assert "env_required" in p
+        assert "parses" in p
+        assert "entry_present" in p
+
+
+def test_turn_response_includes_programs_and_active(tmp_path):
+    proj = Project.init(tmp_path / "multi2")
+    (proj.root / "app.ail").write_text(
+        'entry main(input: Text) { return input }', encoding="utf-8")
+    (proj.root / "sorter.ail").write_text(
+        'entry main(x: Text) { return x }', encoding="utf-8")
+
+    adapter = _ScriptedChatAdapter([
+        '<reply>ok</reply>\n'
+        '<file path="word_counter.ail">\n'
+        'entry main(input: Text) { return input }\n'
+        '</file>\n'
+        '<action>ready_to_run</action>',
+    ])
+    chat = AuthoringChat(proj, adapter)
+    out = chat.turn("add a word counter")
+
+    assert "programs" in out
+    names = [p["name"] for p in out["programs"]]
+    # All three are present.
+    assert "word_counter.ail" in names
+    assert "app.ail" in names
+    assert "sorter.ail" in names
+    # Freshly-written file is the active one.
+    assert out["active_program"] == "word_counter.ail"
+
+
+def test_run_endpoint_selects_program_by_query_param(tmp_path):
+    """v1.13.1 — /authoring-run?program=FILENAME picks which .ail
+    to execute. Running app.ail and sorter.ail in the same project
+    returns different values."""
+    import json as _json
+
+    proj = Project.init(tmp_path / "pickme")
+    (proj.root / "app.ail").write_text(
+        'entry main(input: Text) { return "from app" }', encoding="utf-8")
+    (proj.root / "sorter.ail").write_text(
+        'entry main(input: Text) { return "from sorter" }',
+        encoding="utf-8")
+
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    # Explicit app.ail
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/authoring-run?program=app.ail",
+        data=b"", method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=2) as r:
+        body = _json.loads(r.read().decode("utf-8"))
+    assert "from app" in body["value"]
+    assert body["program"] == "app.ail"
+
+    # Explicit sorter.ail
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/authoring-run?program=sorter.ail",
+        data=b"", method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=2) as r:
+        body = _json.loads(r.read().decode("utf-8"))
+    assert "from sorter" in body["value"]
+    assert body["program"] == "sorter.ail"
+
+
+def test_run_endpoint_rejects_path_traversal_in_program(tmp_path):
+    """Security: the program query param must not escape the project
+    root even if the server is only on localhost."""
+    proj = Project.init(tmp_path / "safe")
+    (proj.root / "app.ail").write_text(
+        'entry main(input: Text) { return input }', encoding="utf-8")
+    # Try to reach a file outside.
+    (tmp_path / "evil.ail").write_text(
+        'entry main(input: Text) { return "pwned" }', encoding="utf-8")
+
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    for bad in ["../evil.ail", "../../evil.ail", "/etc/passwd", "foo.txt"]:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/authoring-run?program="
+            + urllib.request.quote(bad),
+            data=b"", method="POST",
+        )
+        try:
+            urllib.request.urlopen(req, timeout=2)
+            raise AssertionError(f"{bad!r} should have been rejected")
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+
+
+def test_active_program_marker_updated_on_write(tmp_path):
+    proj = Project.init(tmp_path / "active")
+    adapter = _ScriptedChatAdapter([
+        '<reply>first</reply>\n'
+        '<file path="first.ail">\n'
+        'entry main(x: Text) { return "1" }\n'
+        '</file>',
+        '<reply>second</reply>\n'
+        '<file path="second.ail">\n'
+        'entry main(x: Text) { return "2" }\n'
+        '</file>',
+    ])
+    chat = AuthoringChat(proj, adapter)
+    chat.turn("one")
+    assert (proj.state_dir / "active_program").read_text(encoding="utf-8") \
+        == "first.ail"
+    chat.turn("two")
+    assert (proj.state_dir / "active_program").read_text(encoding="utf-8") \
+        == "second.ail"
+
+
+def test_prompt_teaches_intent_md_is_cumulative(tmp_path):
+    """v1.13.1 — user complaint: 'INTENT.md도 계속 덮어쓰는 것 같은데,
+    이러면 목적성이 계속 바뀌어서 곤란해. 하나의 챗 세션은 정보를
+    누적할 수 있어야 해.' The prompt must teach append-not-replace
+    discipline for INTENT.md across turns."""
+    proj = Project.init(tmp_path / "cum")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "# existing\n\nprior work", "app.ail": ""},
+        history=[],
+        user_message="add another program",
+    )
+    # Framing: INTENT.md is cumulative memory.
+    assert "INTENT.md IS CUMULATIVE" in prompt
+    assert "NEVER OVERWRITE" in prompt or "Don't rewrite" in prompt
+    # Explicit carry-forward rule.
+    assert "every line from the previous INTENT.md" in prompt
+    # Skip-writing rule.
+    assert "omit the" in prompt.lower() or "SKIP writing" in prompt
+    # Example walkthrough is present.
+    assert "word counter" in prompt.lower()
+    assert "sorter" in prompt.lower()
+
+
+def test_prompt_minimizes_human_interrogation(tmp_path):
+    """v1.13.1 — user feedback: 'agent became a bad chatbot, asking
+    too many clarifying questions instead of just doing the work.'
+    The whole project's premise is minimizing human involvement.
+    Prompt must push toward aggressive defaults, not interviews."""
+    proj = Project.init(tmp_path / "quiet")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "", "app.ail": ""},
+        history=[],
+        user_message="make a word counter",
+    )
+    # Strong framing that asking is the failure mode.
+    assert "DEFAULT AGGRESSIVELY" in prompt
+    assert "MINIMIZE human involvement" in prompt
+    # Specific anti-interrogation cases listed.
+    assert "Do NOT ask about" in prompt
+    assert "Korean vs English" in prompt
+    assert "Port number" in prompt or "port number" in prompt.lower()
+    # Allowed-to-ask cases explicitly limited.
+    assert "Secrets" in prompt
+    assert "Permissions" in prompt
+
+
+def test_render_value_strips_value_envelope(tmp_path):
+    """v1.13.1 — LLM intent responses sometimes slip through
+    `{"value": X}` envelopes that parse_value_confidence doesn't
+    unwrap. The renderer strips them so users see markdown, not
+    `{"value": "...markdown..."}`."""
+    from ail.agentic.server import _render_value
+    # Single-key envelope around markdown → markdown alone.
+    wrapped = {"value": "# Heading\n\nBody text."}
+    assert _render_value(wrapped) == "# Heading\n\nBody text."
+    # value + confidence envelope → inner.
+    wrapped = {"value": "answer", "confidence": 0.9}
+    assert _render_value(wrapped) == "answer"
+    # Nested envelopes peel recursively.
+    wrapped = {"value": {"value": "deep"}}
+    assert _render_value(wrapped) == "deep"
+    # A dict with OTHER keys is NOT unwrapped — it's genuine data.
+    real_dict = {"value": "a", "other": "b"}
+    import json as _json
+    out = _render_value(real_dict)
+    assert _json.loads(out) == real_dict
+
+
+def test_prompt_teaches_multiple_program_file_naming(tmp_path):
+    """v1.13.1 — agent must know not to overwrite when user asks for
+    a new independent program."""
+    proj = Project.init(tmp_path / "nameit")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "", "app.ail": ""},
+        history=[],
+        user_message="sorter도 만들어줘",
+    )
+    assert "new descriptively-named file" in prompt or \
+        "NEW descriptively-named file" in prompt
+    assert "word_counter.ail" in prompt or "news_fetcher.ail" in prompt
+    # Don't-overwrite guidance.
+    assert "Do NOT overwrite" in prompt
 
 
 def test_chat_ui_service_card_links_to_service_route(tmp_path):

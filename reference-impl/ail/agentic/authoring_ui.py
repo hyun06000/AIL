@@ -96,6 +96,15 @@ def render_authoring_page(
       background: #047857; color: #fff; cursor: pointer; }}
     .run-card .run-inline:hover {{ opacity: 0.9; }}
     .run-card .run-inline:disabled {{ opacity: 0.5; cursor: wait; }}
+    .program-picker {{ display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: #374151; }}
+    .program-picker select {{ font-family: ui-monospace, Menlo,
+      monospace; font-size: 12px; padding: 4px 8px;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: #fff; }}
+    .program-picker .flag {{ font-size: 11px; color: #6b7280;
+      font-family: ui-monospace, Menlo, monospace; }}
+    .program-picker .flag.bad {{ color: #b91c1c; }}
     .env-block {{ border: 1px solid #fde68a; background: #fffbeb;
       border-radius: 6px; padding: 10px 12px; display: flex;
       flex-direction: column; gap: 6px; }}
@@ -253,21 +262,20 @@ def render_authoring_page(
       }}
 
       if (action === 'ready_to_run') {{
-        addRunWidget(false, inputUsedForNext, envRequiredForNext);
+        addRunWidget(false);
       }} else if (action === 'ready_to_serve' || action === 'ready_to_deploy') {{
-        addRunWidget(true, inputUsedForNext, envRequiredForNext);
+        addRunWidget(true);
       }}
     }}
 
-    // Whether the latest agent turn signalled that entry main uses
-    // its input param. Controls whether the Run widget shows an
-    // input textarea. Defaults to true so pre-v1.12.5 history
-    // replays don't lose the input box.
+    // Multi-program state (v1.13.1). Each turn's response carries the
+    // full list of `.ail` files in the project plus which is active;
+    // the Run widget uses this to render a selector.
+    let programsForNext = [];
+    let activeProgramForNext = null;
+    // Backward-compat shadows for single-program cases — kept in sync
+    // with the active program's metadata.
     let inputUsedForNext = true;
-    // Env vars the latest-written app.ail references via env.read.
-    // Each entry: {name, set}. When not set, the run widget surfaces
-    // a masked input so the user can provide the secret without
-    // leaving the chat (v1.13.0).
     let envRequiredForNext = [];
 
     // Inline widget that the user can invoke repeatedly without
@@ -278,9 +286,26 @@ def render_authoring_page(
     // `inputUsed` controls whether to render the input textarea —
     // when false (entry doesn't reference input), the widget is a
     // bare Run button with no confusing empty input field.
-    function addRunWidget(service, inputUsed, envRequired) {{
-      if (typeof inputUsed === 'undefined') inputUsed = true;
-      if (!envRequired) envRequired = [];
+    function addRunWidget(service) {{
+      // v1.13.1: widget operates on a selected program. `programs`
+      // and `activeProgramForNext` come from the latest agent turn.
+      // Falls back to legacy single-program behaviour when the list
+      // is empty (pre-v1.13.1 history replays).
+      const programs = programsForNext && programsForNext.length > 0
+        ? programsForNext.slice()
+        : [{{
+            name: 'app.ail',
+            input_used: inputUsedForNext,
+            env_required: envRequiredForNext,
+            parses: true,
+          }}];
+      let selected = activeProgramForNext
+        && programs.find(p => p.name === activeProgramForNext)
+        ? activeProgramForNext
+        : programs[0].name;
+      const meta = () => programs.find(p => p.name === selected) || programs[0];
+      let inputUsed = meta().input_used;
+      let envRequired = meta().env_required || [];
       const card = document.createElement('div');
       card.className = 'run-card' + (service ? ' service' : '');
 
@@ -307,17 +332,70 @@ def render_authoring_page(
         card.appendChild(title);
       }}
 
+      // Program picker. Only shown when there are 2+ programs.
+      const dynSlot = document.createElement('div');
+      dynSlot.style.display = 'flex';
+      dynSlot.style.flexDirection = 'column';
+      dynSlot.style.gap = '10px';
+      if (programs.length > 1) {{
+        const pickerRow = document.createElement('div');
+        pickerRow.className = 'program-picker';
+        const label = document.createElement('span');
+        label.textContent = '프로그램 / Program:';
+        pickerRow.appendChild(label);
+        const sel = document.createElement('select');
+        programs.forEach(p => {{
+          const opt = document.createElement('option');
+          opt.value = p.name;
+          opt.textContent = p.name + (p.parses ? '' : ' (parse error)');
+          if (p.name === selected) opt.selected = true;
+          sel.appendChild(opt);
+        }});
+        sel.onchange = () => {{
+          selected = sel.value;
+          inputUsed = meta().input_used;
+          envRequired = meta().env_required || [];
+          redrawDynamic();
+        }};
+        pickerRow.appendChild(sel);
+        const flag = document.createElement('span');
+        flag.className = 'flag';
+        pickerRow.appendChild(flag);
+        card.appendChild(pickerRow);
+        // Update flag whenever selection changes too.
+        const refreshFlag = () => {{
+          const m = meta();
+          if (!m.parses) {{
+            flag.className = 'flag bad';
+            flag.textContent = '✗ parse error — fix before running';
+          }} else {{
+            flag.className = 'flag';
+            flag.textContent = '';
+          }}
+        }};
+        refreshFlag();
+        const _orig = sel.onchange;
+        sel.onchange = () => {{ _orig(); refreshFlag(); }};
+      }}
+      card.appendChild(dynSlot);
+
+      function redrawDynamic() {{
+        dynSlot.innerHTML = '';
+        renderDynamic();
+      }}
+
+      function renderDynamic() {{
       // Env-var requirement block — shown when the authored app.ail
       // calls `perform env.read("VAR")` for any var that isn't set.
       // Masked input; value NEVER goes into chat history or ledger.
       const unset = envRequired.filter(e => !e.set);
       if (unset.length > 0) {{
-        const env = document.createElement('div');
-        env.className = 'env-block';
-        const title = document.createElement('div');
-        title.className = 'env-title';
-        title.textContent = '환경변수 필요 / Secrets this program needs:';
-        env.appendChild(title);
+        const envBox = document.createElement('div');
+        envBox.className = 'env-block';
+        const envTitle = document.createElement('div');
+        envTitle.className = 'env-title';
+        envTitle.textContent = '설정 필요 / This program needs:';
+        envBox.appendChild(envTitle);
         unset.forEach(e => {{
           const row = document.createElement('div');
           row.className = 'env-row';
@@ -326,7 +404,7 @@ def render_authoring_page(
           row.appendChild(lbl);
           const field = document.createElement('input');
           field.type = 'password';
-          field.placeholder = '값 붙여넣기 / paste value';
+          field.placeholder = '여기에 붙여넣으세요 / paste here';
           field.autocomplete = 'off';
           row.appendChild(field);
           const setBtn = document.createElement('button');
@@ -366,9 +444,9 @@ def render_authoring_page(
           }};
           row.appendChild(setBtn);
           row.appendChild(status);
-          env.appendChild(row);
+          envBox.appendChild(row);
         }});
-        card.appendChild(env);
+        dynSlot.appendChild(envBox);
       }}
 
       let input = null;
@@ -391,13 +469,13 @@ def render_authoring_page(
             fire();
           }}
         }});
-        card.appendChild(input);
+        dynSlot.appendChild(input);
       }} else {{
         const note = document.createElement('div');
         note.className = 'desc';
         note.textContent =
           '이 프로그램은 입력이 필요 없어요. 실행 버튼을 누르세요.';
-        card.appendChild(note);
+        dynSlot.appendChild(note);
       }}
 
       const runBtn = document.createElement('button');
@@ -413,7 +491,8 @@ def render_authoring_page(
         thread.appendChild(placeholder);
         scrollBottom();
         try {{
-          const r = await fetch('/authoring-run', {{
+          const url = '/authoring-run?program=' + encodeURIComponent(selected);
+          const r = await fetch(url, {{
             method: 'POST',
             headers: {{ 'Content-Type': 'text/plain; charset=utf-8' }},
             body: input ? input.value : '',
@@ -436,8 +515,10 @@ def render_authoring_page(
         }}
       }};
       runBtn.onclick = fire;
-      card.appendChild(runBtn);
+      dynSlot.appendChild(runBtn);
+      }}  // end renderDynamic
 
+      renderDynamic();
       thread.appendChild(card);
     }}
 
@@ -531,6 +612,12 @@ def render_authoring_page(
         }}
         if (Array.isArray(data.env_required)) {{
           envRequiredForNext = data.env_required;
+        }}
+        if (Array.isArray(data.programs)) {{
+          programsForNext = data.programs;
+        }}
+        if (data.active_program) {{
+          activeProgramForNext = data.active_program;
         }}
         addAgent(data.reply || '(empty)', data.files || [], data.action || null);
       }} catch (e) {{

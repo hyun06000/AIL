@@ -18,6 +18,54 @@ from .agent import _looks_like_error
 from .project import Project
 
 
+def _resolve_program_path(project, requested: str):
+    """Pick which .ail file to run for /authoring-run.
+
+    Precedence: explicit `?program=` query (must match an existing
+    `.ail` file) → `.ail/active_program` marker → `app.ail`. Returns
+    a Path, or None if the requested name doesn't exist and no
+    sensible default can be found.
+    """
+    root = project.root
+    # 1. Explicit request, safety-check it.
+    if requested:
+        # Only a filename, no path traversal, must end .ail.
+        if "/" in requested or "\\" in requested or ".." in requested:
+            return None
+        if not requested.endswith(".ail"):
+            return None
+        target = (root / requested).resolve()
+        try:
+            target.relative_to(root.resolve())
+        except ValueError:
+            return None
+        if not target.is_file():
+            return None
+        return target
+    # 2. active_program marker.
+    marker = project.state_dir / "active_program"
+    if marker.is_file():
+        try:
+            name = marker.read_text(encoding="utf-8").strip()
+        except OSError:
+            name = ""
+        if name and name.endswith(".ail") and "/" not in name:
+            candidate = root / name
+            if candidate.is_file():
+                return candidate
+    # 3. app.ail default.
+    if project.app_path.is_file():
+        return project.app_path
+    # 4. Any .ail file.
+    try:
+        for p in root.iterdir():
+            if p.is_file() and p.suffix == ".ail":
+                return p
+    except OSError:
+        pass
+    return None
+
+
 def _diagnose_from_trace(trace) -> str:
     """Turn a Trace of a failed request into a human-readable diagnostic.
 
@@ -129,6 +177,11 @@ def _render_value(value):
     list returns are re-formatted as pretty-printed JSON so a user who
     opens / in a browser sees readable structure instead of Python's
     repr syntax (`{'k': 'v'}` with single quotes).
+
+    v1.13.1 also strips residual `{"value": X}` envelopes that LLM
+    intent responses sometimes slip past `parse_value_confidence`
+    (e.g. when nested). Without this, a markdown answer renders as a
+    quoted-inside-JSON block instead of plain markdown.
     """
     if isinstance(value, dict) and value.get("_result"):
         if value.get("ok"):
@@ -137,12 +190,30 @@ def _render_value(value):
     if isinstance(value, str) and value.startswith("UNWRAP_ERROR:"):
         # Surface the inner message without the runtime sentinel prefix.
         return value[len("UNWRAP_ERROR:"):].strip()
+    # Recursively strip `{"value": X}` and `{"value": X, "confidence": c}`
+    # single/double-key envelopes — they're leaked LLM JSON wrappers,
+    # not the structured data the user intended.
+    value = _strip_value_envelopes(value)
     if isinstance(value, (dict, list)):
         import json as _json
         try:
             return _json.dumps(value, ensure_ascii=False, indent=2)
         except (TypeError, ValueError):
             return str(value)
+    return value
+
+
+def _strip_value_envelopes(value, _depth: int = 0):
+    """Peel off `{"value": X}` and `{"value": X, "confidence": N}`
+    dict wrappers recursively (capped at 6 levels so a truly
+    pathological recursive structure can't loop us)."""
+    if _depth >= 6:
+        return value
+    if not isinstance(value, dict):
+        return value
+    keys = set(value.keys())
+    if keys == {"value"} or keys == {"value", "confidence"}:
+        return _strip_value_envelopes(value["value"], _depth + 1)
     return value
 
 
@@ -339,11 +410,21 @@ def _make_handler(project: Project):
             # and can ask for fixes. Replaces the v1.12.0–2 behavior
             # where clicking "Run" killed the chat and switched to the
             # service UI.
-            if self.path == "/authoring-run":
+            if self.path.startswith("/authoring-run"):
+                # `?program=FILENAME` query selects which .ail to run
+                # when a project has multiple programs. Defaults to
+                # the active_program marker, falling back to app.ail.
+                from urllib.parse import urlparse, parse_qs
+                qs = parse_qs(urlparse(self.path).query)
+                requested = (qs.get("program", [""])[0] or "").strip()
+                program_path = _resolve_program_path(project, requested)
+                if program_path is None:
+                    self._send_text(400, "program not found\n")
+                    return
                 length = int(self.headers.get("Content-Length", "0") or "0")
                 run_input = self.rfile.read(length).decode("utf-8") if length else ""
                 try:
-                    result, trace = ail_run(str(project.app_path), input=run_input)
+                    result, trace = ail_run(str(program_path), input=run_input)
                     value = result.value
                     is_err = _looks_like_error(value)
                     rendered = _render_value(value)
@@ -388,20 +469,23 @@ def _make_handler(project: Project):
                 # textarea for input-free programs (v1.12.5 fix).
                 # Also list env vars the program references so the
                 # widget can surface a masked secret input when any
-                # are unset (v1.13.0).
+                # are unset (v1.13.0). Uses the ACTUAL program that
+                # ran, not hardcoded app.ail (v1.13.1 multi-program).
                 import os as _os
                 try:
                     from .web_ui import entry_uses_input
                     from .authoring_chat import list_required_env_vars
-                    app_source = project.app_path.read_text(encoding="utf-8")
-                    outcome["input_used"] = entry_uses_input(app_source)
+                    program_source = program_path.read_text(encoding="utf-8")
+                    outcome["input_used"] = entry_uses_input(program_source)
                     outcome["env_required"] = [
                         {"name": n, "set": n in _os.environ}
-                        for n in list_required_env_vars(app_source)
+                        for n in list_required_env_vars(program_source)
                     ]
+                    outcome["program"] = program_path.name
                 except Exception:
                     outcome["input_used"] = True
                     outcome["env_required"] = []
+                    outcome["program"] = "app.ail"
 
                 # Record the run result into the chat history so the
                 # agent has context on the next turn — "fix the error

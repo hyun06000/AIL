@@ -125,7 +125,7 @@ fn get_draft(channel: Text) -> Text {
 fn post_discord(text: Text) -> Text {
     webhook_r = perform env.read("DISCORD_WEBHOOK_URL")
     if is_error(webhook_r) {
-        return "DISCORD_WEBHOOK_URL 환경변수가 설정 안 됐어요. 채팅의 환경변수 입력창에 붙여넣거나 Discord 서버 → 채널 설정 → Integrations → Webhooks에서 URL 만드세요."
+        return "Discord 웹훅이 설정되지 않았어요. Discord 서버 → 채널 설정 → Integrations → Webhooks에서 URL을 만들어 채팅의 '설정 필요' 입력창에 붙여넣으세요."
     }
     url = unwrap(webhook_r)
     body = join(["{\"content\": \"", escape_json_text(text), "\"}"], "")
@@ -141,10 +141,10 @@ fn post_mastodon(text: Text) -> Text {
     instance_r = perform env.read("MASTODON_INSTANCE")
     token_r = perform env.read("MASTODON_TOKEN")
     if is_error(instance_r) {
-        return "MASTODON_INSTANCE 환경변수 필요 (예: https://mastodon.social). 채팅의 환경변수 입력창에 붙여넣으세요."
+        return "Mastodon 서버 주소가 설정되지 않았어요 (예: https://mastodon.social). 채팅의 '설정 필요' 입력창에 붙여넣으세요."
     }
     if is_error(token_r) {
-        return "MASTODON_TOKEN 환경변수 필요 (Mastodon 설정 → Development → New application → write:statuses 권한). 채팅의 환경변수 입력창에 붙여넣으세요."
+        return "Mastodon 액세스 토큰이 설정되지 않았어요 (Mastodon → Preferences → Development → New application, write:statuses 권한). 채팅의 '설정 필요' 입력창에 토큰을 붙여넣으세요."
     }
     url = join([unwrap(instance_r), "/api/v1/statuses"], "")
     body = join(["{\"status\": \"", escape_json_text(text), "\"}"], "")

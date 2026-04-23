@@ -80,6 +80,15 @@ class AuthoringChat:
             ok, summary = self._write_file(path, content)
             if ok:
                 applied_writes.append({"path": path, "bytes": len(content.encode("utf-8"))})
+                # Track last-written .ail as the "active" one so the
+                # Run widget defaults to it when multiple programs
+                # exist.
+                if path.endswith(".ail"):
+                    try:
+                        (self.project.state_dir / "active_program").write_text(
+                            path, encoding="utf-8")
+                    except OSError:
+                        pass
             else:
                 applied_writes.append({"path": path, "skipped": summary})
 
@@ -92,25 +101,30 @@ class AuthoringChat:
             "action": action,
         })
 
-        # Tell the UI whether the entry uses its input parameter so
-        # the Run widget shown next to a ready_to_run/serve action
-        # can hide the input textarea when the program takes no
-        # input (v1.12.5). Also list env vars the program references
-        # so the UI can surface a masked secret input for unset ones
-        # (v1.13.0) — the chat-safe alternative to terminal exports.
-        import os
-        try:
-            from .web_ui import entry_uses_input
-            app_source = self.project.app_path.read_text(encoding="utf-8")
-            input_used = entry_uses_input(app_source)
-        except Exception:
-            app_source = ""
-            input_used = True
+        # Multi-program support (v1.13.1): list every .ail program in
+        # the project with its own input_used + env_required. The UI's
+        # Run widget uses this to render a program selector when
+        # more than one program exists, and to show the right input
+        # box / secret inputs per-program. `active_program` is the
+        # most-recently-written program and becomes the selector's
+        # default.
+        programs = list_project_programs(self.project)
+        active = self._active_program()
+        # Backward-compatible top-level fields mirror the active one.
+        if active:
+            active_info = next(
+                (p for p in programs if p["name"] == active),
+                programs[0] if programs else None,
+            )
+        else:
+            active_info = programs[0] if programs else None
 
-        env_required = [
-            {"name": name, "set": name in os.environ}
-            for name in list_required_env_vars(app_source)
-        ]
+        if active_info:
+            input_used = active_info["input_used"]
+            env_required = active_info["env_required"]
+        else:
+            input_used = True
+            env_required = []
 
         return {
             "reply": reply,
@@ -118,7 +132,18 @@ class AuthoringChat:
             "action": action,
             "input_used": input_used,
             "env_required": env_required,
+            "programs": programs,
+            "active_program": active_info["name"] if active_info else None,
         }
+
+    def _active_program(self) -> Optional[str]:
+        marker = self.project.state_dir / "active_program"
+        if marker.is_file():
+            try:
+                return marker.read_text(encoding="utf-8").strip() or None
+            except OSError:
+                return None
+        return None
 
     # ---------- prompt construction ----------
 
@@ -129,7 +154,7 @@ class AuthoringChat:
         history_text = self._format_history(history)
         state_text = self._format_state(state)
 
-        return f"""You are a co-author for an AIL project. The user is typically NOT a programmer. Your job is to elicit what they want, ask ONE clarifying question at a time, and write/update files incrementally.
+        return f"""You are the author and driver of an AIL project. The user is NOT a programmer and the whole point of this project is to MINIMIZE human involvement. Do the work. Stop asking.
 
 === PROJECT IDENTITY ===
 AIL stands for "AI-Intent Language". It's a programming language designed for LLMs to author code. The Python interpreter is the PyPI package `ail-interpreter`. The GitHub repo is https://github.com/hyun06000/AIL. Humans describe what they want in plain language; AIL + an LLM author the code; the runtime executes it safely.
@@ -157,11 +182,86 @@ full new contents of app.ail
 </file>
 <action>ready_to_run</action>
 
+=== INTENT.md IS CUMULATIVE MEMORY — NEVER OVERWRITE WHOLESALE ===
+
+INTENT.md is the project's accumulating memory across chat turns. Every clarification and constraint the user has ever given lives here. You read it on every turn via the PROJECT STATE block. If you overwrite it, the user's context disappears and the project's purpose seems to mutate turn-by-turn.
+
+**Rules for INTENT.md:**
+
+- **Don't rewrite it from scratch every turn.** If an agent reflex says "regenerate INTENT.md to describe the new thing the user asked for", suppress that reflex. Amend, don't replace.
+- **First turn on an empty project:** write a minimal skeleton — title, one-line purpose, empty `## Programs` section, `## Deployment` with a port.
+- **New program added:** APPEND a `### filename.ail — short purpose` subsection under `## Programs`. Keep all existing subsections untouched.
+- **Program refined:** update ONLY that program's `### filename.ail` subsection.
+- **Project-wide constraint** (port, deployment target, shared storage, credential names): add it once under a suitable top-level heading and leave it there.
+
+**Carry-forward discipline.** When your `<file path="INTENT.md">` tag appears, its contents must include **every line from the previous INTENT.md** except the specific lines you're changing. Re-read the PROJECT STATE section above; copy existing content forward; apply the targeted change; write the result. Never drop an earlier program's description because the user's current request is about a different program.
+
+**When to SKIP writing INTENT.md:** if the current turn only touches `.ail` code and INTENT.md wouldn't change, simply omit the `<file path="INTENT.md">` tag. Don't re-emit unchanged content.
+
+**Example evolution:**
+
+Turn 1 (user: "단어 수 세주는 프로그램 만들어줘"):
+```markdown
+# my-app
+
+Text utilities service.
+
+## Programs
+
+### app.ail — word counter
+Counts words. Empty input is an error.
+
+## Deployment
+- Port 8080
+```
+
+Turn 2 (user: "이제 정렬도 해줘"):
+```markdown
+# my-app
+
+Text utilities service.
+
+## Programs
+
+### app.ail — word counter
+Counts words. Empty input is an error.
+
+### sorter.ail — list sorter
+Sorts a comma-separated list alphabetically.
+
+## Deployment
+- Port 8080
+```
+
+The word-counter description survived the sorter addition. That's the goal.
+
+=== DEFAULT AGGRESSIVELY — DO NOT INTERROGATE ===
+
+The whole project's premise is that humans don't touch the code layer. Your job is to do the work, not to interview them. When the user gives you a task, WRITE THE PROGRAM. Pick sensible defaults. Run it. They'll correct you if wrong — that's cheaper than 5 turns of clarifying questions.
+
+**Only ask a human for:**
+- **Secrets** that only they can provide (API tokens, webhook URLs, OAuth access tokens). And even then: write the code that uses `perform env.read("NAME")` FIRST, then briefly note in `<reply>` that the env var is needed. The UI surfaces a masked input next to the Run widget — the human fills it inline without chat ceremony.
+- **Permissions** that only they can grant (access to a specific Discord server, a repo they own, etc.).
+- **Genuinely weighty, irreversible choices** where any default would likely be wrong (e.g. "delete all users or just inactive ones?").
+
+**Do NOT ask about:**
+- Korean vs English — match whatever language they're using. Just match it.
+- Error handling shape — default to `Result`; empty input → error. Move on.
+- Port number — 8080. Always.
+- Output format — whatever fits the task; usually plain text or a simple record. Move on.
+- "Which tone/style/length?" — pick one. Move on.
+- "Want me to add X?" — if X is obviously part of the task, just add X. Don't ask.
+- "Should I use intent or fn?" — you decide, per the reference card. Don't narrate the decision.
+
+If you find yourself about to ask a clarifying question, ask instead: **does a reasonable default exist?** If yes, use it silently. If no, ask. Default: yes. The second-turn-clarifier is the failure mode this project exists to kill.
+
 Rules:
 - <reply> is required. All other tags are optional.
 - Include <file> only when you're writing or updating that file. Omit it to leave the file unchanged.
 - When you include <file>, provide the COMPLETE new contents, not a diff. Everything between the tags replaces the file entirely.
-- Allowed files: INTENT.md, app.ail, view.html, tests/*.
+- Allowed files: INTENT.md, view.html, tests/*, and ANY `*.ail` file in the project root. A project can (and should) hold multiple independent `.ail` programs — one file per distinct use case.
+- **File naming rule — the critical one.** When the user asks for a NEW, INDEPENDENT program (different use case, e.g., first "word counter" and then later "sorter" — no relationship between them), write it to a NEW descriptively-named file: `word_counter.ail`, `news_fetcher.ail`, `stock_summary.ail`, etc. Do NOT overwrite an existing program that has nothing to do with the new request. When the user asks to EDIT or FIX an existing program ("그거 좀 고쳐줘", "에러 고쳐줘", "더 짧게 해줘"), update THAT file by its existing name. The current state view lists every `.ail` file in the project with a parse status — use those names when editing.
+- `app.ail` is just the default for the first file. It has no special status except convention. After the first program, always pick descriptive names.
 - Two action values are recognized. BOTH keep the user in the chat — nothing ever navigates away. The difference is framing and affordances, not UI mode:
   - `<action>ready_to_run</action>` — the DEFAULT for most tasks (one-shot answers, scripts, calculations, previews). Renders an inline "Run" card in the chat with an optional input textarea and a Run button. The user can click Run repeatedly with different inputs; each result appears as a bubble. They stay in the chat and can also say "이거 수정해줘" to have you iterate on the code.
   - `<action>ready_to_serve</action>` — use when the user has said they want a long-running service / dashboard / webhook / something other people or apps will call. Renders the same run widget wrapped as a "service card" (green, labeled 서비스 모드) with a link to `/service` — a shareable URL that serves the classic textarea page (or view.html) on a separate route for external consumers. The user STILL stays in the chat; `/service` opens in a new tab only when they click the link.
@@ -169,8 +269,7 @@ Rules:
 - When the conversation history contains a `[Run result — OK]` entry, the user saw the output. If they don't object, offer either more refinement questions OR `ready_to_serve` if they want a service. Don't re-offer `ready_to_run` with unchanged code.
 - When the PROJECT STATE for `app.ail` includes `[PARSE ERROR]`, the code you previously wrote does NOT parse. Do NOT emit `ready_to_run` or `ready_to_serve`. Instead: write a corrected `<file path="app.ail">` and briefly explain the fix in `<reply>`. Common LLM mistakes to avoid: don't use `#` for comments (AIL uses `//`); `intent` constraints must be short identifier-style phrases like `output_is_valid_json` or `language_is_korean`, NOT free-prose sentences with articles like "their" or "a"; don't put JSON shape descriptions in constraints — that's free prose; only write syntax that appears in the reference card.
 - Match the user's language (Korean or English) both in `<reply>` AND in the AIL program's eventual output. This is critical: if the user is chatting in Korean, every `intent` in `app.ail` must produce Korean output. Add a constraint like `language_is_korean` or put `"Reply in Korean."` in the intent's goal string. The user should NEVER run the program and get English back when they were conversing in Korean (and vice versa). The ONLY exception is channel-specific: if the program posts to an English-only venue like Hacker News, r/ProgrammingLanguages, or international Discord, that intent should be English regardless. Make this an explicit choice in each intent's constraints.
-- Ask one question at a time. Don't dump 10 decisions in one message.
-- Keep the reply short (1–3 sentences plus a question). The UI is chat — not a document.
+- Keep the reply short (1–2 sentences summarizing what you did). The UI is chat — not a document. If you MUST ask a question per the DEFAULT AGGRESSIVELY rules above, keep it to a single binary choice and attach it to a `ready_to_run` action so they can run-first-ask-later if they prefer.
 - The AIL reference card is authoritative. Do NOT import modules that aren't listed. Do NOT use syntax that isn't in the card.
 - **Intent goals MUST be quoted string literals for any multi-word instruction.** `goal: Korean summary of X` only captures the first identifier (`Korean`) as the goal; the rest is silently dropped. Write `goal: "Korean summary of X with details ..."` instead. Use double quotes and escape inner quotes with `\"`. This is the single most common AIL authoring mistake — verify every intent you write uses `goal: "..."` if the goal is more than one word.
 
@@ -248,9 +347,21 @@ When the user asks you to **take an action** — "post this", "send that", "noti
 
 1. Identify which side-effect primitive fits (usually `http.post` for outbound).
 2. Identify what credential is needed (webhook URL, bearer token, API key).
-3. If the user hasn't set the env var yet, tell them the exact env var name and how to get the credential (link to the settings page). Offer to proceed once set.
-4. Write the AIL that does the action.
-5. Emit `<action>ready_to_run</action>` so the user can trigger it.
+3. **Just write the AIL with `perform env.read("NAME")`.** The chat UI AUTOMATICALLY surfaces a password-masked input next to the Run button for any `env.read("NAME")` the program contains and the env var is not yet set. The user types/pastes the value; the server stores it in `.ail/secrets.json` (gitignored) and loads it into the environment. No terminal interaction. No shell exports. No restart.
+4. In your `<reply>`, tell the user in ONE line where to GET the credential (e.g. "Discord 서버 설정 → Integrations → Webhooks에서 웹훅 URL을 만드세요"). Do NOT instruct them to `export` anything. Do NOT mention environment variables, terminals, shell, `.env` files, or system settings. Those are programmer concepts the UI abstracts away.
+5. Emit `<action>ready_to_run</action>` so the user runs the program. If the secret isn't set yet, the UI surfaces the masked input inline; once they paste and hit Save, they click Run.
+
+**Never say:**
+- "터미널에서 `export DISCORD_WEBHOOK_URL=...` 입력하세요"
+- "Set the `MASTODON_TOKEN` environment variable"
+- ".env 파일에 추가하세요"
+- "shell profile에 넣으세요"
+
+**Say instead:**
+- "Discord 서버 설정 → Integrations → Webhooks에서 URL을 만들어 아래 입력창에 붙여넣으세요."
+- "Mastodon 설정 → Development → New application (write:statuses 권한) → 토큰을 복사해서 아래 입력창에 붙여넣으세요."
+
+The user never sees the word "환경변수" or "environment variable" from you. The UI's own label says "설정 필요" — you stick to the user-visible vocabulary.
 
 **Concrete "post to X" examples — use these as templates:**
 
@@ -419,35 +530,56 @@ Now respond using the XML format above."""
     # ---------- filesystem ----------
 
     def _read_project_state(self) -> dict[str, str]:
-        files_to_show = ["INTENT.md", "app.ail"]
-        # Include view.html if present
-        if (self.project.root / "view.html").exists():
-            files_to_show.append("view.html")
-        state = {}
-        for name in files_to_show:
-            p = self.project.root / name
-            if p.exists():
-                try:
-                    state[name] = p.read_text(encoding="utf-8")
-                except OSError:
-                    state[name] = "(read error)"
-            else:
-                state[name] = ""
+        """Assemble the PROJECT STATE block the agent sees each turn.
 
-        # Parse-check app.ail so the agent sees syntax errors in its
-        # state view and prioritizes fixing them. Without this, the
-        # agent happily re-emits ready_to_run on code that fails to
-        # parse (field test 2026-04-23: LLM wrote free-prose inside
-        # intent goal/constraints blocks).
-        app = state.get("app.ail", "").strip()
-        if app:
-            parse_err = _parse_check(app)
-            if parse_err:
-                state["app.ail"] = (
-                    state["app.ail"]
-                    + f"\n\n[PARSE ERROR — this file will NOT run until "
-                      f"fixed]\n{parse_err}"
+        Lists every `.ail` program in the project (not just app.ail)
+        so the agent knows which files already exist and writes NEW
+        ones with new names when the user asks for a new independent
+        program, instead of overwriting.
+        """
+        state: dict[str, str] = {}
+
+        # INTENT.md
+        intent_path = self.project.intent_path
+        if intent_path.is_file():
+            try:
+                state["INTENT.md"] = intent_path.read_text(encoding="utf-8")
+            except OSError:
+                state["INTENT.md"] = "(read error)"
+        else:
+            state["INTENT.md"] = ""
+
+        # view.html
+        if (self.project.root / "view.html").exists():
+            try:
+                state["view.html"] = (
+                    self.project.root / "view.html"
+                ).read_text(encoding="utf-8")
+            except OSError:
+                state["view.html"] = "(read error)"
+
+        # All `.ail` programs in the project root — each with its
+        # own full source and parse-check annotation.
+        programs = list_project_programs(self.project)
+        for info in programs:
+            name = info["name"]
+            try:
+                source = (self.project.root / name).read_text(encoding="utf-8")
+            except OSError:
+                continue
+            annotated = source
+            if not info["parses"] and info["parse_error"]:
+                annotated = source + (
+                    f"\n\n[PARSE ERROR — this file will NOT run until "
+                    f"fixed]\n{info['parse_error']}"
                 )
+            state[name] = annotated
+
+        # If no .ail file exists at all, put an explicit placeholder
+        # so the state view shows the agent there are no programs yet.
+        if not programs:
+            state["app.ail"] = ""
+
         return state
 
     def _write_file(self, rel_path: str, content: str) -> tuple[bool, str]:
@@ -533,6 +665,55 @@ Now respond using the XML format above."""
         }
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def list_project_programs(project) -> list[dict]:
+    """Return metadata for every `.ail` file in the project root.
+
+    A project can host multiple independent programs — a word counter
+    AND a news fetcher AND a list sorter, each its own file — without
+    overwriting each other. This lists them for the chat UI's program
+    selector and for the agent's project-state view.
+
+    Each entry: {name, bytes, parses, input_used, env_required,
+    entry_present}. Sorted by modification time descending so the
+    most-recently-edited program is first (the natural "active" one).
+    """
+    import os
+    from .web_ui import entry_uses_input
+
+    results: list[dict] = []
+    try:
+        candidates = [
+            p for p in project.root.iterdir()
+            if p.is_file() and p.suffix == ".ail"
+        ]
+    except OSError:
+        return []
+
+    # Sort newest-first by mtime.
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    for p in candidates:
+        try:
+            source = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        parse_err = _parse_check(source)
+        has_entry = bool(re.search(r"\bentry\s+\w+\s*\(", source))
+        results.append({
+            "name": p.name,
+            "bytes": len(source.encode("utf-8")),
+            "parses": parse_err is None,
+            "parse_error": parse_err,
+            "entry_present": has_entry,
+            "input_used": entry_uses_input(source) if has_entry else False,
+            "env_required": [
+                {"name": n, "set": n in os.environ}
+                for n in list_required_env_vars(source)
+            ],
+        })
+    return results
 
 
 def list_required_env_vars(app_source: str) -> list[str]:
