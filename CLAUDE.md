@@ -63,62 +63,41 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 ## NOW — 2026-04-23
 
-**버전:** v1.14.0 (main = dev = origin, PyPI는 v1.10.1 상태). 서빙 모델: `ail-coder:7b-v3`.
+**버전:** v1.14.0 (main = dev = origin 동기화). PyPI는 v1.10.1에 멈춰 있음 — v1.11.0~v1.14.0 누적 미배포, hyun06000 승인 대기.
 
-**두 트랙 (상세: [`docs/heaal/README.md`](docs/heaal/README.md)):**
-- **AIL 트랙** — 언어 자체. R3/C4 기준선 AIL parse 80% / answer 70% vs Python 56%. Python 돌파 후 stable.
-- **HEAAL 트랙** — 4개 모델 가족(Anthropic/Alibaba/Meta/Mistral) boundary 특성화 완료. 결론: grammar floor는 모델이 parse 임계 넘을 때만 작동, 그 이하는 fine-tune 영역. 전체 표 + 분석: [`docs/benchmarks/2026-04-22_heaal_boundary_summary.md`](docs/benchmarks/2026-04-22_heaal_boundary_summary.md).
+**서빙 모델:** `ail-coder:7b-v3`. 테스트 **528 passing**.
 
-**L2 v2 완결 (6/6):**
+### 두 벤치마크 트랙 (둘 다 stable — 후속 실험은 대기 중)
 
-| | Primitive | Ship |
-|---|---|---|
-| ✅ | `perform clock.now()` | v1.9.5 |
-| ✅ | Authoring prompt가 `perform http.get` 채택 유도 | v1.9.5 |
-| ✅ | `perform state.read/write/has/delete` | v1.9.8 |
-| ✅ | Input-aware UI (`entry main`이 `input` 안 쓰면 textarea 숨김) | v1.9.9 |
-| ✅ | HTML output mode (`entry`가 `<!doctype...`/`<html...`/`<tag...` 반환) | v1.9.10 |
-| ✅ | `perform schedule.every(seconds)` 백그라운드 재호출 | v1.9.12 |
+- **AIL 트랙** — R3/C4 기준선 AIL parse 80% / answer 70% vs Python 56%. Python 돌파 후 동결.
+- **HEAAL 트랙** — 4개 모델 가족 boundary 특성화 완료. 결론: grammar floor는 모델이 parse 임계 넘을 때만 작동. 전체 표 + 분석: [`docs/benchmarks/2026-04-22_heaal_boundary_summary.md`](docs/benchmarks/2026-04-22_heaal_boundary_summary.md).
 
-**별도 UX 개선:** `ail ask --show-source`가 `author=provider/model-id` 출력 (환경변수 라우팅 확인용) — v1.9.11.
+### L2 agentic runtime — 성숙
 
-**새 예제:** `examples/agentic/news-ticker/` — schedule + state + HTML 3개 primitive가 한 대시보드에서 합성.
+- L2 v2 primitive **6/6 완결** (clock / http authoring / state.* / input-aware UI / view.html / schedule.every)
+- 부가 기능: `env.read`, `http.post` headers, chat-safe secret input, `/authoring-run` / `/authoring-complete` / `/back-to-chat` / `/authoring-chat-export` / `/authoring-set-env` / `/service` endpoints, 다중 `.ail` 프로그램 per project, 프로그램 선택 dropdown, 에러 버블 "🔧 수정 요청" 버튼.
+- 작동 예제: `word-counter`, `visit-counter`, `sentiment`, `csv-stats`, `news-ticker`, `ail-herald`, `ail-promoter`.
 
-**근거 case study:** [`docs/case-studies/2026-04-23_news-dashboard.md`](docs/case-studies/2026-04-23_news-dashboard.md) — hyun06000이 호르무즈 뉴스 대시보드 INTENT를 작성했고, 그 한 INTENT가 위 6개 primitive를 정확히 짚었음. 새 primitive 우선순위 결정의 데이터 근거.
+### v1.14.0 아키텍처 피벗 — chat_history가 agent memory
 
-**현재 작동하는 비개발자 흐름** (검증됨, 2026-04-23 hyun06000 + Sonnet):
-1. `ail init my-app` (터미널 1번)
-2. `INTENT.md` 편집 (자연어, 한국어/영어 자동 감지)
-3. `ail up my-app` (터미널 1번) — 친근 로깅(전 세션 한국어 i18n), AI-translated 저자 실패 진단, 실패 시 `.ail/attempts/`에 시도 보존, 파일 watch 자동 reload, `--auto-fix N` 자율 수정
-4. 브라우저로 `http://127.0.0.1:8080/` — textarea + 보내기 버튼 + 결과 영역 (curl 불필요)
-5. `ail chat <path> "..."` 자연어로 후속 편집
+가장 최근 변화. hyun06000의 질문 ("챗 기반인데 INTENT.md 꼭 필요하니?") 으로 촉발된 근본 재설계:
 
-**재현용 샘플 프로젝트:**
-- `~/Desktop/code/personal/usd-now/` (실제 사용자 작성, exchangerate-api fetch 데모)
-- `reference-impl/examples/agentic/visit-counter/` (state effect 데모)
+- `_read_project_state`에서 INTENT.md 제거 — agent는 `.ail` + view.html만 본다.
+- 프롬프트: "YOUR MEMORY IS THE CHAT HISTORY" 한 섹션으로 통합, 옛 INTENT.md 관련 두 섹션 제거.
+- `_format_history`가 첫 user 메시지를 `[PROJECT PURPOSE ANCHOR]`로 prepend.
+- INTENT.md는 legacy human-facing scaffold로 격하. `ail init`이 여전히 생성하지만 agent는 건드릴 의무 없음.
 
-**PyPI 미배포 변경:** v1.11.0 (env.read effect + http.post headers + ail-herald 예제). PyPI는 v1.10.1.
+효과: v1.13.x가 계속 패치하던 "INTENT.md 덮어쓰기 / drift / sync" 버그류 전체가 구조적으로 사라짐.
 
-**최근 세션 핵심 변화 (v1.9.9 → v1.11.0):**
-- L2 v2 primitive 6개 전부 shipping (clock.now, http.get 저작가이드, state.*, input-aware UI, HTML output mode revert→view.html, schedule.every)
-- v1.9.13 — `view.html` 파일 기반 대시보드 (AIL은 markup 안 만듦)
-- v1.10.0 — intent 반환 타입 런타임 검증 (HEAAL harness가 intent 경계까지)
-- v1.10.1 — 500 응답에 trace 기반 진단 포함 (HTTP 401 같은 원인이 사용자에게 직접 전달)
-- **v1.11.0 — 자기홍보 agent `ail-herald`** (AIL로 작성된 AIL 홍보 에이전트, Discord webhook). env.read + http.post headers 지원.
-- **v1.11.1 — ail-herald 대화형 온보딩 리라이트.** 사용자가 "웹훅이 뭐예요"부터 시작해도 에이전트가 단계별 안내 (차원/자격증명을 presume하지 않음). list-of-pairs UI 프로토콜, state-driven conversation flow. 새 AIL primitive 없음.
-- **v1.12.0 — `ail init` 진입점 재설계.** 프로젝트 scaffold 후 자동으로 authoring chat 서버 시작 + 브라우저 오픈. 사용자가 채팅으로 설명하면 에이전트가 INTENT.md / app.ail 점진적으로 작성, "실행해보기" 버튼으로 service UI로 handoff. `authoring_chat.py` + `authoring_ui.py`, XML 응답 프로토콜(`<reply>`, `<file path="...">`, `<action>`), file-write safety(경로/확장자/크기), chat history 지속. Claude Code의 패턴을 AIL 프로젝트 저작에 가져옴.
-- **v1.12.1 — authoring agent가 HEAAL / AIL 정체성을 알게 됨.** hyun06000 field test: "HEAAL이 뭐야?" → agent 모른다고 대답 + 웹검색 거부. 시스템 프롬프트에 PROJECT IDENTITY (AIL/HEAAL 한 문단) + KNOWLEDGE & RESEARCH 가이드 (모르는 주제면 "I can't search" 대신 "perform http.get로 가져오는 프로그램을 작성해드릴까요?" 제안) 추가.
-- **v1.12.2 — chat UI Enter=전송, Shift+Enter=줄바꿈.** 한글 IME 조합 중 Enter는 조합 완료로 처리 (isComposing + keyCode 229 guard).
-- **v1.12.3 — "Run"이 dead-end가 아니라 대화 내 실행으로.** hyun06000 field test: "실행해보기" 누르니 채팅 사라지고 서비스 UI로 교체됨, 잘못 생성된 프로그램을 고칠 방법 없음. 재설계: (1) Run 버튼 → `/authoring-run` → 결과가 채팅 내 result 버블로 나타남, 채팅 유지 (2) `ready_to_run`(대화 내 실행) vs `ready_to_serve`(장기 서비스 deploy, 명시적 선택) 구분 (3) `/back-to-chat` endpoint + 서비스 UI 상단의 "← 대화로 돌아가기" 버튼으로 언제든 대화 복귀 (4) run 결과가 history에 기록되어 다음 턴 에이전트가 에러 맥락 보고 수정 제안. `project_is_fresh` 로직 갱신: chat_history 있으면 그 자체로 채팅 모드.
-- **v1.12.4 — 채팅이 유일한 UI.** ready_to_run은 이제 한 번 누르고 사라지는 버튼이 아닌 **반복 호출 가능한 인라인 widget** (입력 textarea + Run 버튼, 결과 버블들이 누적). ready_to_serve는 **페이지 이동 없음** — 같은 widget이 초록색 "🌐 서비스 모드" 카드로 감싸져 나타나고 `/service` 공유 링크 포함. 새 route `GET /service` = classic textarea UI (외부 공유/curl용 새 탭). 페이지 전환 제로, confirm dialog 제로. 간단한 태스크(ail ask) ↔ 복잡한 태스크(ail up) 구분이 UI 전환이 아니라 카드 스타일 + 링크 유무로만 표현됨.
-- **v1.12.5 — 필드테스트 fix 3종.** hyun06000이 "하네스 엔지니어링 커뮤니티 리서치" 프롬프트로 실제 실행해본 결과: (1) LLM이 `goal:`에 자연어 prose를 쓰면서 `with` 키워드 때문에 parse 실패. (2) 에러에 Python traceback이 그대로 덤프됨. (3) 입력 없는 프로그램인데 input textarea 보임. 수정: (a) `_read_project_state`가 app.ail 파싱 체크해서 실패 시 `[PARSE ERROR]` 주석 달아 에이전트 state에 전달. 에이전트가 다음 턴에 자동 수정 시도. (b) `/authoring-run`이 ParseError/LexError/PurityError를 catch해서 Python traceback 제거. (c) 응답에 `input_used` 포함 → widget이 그에 따라 input box 표시/숨김. (d) 에러 버블에 🔧 "에이전트에게 수정 요청" 버튼 자동 노출 → 원클릭으로 수정 요청 전송.
-- **v1.12.6 — Live data first (HEAAL 복원).** 추가 필드 테스트: 에이전트가 `google.com/search` 스크래핑 → JS-only 페이지 → 빈 결과. 초안으로 "지식 쿼리는 intent 직접 써라"고 했다가 hyun06000가 바로잡음: "모델 학습 데이터는 stale. 우리가 원하는 건 모델의 논리력+도구활용력, 모델 자체의 지식은 아님. 지식은 AIL을 통해 최신으로 가져와야." HEAAL 원칙 복원 — grammar가 harness, 데이터는 그 harness를 통해 흘러야. Prompt 재작성: 현재 상태에 의존하는 질문("요즘", "가장 핫한", stars, trends)은 반드시 `perform http.get` + live source. Google 스크래핑 금지 유지. 구체 API 목록 (GitHub `/search/repositories`, HN Algolia, Reddit JSON, Wikipedia REST, News RSS, npm, PyPI). "요즘 가장 핫한 harness engineering GitHub 프로젝트" worked example 포함.
-- **v1.13.0 — ail-promoter flagship 예제 + chat-safe secrets + 에이전트 정체성 강화 + AIL 문법 함정 2개 해결.** 이번 턴에 사용자가 제기한 여러 요구 사항 종합: (1) "AIL로 AIL 홍보하는 agent 만들어줘" → `examples/agentic/ail-promoter/` 완성 (GitHub + HN 라이브 리서치, 6개 채널 드래프트, Discord/Mastodon 자동 게시, HN/Reddit/GitHub 초안만, state 추적, view.html 대시보드). (2) "Sonnet이 'I can't post' 거부하는 문제" → 프롬프트에 "YOU CAN DO, NOT JUST SAY" 강력 섹션 추가, Discord/Mastodon/GitHub 워크드 예제. (3) "채팅에서 환경변수 입력할 방법 필요" → `/authoring-set-env` endpoint + masked input widget + `.ail/secrets.json` gitignored 영속 + 서버 시작시 자동 로드 + ledger에 값 기록 금지. (4) "에이전트가 user 언어가 아닌 다른 언어로 출력하는 문제" → 프롬프트에 "intent의 goal에서도 user 언어 matching, channel이 English-only면 예외" 추가. (5) **핵심 AIL 문법 발견**: `goal:`은 parse_expr()로 파싱되어 첫 identifier만 goal이 되고 나머지 prose는 drop됨. 해결: 다단어 goal은 `goal: "quoted string"` 필수. 프롬프트에 가장 흔한 저자 실수로 명시. 507 tests passing (+10).
-- **v1.14.0 — 아키텍처 피벗: chat_history가 agent memory, INTENT.md는 legacy.** hyun06000이 근본 질문 제기: "챗 기반인데 INTENT.md 꼭 필요하니? 더 AI-친화적 방식 있을 듯." 정답. INTENT.md는 chat-driven authoring 이전의 scaffold였음. Chat history는 자연 누적/per-turn/audit 가능하고 이미 매 턴 agent에 로드됨. 두 source of truth가 드리프트 유발해 v1.13.x가 계속 패치했음. 아키텍처 변경: (1) `_read_project_state`에서 INTENT.md 제거 — agent는 `.ail` 프로그램과 view.html만 봄. (2) 프롬프트에서 "CUMULATIVE MEMORY" + "EVERY PROGRAM CARRIES PURPOSE" 두 섹션 제거 → "YOUR MEMORY IS THE CHAT HISTORY" 하나로 통합. (3) `_format_history`가 첫 user 메시지를 `[PROJECT PURPOSE ANCHOR]`로 prepend — 20턴 뒤에도 agent가 프로젝트 주제 놓치지 않음. (4) INTENT.md는 optional README로 격하. `ail init`은 여전히 scaffold 생성(backward compat), 하지만 agent는 건드릴 의무 없음. 528 tests (+2).
-- **v1.13.4 — self-contained 프로그램에서 불필요한 입력 textarea 제거.** field test: PR 봇인데 token 입력창 + user 입력창 같이 나옴. 원인: agent가 `payload = input` 같은 reflex 할당 → entry가 `input`을 기술적으로 참조 → UI가 textarea 표시. 프롬프트에 semantic 기준 명시: `entry main(input: Text)`는 관용 parameter명, 하지만 **body에서 input 참조 여부가 UI를 결정**. self-contained 프로그램(PR 생성, 채널 포스팅, 스케줄링)은 input 참조 금지 → UI는 Run 버튼 + secret inputs만. Runtime-input 프로그램(요약기, 변환기)만 input 참조. Self-check: "같은 env에 다른 textarea 값으로 실행하면 다른 결과 나오나?" 기준. 526 tests (+1).
-- **v1.13.3 — agent가 일을 끝까지 안 하는 문제 3종 세트.** 공통 테마: LLM이 "완성" 주장, user에게 실행 떠넘김, 계획만 세우고 stop. (1) "draft-only" fallback 강등 — HN API 없어서 초안만 쓰겠다는 응답 금지, 대안 채널(Reddit/Mastodon/Bluesky)에 실제 게시하도록. (2) **FINISH THE JOB IN ONE TURN** — build/create/make 요청엔 `<file app.ail>` + `<action>ready_to_run</action>` 둘 다 필수. INTENT.md만 쓰고 멈추는 건 실패. (3) **Claim-reality matching** — "완성" 주장하면 실제 app.ail 있어야 함. "입력창에 붙여넣으세요"라고 했으면 `env.read` 호출이 코드에 있어야 함 ("no call, no input box" — UI는 env.read가 있어야만 입력창 띄움). 525 tests (+2).
-- **v1.13.2 — 채팅 export + 프로젝트 목적 승계.** (1) "대화 저장/복사 기능" 피드백 → `GET /authoring-chat-export` 엔드포인트 (마크다운), 헤더에 "대화 내보내기/Export" + "복사/Copy" 링크. Turn별 User/Agent/파일/액션/run 결과를 포맷팅. (2) "AIL/HEAAL 홍보 프로젝트인데 몇 턴 뒤 agent가 generic한 channel_recommender 만들고 주제 까먹음" → 프롬프트에 **EVERY PROGRAM CARRIES THE PROJECT'S PURPOSE** 섹션 추가. 새 프로그램 쓰기 전 INTENT.md 최상위 목적 재확인, intent goal string에 프로젝트 주제 명시적으로 박아넣기, `<reply>`에서 주제 확인 ("AIL/HEAAL 홍보용 ..."). 사용자가 pivot 의도 분명하면 예외 허용. 523 tests (+6).
-- **v1.13.1 — agent 다움 회복 (5개 field test fix).** (1) "app.ail만 덮어쓰는 비효율" → 다중 프로그램 지원. 프로젝트 안 여러 `.ail` 파일 독립 유지. 에이전트 프롬프트에 "새 use case = 새 파일명, edit은 기존 파일명". `/authoring-run?program=X` 쿼리 파라미터, `.ail/active_program` 마커, UI에 프로그램 선택 dropdown (2개 이상일 때). (2) "JSON envelope 그대로 출력" → `_render_value`가 `{"value": X}` / `{"value": X, "confidence": N}` envelope 재귀적으로 stripping. (3) "agent가 너무 많이 물어본다, 인간 개입 최소화가 목표" → 프롬프트 뒤집음. **DEFAULT AGGRESSIVELY** 섹션 추가: 물어보지 마라. 합리적 default 있으면 써라. Secrets/Permissions/진정으로 irreversible한 선택만 물어라. 언어/포트/에러 처리/톤/출력 형식 등은 DO-NOT-ASK 리스트에 명시. "ask one at a time" 옛날 규칙 제거. (4) "INTENT.md도 덮어쓰기 문제 — 한 세션이 정보 누적해야" → **INTENT.md IS CUMULATIVE MEMORY** 섹션. 매 턴 전체 재작성 금지. 신규 프로그램은 `### filename.ail` 서브섹션 append. 기존 섹션 touch 금지. 변경 없으면 `<file>` 태그 아예 omit. Turn 1/Turn 2 진화 예제 포함. (5) "env.read 업데이트 툴이 구현 안 됐냐? 비개발자에게 환경변수 등록하라고 하고 있다" — UI는 v1.13.0에 이미 있지만 프롬프트가 여전히 LLM이 "export DISCORD_WEBHOOK_URL" 말하도록 허용. Fix: **Never say / Say instead** 리스트 명시 (터미널/export/환경변수/shell/.env 전부 금지, 대신 "Discord 서버 설정 → Integrations → Webhooks → 입력창에 붙여넣기" 같은 사용자 언어). UI 라벨 "환경변수 필요" → "설정 필요". ail-promoter 에러 메시지도 사용자 언어로 재작성. 517 tests passing (+10).
+### 사용자-에이전트 협업 모드 (현재 세션에서 확립)
+
+hyun06000이 명시한 role split:
+- **hyun06000은 UI/UX 피드백만 집중.** 실제 field test로 버그/UX 문제 발견해서 알려줌.
+- **Claude(너)는 아키텍처/내부 프로세스 결정권 가짐.** "AI인 네가 불필요하다고 판단하면 불필요한 거야. 모든 걸 AI-친화적으로 해줘."
+
+이 합의에 따라 v1.14.0의 INTENT.md 격하도 Claude 판단으로 실행. 다음 세션도 같은 분업 유지.
+
+---
 
 ---
 
@@ -126,52 +105,72 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 HEAAL은 언어 층 한 곳에서 끝나지 않는다. 하네스가 문법인 언어 위에, 하네스가 스케줄링인 런타임을 얹고, 하네스가 커널인 OS까지 가야 패러다임이 닫힌다. 세 층 모두 같은 원리: *constraint as construction, not configuration*.
 
-**L1 — AIL Language (현재 위치, v1.8.x)**
-- 문법 안에 harness가 들어감: `pure fn` 순도, `Result` 강제, `while` 부재, `evolve rollback_on` 필수.
-- 현재 초점: fine-tune 기준선 R3 (70%) + HEAAL 매니페스토 확산 + 외부 피드백 수렴.
-- 완료 조건: 저자 모델 독립적으로 AIL이 Python보다 안전한 코드를 생성한다는 것을 3+ 모델 가족에서 확증 (Claude Sonnet ✅, frontier others ?, mid-tier boundary ?).
+**L1 — AIL Language** — *핵심 stable, 외부 검증 대기*
+- 문법 안에 harness: `pure fn` 순도, `Result` 강제, `while` 부재, `evolve rollback_on` 필수.
+- fine-tune 기준선 R3 = 70% vs Python 56%. Claude Sonnet까지 검증 ✅.
+- 남은 미션: 3+ 모델 가족 전이성 확증 (frontier other ?, mid-tier boundary ?).
 
-**L2 — AIRT Runtime ([`runtime/00-airt.md`](runtime/00-airt.md) 비전 + [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md) v0/v1/v2 진행 중)**
-- 런타임 안에 harness가 들어감: 실행이 instruction sequence가 아니라 intent-graph walk. 전략 선택이 confidence와 제약으로 결정되고, 모든 결정이 ledger에 기록됨.
-- 현재 상태: `reference-impl/ail/agentic/`에 v0+v1+v2 전체 구현. `ail init` / `ail up` (HTTP serve + 친근 i18n 로깅 + 파일 watcher + 스케줄러), `ail chat` (자연어 편집), `--auto-fix N` (자율 수정), AI-translated 저자 실패 진단, `.ail/attempts/` 시도 보존, input-aware 브라우저 UI, HTML output mode, `clock.now`/`state.*`/`schedule.every` effects. 5개 작동 예제, 412개 단위 테스트.
-- **L2 v2 완결.** 다음 단계: PyPI 묶음 배포 → L3 HEAAOS / 외부 사용자 / HEAAL 추가 실험.
+**L2 — AIRT Runtime** — *v2 완결, field test 중*
+- 런타임 안 harness: intent-graph walk, confidence + 제약으로 전략 선택, 모든 결정 ledger.
+- 구현: `reference-impl/ail/agentic/`. `ail init` / `ail up` / `ail chat` / `--auto-fix` / AI-translated 진단 / `.ail/attempts/` / input-aware 브라우저 UI / HTML output 분리 / `clock.now`/`state.*`/`schedule.every` effects / env.read + chat-safe secret UI / 다중 프로그램 / chat export / v1.14.0 chat-history-as-memory.
+- 설계 문서: [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md).
+- 남은 미션: 외부 사용자 확보 → 실사용 피드백 → 필요 시 scope 확장.
 
-**L3 — HEAAOS (NOOS를 HEAAL 관점으로 리브랜딩 예정, [`os/00-noos.md`](os/00-noos.md))**
-- OS 안에 harness가 들어감: 기본 추상화가 file/process가 아니라 intent/context/capacity/authority. 커널이 모든 effect를 ledger에 정당화하고, capability를 intent에 바인딩.
-- 현재 상태: NOOS 비전 문서 4종 (`os/00-03`). HEAAL 매니페스토 이전에 쓰여 프레이밍이 오래됨. L2 착수 후 HEAAOS로 재작성 필요.
-- **이름 결정:** NOOS (Neural-Oriented OS)를 **HEAAOS (HEAAL Operating System)**로 교체. 이유: HEAAL이 프로젝트 전체의 북극성이 됐으므로 OS층도 그 이름 아래 통일.
+**L3 — HEAAOS** — *개념 단계, L1 해외 검증 후 착수*
+- OS 안 harness: file/process 대신 intent/context/capacity/authority. 커널이 모든 effect를 ledger에 정당화, capability를 intent에 바인딩.
+- 현재: `os/00-noos.md`~`os/03` 비전 문서 4종 (HEAAL 이전 작성, 프레이밍 오래됨).
+- NOOS (Neural-Oriented OS) → **HEAAOS (HEAAL Operating System)** 로 리브랜딩 결정.
 
-**층간 의존:** L1이 흔들리면 L2는 구축 근거가 없고, L2 없이는 L3가 L1 문법을 커널에서 강제할 수 없다. 위층으로 뛰지 말 것. L1 기준선 지표가 Python을 확실히 넘고, 3+ 모델 가족에서 HEAAL이 입증된 뒤 L2 착수.
+**층간 의존:** 위층으로 뛰지 말 것. L1 3+ 모델 가족 검증 완료 후 L3 본격 착수.
 
 ---
 
 ## NEXT — 다음 세션 진입점
 
-**가장 직진하면 좋은 길 (auto mode 권장 순서):**
+hyun06000이 실사용 field test 계속 중. UX/UI 피드백이 들어오면 즉시 대응. 아키텍처 결정은 Claude 재량.
 
-1. **PyPI 묶음 배포 v1.9.12** *(hyun06000 승인 필요)*
-   - `cd reference-impl && python -m build && twine upload dist/ail_interpreter-1.9.12*`
-   - [`RELEASING.md`](RELEASING.md) 체크리스트 따르기. 반영되는 변경: v1.9.9 input-aware UI, v1.9.10 HTML output, v1.9.11 model-id 표시, v1.9.12 schedule.every + news-ticker 예제.
+**hyun06000이 이번 세션 끝에 명시한 기능 요청 — 최우선:**
 
-2. **HEAAL boundary 추가 실험** — Frontier 이식 (GPT-4o/Gemini Pro에 `anti_python` 적용, ~$5), E1' Sonnet 4.5 default 재측정 (~$2). 모델 가족 전이성 데이터 확장.
+1. **세션 재개 UX** — "대화 종료 후 다시 레포에 와도 대화 이어가기"
+   - 기술적으로는 이미 `ail up <path>`가 chat_history 복원. 하지만 path 기억해야 하고, 프로젝트 목록 볼 방법 없음.
+   - 추가 필요: `ail list` / `ail resume` CLI + 프로젝트 선택 UI (홈 페이지 또는 landing route). 어느 프로젝트로 재개할지 한눈에.
+   - 제안: `ail` 단독 실행 또는 `ail home`이 localhost에 프로젝트 목록 서버 띄우고 각 프로젝트 이름 클릭하면 해당 `ail up` 세션으로 연결.
 
-3. **L3 HEAAOS 착수** — `os/00-noos.md` 4종을 HEAAL 관점으로 리브랜딩 + 재작성. NOOS → HEAAOS.
+**field test에서 예상되는 UX 후속 작업 (피드백 들어오면):**
 
-4. **외부 사용자 1명** — 비개발자 흐름이 충분히 다듬어짐 (news-ticker/visit-counter 데모 실행 가능). hyun06000의 홍보 시점 결정 대기.
+- 프로그램 dropdown의 편의 기능 (빠른 switch, preview, delete)
+- view.html 자동 생성 제안 (agent가 "이건 dashboard 형식이 어울려요, view.html 만들어드릴까요?")
+- secret rotate / 지우기 UI
+- chat 검색 (긴 history에서 "언제 Discord 얘기했지?" 같은 탐색)
 
-**대기 중 후보 (hyun06000 지시 받으면):**
+**대기 중 — hyun06000 승인 필요한 것들:**
 
-- **Frontier 이식 (HEAAL)** — GPT-4o / Gemini Pro에 `anti_python` 적용. ~$5 API 크레딧. 모델 가족 전이성 데이터.
-- **E1' Sonnet 4.5 default** — apples-to-apples 재측정. ~$2.
-- **v7 훈련 재시도** — 비-coder base + indented 포맷으로 v3(70%) vs v6(62%) 8pp 격차 분해. **주의:** 2회 OOM 이력. 반드시 `ollama stop <model>` 선행 + `max-seq-length=1024`.
-- **외부 사용자 1명** — 현재 비개발자 흐름이 충분히 다듬어짐. hyun06000 홍보 결정.
-- **L3 HEAAOS 재설계** — `os/00-noos.md` 4종을 HEAAL 관점으로 리브랜딩. L2 v2 종결 후.
+- **PyPI 묶음 배포** — v1.10.1 → v1.14.0 누적. `cd reference-impl && python -m build && python -m twine upload dist/ail_interpreter-1.14.0*`. [`RELEASING.md`](RELEASING.md) 체크리스트.
+- **외부 사용자 1명 확보 / 공개 홍보** — 비개발자 흐름이 `ail init` + chat으로 충분히 다듬어짐.
+- **HEAAL boundary 확장 실험** — Frontier 이식 (GPT-4o / Gemini Pro에 `anti_python` 적용, ~$5). E1' Sonnet 4.5 default 재측정 (~$2). 3+ 모델 가족 전이성 강화.
+- **v7 훈련 재시도** — 비-coder base + indented 포맷으로 v3(70%) vs v6(62%) 8pp 격차 분해. **주의:** 2회 OOM 이력. `ollama stop <model>` 선행 + `max-seq-length=1024`.
+- **L3 HEAAOS 착수** — `os/00-noos.md` 4종을 HEAAL 관점으로 리브랜딩. L1 해외 검증 후 착수 권장.
+- **INTENT.md template 정리** — v1.14.0이 INTENT.md를 legacy로 격하했는데 `ail init`이 여전히 template 작성. 언젠가 template을 더 가벼운 것(또는 empty)으로 정리 필요.
 
-**API 키:** `.env`가 repo root에 있음. AIL이 cwd부터 4단계 위까지 자동 탐색 (`ail/__init__.py:_load_dotenv_if_present`). repo 안에서 호출하면 자동 로드.
+---
 
-**테스트 패턴:** 새 effect/feature 추가 시 PyPI 미배포 코드를 검증하려면 `cd /Users/david/Desktop/code/personal/AIL && PYTHONPATH=$(pwd)/reference-impl /opt/anaconda3/bin/python -m ail.cli ...`. 사용자 설치본(`/opt/anaconda3/bin/ail`)은 옛 버전일 수 있음.
+## 실용 레퍼런스 (세션 시작 시 유용)
 
-**커밋 워크플로우:** dev에서 작업 → `git push origin dev` → `git checkout main && git merge --ff-only dev && git tag vX.Y.Z && git push origin main && git push origin v...` → `cd reference-impl && python -m build && twine upload dist/ail_interpreter-X.Y.Z*`.
+**API 키:** `.env`가 repo root에 있음. `ail/__init__.py:_load_dotenv_if_present`가 cwd부터 4단계 위까지 자동 탐색.
+
+**로컬 dev 테스트:** PyPI 미배포 코드 검증은 `cd /Users/user/Desktop/code/personal/AIL && pip install -e reference-impl`. 사용자 글로벌 설치본은 옛 버전일 수 있음.
+
+**커밋 워크플로우:**
+```
+dev 작업 → git push origin dev
+→ git checkout main && git merge --ff-only dev
+→ git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
+→ (승인 후) cd reference-impl && python -m build && python -m twine upload dist/*X.Y.Z*
+```
+
+**bundled reference card sync** (버전 bump 시 반드시):
+`cp spec/08-reference-card.ai.md reference-impl/ail/reference_card.md`
+— `test_spec_bundled.py`가 잡아줌.
 
 ---
 
