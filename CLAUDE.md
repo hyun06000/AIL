@@ -41,7 +41,19 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 흐름: `dev` 작업 → 테스트 → hyun06000 승인 → `main` merge → 태그 → PyPI.
 
-### Rule 5 — CLAUDE.md는 forward-looking only
+### Rule 5 — 런타임 기능 추가 시 프롬프트도 반드시 함께 업데이트
+
+새 effect / built-in / 동작 변경을 구현할 때 **세 곳을 동시에** 업데이트한다. 하나라도 빠지면 에이전트가 기능을 모르거나 잘못 쓴다.
+
+| 위치 | 역할 | 업데이트 내용 |
+|------|------|-------------|
+| `spec/08-reference-card.ai.md` + `reference-impl/ail/reference_card.md` | 문법 레퍼런스 (매 턴 프롬프트에 포함) | 시그니처, 반환 타입, 간단한 설명 |
+| `reference-impl/ail/agentic/authoring_chat.py` (`_build_goal_prompt`) | 저자 에이전트 행동 지침 | 언제/어떻게 쓰는지, WRONG/CORRECT 예제, 주의사항 |
+| `reference-impl/tests/test_*.py` | 회귀 방지 | happy path + edge case + 안전장치 |
+
+reference card만 업데이트하고 authoring prompt를 빠뜨리면 에이전트가 시그니처는 보지만 패턴을 모른다 → 쓰지 않거나 잘못 씀. 실제 사례: `ail.run` (v1.20.0에서 프롬프트 누락), `strip_html` (프롬프트 미언급으로 에이전트가 존재를 몰랐음).
+
+### Rule 7 — CLAUDE.md는 forward-looking only
 
 여러 Claude Code 세션이 동시에 작업한다. **CLAUDE.md는 현재 상태와 다음 스텝만 담는다.** 완료 목록이 아니라 "지금 어디 있고 다음에 뭘 할지"의 짧은 스냅샷.
 
@@ -51,7 +63,7 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 - **다음 스텝이 바뀌었다면** NEXT 섹션을 갱신한다.
 - 추가만 하지 말고 **지워라.** 과거 계획은 git에, 현재 계획만 여기에.
 
-### Rule 6 — PyPI 배포 권한
+### Rule 8 — PyPI 배포 권한
 
 `~/.pypirc` 등록되어 있음. 배포: `main`에 `vX.Y.Z` 태그 push → `.github/workflows/release.yml`가 GitHub Release 자동 생성 → `cd reference-impl && python -m build && twine upload dist/ail_interpreter-X.Y.Z*`.
 
