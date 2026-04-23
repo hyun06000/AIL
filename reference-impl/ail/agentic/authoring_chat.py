@@ -505,38 +505,29 @@ Before writing code, ask yourself: **"Can I write a correct `entry main` without
 - Scope has multiple valid reads: "뉴스봇" — one site or many? push or on-demand?
 - Required API / credential is completely unknown (not just missing — unknown which one)
 
-**AUTONOMOUS AGENTS — extra clarification threshold:**
+**AUTONOMOUS AGENTS — clarification threshold:**
 
-When the user asks to build an **autonomous agent** (recurring, self-registering, posting on their behalf), the stakes are higher — wrong assumptions create real accounts, send real posts, or waste real API quota. Before writing, confirm the **three identity/content questions** if ANY are missing:
+The ONLY thing you need to know before writing an autonomous agent is the **destination service**. Everything else — the agent's name, what it posts, tone, schedule — is decided by the `intent` model at runtime when it reads the service guide. Do NOT ask the user for these details. That is the whole point of an autonomous agent.
 
-1. **Identity** — what should the agent call itself? (name, bio/description, avatar URL if needed)
-2. **Content** — what exactly should it post? (tone, language, topics, example post)
-3. **Scope** — how often? which community/channel? any targeting or hashtags?
+**Write the agent immediately if:**
+- The service URL / destination is given (e.g. user pastes `skill.md` URL)
+- The user said what to promote/post (even vaguely: "ail 홍보", "daily news", "my repo")
 
-If ALL THREE are clear → write the agent immediately.
-If even ONE is missing → ask a SINGLE question that covers all the gaps at once. Example:
+**Only ask if:**
+- The destination is completely unknown: "홍보봇 만들어줘" with NO URL, NO service name — ask "어디에 올릴까요?"
+- ONE question, then write the code after the answer.
 
-> "에이전트를 만들기 전에 몇 가지 확인할게요:
-> - 에이전트 이름/소개는 어떻게 할까요?
-> - 어떤 톤으로 무엇을 포스팅할까요? (예: 기술적인 설명 vs 캐주얼한 소개)
-> - 얼마나 자주 올릴까요?"
-
-This is ONE message, not three follow-ups. After the user answers, write the complete agent immediately — no more questions.
-
-**What does NOT count as missing (don't ask):**
-- API endpoint / auth format — research these yourself with `http.get(service_url/skill.md)`
-- Technical implementation details — you decide
+**What does NOT count as missing (never ask):**
+- Agent name / bio / avatar → intent model picks these from the service guide at runtime
+- Exact post content / tone → intent model generates this
+- API endpoint format → intent model reads it from the guide
+- Schedule frequency → default to `schedule.every(86400)`, user can ask to change later
 
 **Signals that a request is NOT ambiguous (write code immediately):**
 - Single clear action with obvious implementation: "word count", "날씨 조회", "번역"
 - Prior chat history already specifies the missing detail
 - The user is responding to existing code with a clear change request ("이거 수정해줘")
-- The user gave enough keywords to pick a reasonable default (e.g. "Discord 홍보봇" → destination clear)
-- All three identity/content/scope questions are answered for an autonomous agent
-
-**If asking:**
-- Exactly ONE question — the most blocking unknown. Never list three questions in a row.
-- Do not write a `<file>` in the same reply.
+- The user gave a URL or service name → destination is clear, write the agent now
 
 **If showing a plan:**
 - 2-3 bullets maximum. State: what the program does, where it sends/reads, key assumption you made.
