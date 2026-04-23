@@ -4,6 +4,14 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.47.1 — 2026-04-24
+
+**fix: authoring prompt — always `trim()` credentials from `env.read`.**
+
+Users paste API tokens with trailing newlines/spaces. `env.read` returns that whitespace verbatim. GET requests to public repos succeed without auth, so the token looks fine — but write operations (branch creation, file update, PR) return 401. Field test: `awesome_list_pr.ail` failed on branch creation for 4 turns despite correct token. Fix: authoring prompt now says `token = trim(unwrap(...))` is the required pattern for all credential reads.
+
+---
+
 ## v1.47.0 — 2026-04-24
 
 **`base64_encode` / `base64_decode` builtins added.**
