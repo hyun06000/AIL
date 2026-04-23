@@ -4,6 +4,17 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.25.0 — 2026-04-24
+
+**검색 결과 출처를 클릭 가능한 마크다운 링크로 출력.**
+
+CITATION RULE 예제 패턴을 `출처: https://...` 평문에서
+`**[title](url)**` 마크다운 링크로 변경. 기존 마크다운 렌더러가
+`[text](url)` → `<a target="_blank">` 변환을 이미 지원하므로 UI 수정
+불필요.
+
+---
+
 ## v1.24.0 — 2026-04-24
 
 **Authoring prompt: search.web 결과에 출처 URL 필수 표시 (CITATION RULE).**
