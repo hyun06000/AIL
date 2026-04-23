@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ail-promoter</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+           "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+           max-width: 880px; margin: 32px auto; padding: 0 24px;
+           color: #111; background: #fafafa; }
+    h1 { margin: 0 0 4px 0; font-size: 22px; }
+    .sub { color: #6b7280; font-size: 13px; margin-bottom: 24px; }
+    .card { background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 10px 0; font-size: 14px; font-weight: 600;
+               text-transform: uppercase; letter-spacing: 0.06em;
+               color: #6b7280; }
+    pre { white-space: pre-wrap; word-break: break-word;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-size: 13px; line-height: 1.5;
+          padding: 12px; background: #f3f4f6; border-radius: 6px;
+          margin: 0; }
+    button { font-family: inherit; font-size: 13px; font-weight: 500;
+             padding: 8px 16px; border-radius: 6px; border: 0;
+             background: #111; color: #fff; cursor: pointer;
+             margin-right: 6px; margin-top: 4px; }
+    button:hover { opacity: 0.85; }
+    button.secondary { background: #fff; color: #111;
+                       border: 1px solid #e5e7eb; }
+    button:disabled { opacity: 0.5; cursor: wait; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr;
+            gap: 12px; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    .channel { border: 1px solid #e5e7eb; border-radius: 8px;
+               padding: 12px; background: #fff; }
+    .channel h3 { margin: 0 0 6px 0; font-size: 14px; }
+    .channel .tag { font-size: 11px; color: #6b7280;
+                    text-transform: uppercase; letter-spacing: 0.06em; }
+    .channel .tag.auto { color: #047857; }
+    .channel .tag.manual { color: #92400e; }
+    .draft-preview { font-size: 12px; color: #374151;
+                     max-height: 80px; overflow: hidden;
+                     margin: 6px 0; padding: 6px 8px;
+                     background: #f9fafb; border-radius: 4px; }
+    .status-line { font-size: 13px; color: #6b7280;
+                   margin: 4px 0; }
+    .status-line.ok { color: #047857; }
+    .status-line.err { color: #b91c1c; }
+    .log pre { max-height: 240px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <h1>ail-promoter</h1>
+  <div class="sub">AIL and HEAAL promoted by an AIL-authored agent. Live GitHub + HN → intent → post.</div>
+
+  <div class="card">
+    <h2>Status</h2>
+    <pre id="status">(loading…)</pre>
+    <button onclick="refresh()">새로고침 / Refresh</button>
+    <button class="secondary" onclick="doReset()">Reset state</button>
+  </div>
+
+  <div class="card">
+    <h2>Research (live)</h2>
+    <div class="sub">GitHub search + Hacker News Algolia. 실행 시마다 최신 데이터.</div>
+    <button onclick="doResearch()">▶ 리서치 실행 / Run research</button>
+    <pre id="research" class="draft-preview" style="max-height:320px;">(not yet — run research to fetch live data)</pre>
+  </div>
+
+  <div class="card">
+    <h2>Channels</h2>
+    <div class="grid" id="channels"></div>
+  </div>
+
+  <div class="card log">
+    <h2>Log</h2>
+    <pre id="log">(no posts yet)</pre>
+  </div>
+
+  <script>
+    const CHANNELS = [
+      { id: "discord",   label: "Discord webhook",       mode: "auto" },
+      { id: "mastodon",  label: "Mastodon",              mode: "auto" },
+      { id: "bluesky",   label: "Bluesky",               mode: "manual" },
+      { id: "hn",        label: "Hacker News (Show HN)", mode: "manual" },
+      { id: "github",    label: "GitHub Discussion",     mode: "manual" },
+      { id: "reddit_pl", label: "r/ProgrammingLanguages", mode: "manual" },
+    ];
+
+    async function call(body) {
+      const r = await fetch("/", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+        body,
+      });
+      return await r.text();
+    }
+
+    async function refresh() {
+      const text = await call("");
+      document.getElementById("status").textContent = text;
+      const log = await call("log");
+      document.getElementById("log").textContent = log;
+      renderChannels();
+    }
+
+    async function doResearch() {
+      document.getElementById("research").textContent = "리서치 중…";
+      const text = await call("research");
+      document.getElementById("research").textContent = text;
+      refresh();
+    }
+
+    async function doReset() {
+      if (!confirm("모든 state를 초기화할까요? (드래프트, 리서치 캐시, 로그 전부 삭제)")) return;
+      await call("reset");
+      refresh();
+      document.getElementById("research").textContent =
+        "(not yet — run research to fetch live data)";
+    }
+
+    function renderChannels() {
+      const box = document.getElementById("channels");
+      box.innerHTML = "";
+      CHANNELS.forEach(c => {
+        const card = document.createElement("div");
+        card.className = "channel";
+        const h = document.createElement("h3");
+        h.textContent = c.label;
+        card.appendChild(h);
+        const tag = document.createElement("span");
+        tag.className = "tag " + c.mode;
+        tag.textContent = c.mode === "auto"
+          ? "auto-post via API"
+          : "draft only (manual submit)";
+        card.appendChild(tag);
+
+        const preview = document.createElement("div");
+        preview.className = "draft-preview";
+        preview.id = `preview-${c.id}`;
+        preview.textContent = "(no draft yet)";
+        card.appendChild(preview);
+
+        const status = document.createElement("div");
+        status.className = "status-line";
+        status.id = `status-${c.id}`;
+        card.appendChild(status);
+
+        const draftBtn = document.createElement("button");
+        draftBtn.textContent = "Generate draft";
+        draftBtn.onclick = async () => {
+          preview.textContent = "생성 중…";
+          const text = await call(`draft:${c.id}`);
+          preview.textContent = text;
+        };
+        card.appendChild(draftBtn);
+
+        const postBtn = document.createElement("button");
+        postBtn.className = "secondary";
+        postBtn.textContent = c.mode === "auto"
+          ? "Post live"
+          : "Get draft text";
+        postBtn.onclick = async () => {
+          const result = await call(`post:${c.id}`);
+          const st = document.getElementById(`status-${c.id}`);
+          if (result.startsWith("✓") || result.includes("완료")) {
+            st.className = "status-line ok";
+          } else if (result.includes("HTTP") || result.includes("failed")) {
+            st.className = "status-line err";
+          } else {
+            st.className = "status-line";
+          }
+          st.textContent = result;
+          refresh();
+        };
+        card.appendChild(postBtn);
+
+        box.appendChild(card);
+      });
+    }
+
+    refresh();
+  </script>
+</body>
+</html>

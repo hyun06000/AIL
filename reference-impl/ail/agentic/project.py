@@ -57,6 +57,16 @@ class Project:
         )
         proj.state_dir.mkdir(exist_ok=True)
         (proj.state_dir / "state").mkdir(exist_ok=True)
+        # Gitignore the project so .ail/secrets.json and the ledger
+        # don't land in commits. Only write if no .gitignore exists
+        # (respect the user's choices if they bring their own).
+        gi = root / ".gitignore"
+        if not gi.exists():
+            gi.write_text(
+                "# Agentic AIL project state — local to this checkout.\n"
+                ".ail/\n",
+                encoding="utf-8",
+            )
         proj.append_ledger({"event": "init", "name": display_name})
         return proj
 

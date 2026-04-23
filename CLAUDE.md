@@ -57,13 +57,13 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 - `~/.pypirc` 직접 읽지 말 것 (transcript 노출). `twine`이 참조함.
 - PyPI는 yank만 가능, 삭제 불가. 버전·태그·CHANGELOG 일치 반드시 확인.
-- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0–1.12.6 (로컬). PyPI는 1.10.1.
+- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0–1.12.6, 1.13.0 (로컬). PyPI는 1.10.1.
 
 ---
 
 ## NOW — 2026-04-23
 
-**버전:** v1.12.6 (main = dev = origin, PyPI는 v1.10.1 상태). 서빙 모델: `ail-coder:7b-v3`.
+**버전:** v1.13.0 (main = dev = origin, PyPI는 v1.10.1 상태). 서빙 모델: `ail-coder:7b-v3`.
 
 **두 트랙 (상세: [`docs/heaal/README.md`](docs/heaal/README.md)):**
 - **AIL 트랙** — 언어 자체. R3/C4 기준선 AIL parse 80% / answer 70% vs Python 56%. Python 돌파 후 stable.
@@ -113,6 +113,7 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 - **v1.12.4 — 채팅이 유일한 UI.** ready_to_run은 이제 한 번 누르고 사라지는 버튼이 아닌 **반복 호출 가능한 인라인 widget** (입력 textarea + Run 버튼, 결과 버블들이 누적). ready_to_serve는 **페이지 이동 없음** — 같은 widget이 초록색 "🌐 서비스 모드" 카드로 감싸져 나타나고 `/service` 공유 링크 포함. 새 route `GET /service` = classic textarea UI (외부 공유/curl용 새 탭). 페이지 전환 제로, confirm dialog 제로. 간단한 태스크(ail ask) ↔ 복잡한 태스크(ail up) 구분이 UI 전환이 아니라 카드 스타일 + 링크 유무로만 표현됨.
 - **v1.12.5 — 필드테스트 fix 3종.** hyun06000이 "하네스 엔지니어링 커뮤니티 리서치" 프롬프트로 실제 실행해본 결과: (1) LLM이 `goal:`에 자연어 prose를 쓰면서 `with` 키워드 때문에 parse 실패. (2) 에러에 Python traceback이 그대로 덤프됨. (3) 입력 없는 프로그램인데 input textarea 보임. 수정: (a) `_read_project_state`가 app.ail 파싱 체크해서 실패 시 `[PARSE ERROR]` 주석 달아 에이전트 state에 전달. 에이전트가 다음 턴에 자동 수정 시도. (b) `/authoring-run`이 ParseError/LexError/PurityError를 catch해서 Python traceback 제거. (c) 응답에 `input_used` 포함 → widget이 그에 따라 input box 표시/숨김. (d) 에러 버블에 🔧 "에이전트에게 수정 요청" 버튼 자동 노출 → 원클릭으로 수정 요청 전송.
 - **v1.12.6 — Live data first (HEAAL 복원).** 추가 필드 테스트: 에이전트가 `google.com/search` 스크래핑 → JS-only 페이지 → 빈 결과. 초안으로 "지식 쿼리는 intent 직접 써라"고 했다가 hyun06000가 바로잡음: "모델 학습 데이터는 stale. 우리가 원하는 건 모델의 논리력+도구활용력, 모델 자체의 지식은 아님. 지식은 AIL을 통해 최신으로 가져와야." HEAAL 원칙 복원 — grammar가 harness, 데이터는 그 harness를 통해 흘러야. Prompt 재작성: 현재 상태에 의존하는 질문("요즘", "가장 핫한", stars, trends)은 반드시 `perform http.get` + live source. Google 스크래핑 금지 유지. 구체 API 목록 (GitHub `/search/repositories`, HN Algolia, Reddit JSON, Wikipedia REST, News RSS, npm, PyPI). "요즘 가장 핫한 harness engineering GitHub 프로젝트" worked example 포함.
+- **v1.13.0 — ail-promoter flagship 예제 + chat-safe secrets + 에이전트 정체성 강화 + AIL 문법 함정 2개 해결.** 이번 턴에 사용자가 제기한 여러 요구 사항 종합: (1) "AIL로 AIL 홍보하는 agent 만들어줘" → `examples/agentic/ail-promoter/` 완성 (GitHub + HN 라이브 리서치, 6개 채널 드래프트, Discord/Mastodon 자동 게시, HN/Reddit/GitHub 초안만, state 추적, view.html 대시보드). (2) "Sonnet이 'I can't post' 거부하는 문제" → 프롬프트에 "YOU CAN DO, NOT JUST SAY" 강력 섹션 추가, Discord/Mastodon/GitHub 워크드 예제. (3) "채팅에서 환경변수 입력할 방법 필요" → `/authoring-set-env` endpoint + masked input widget + `.ail/secrets.json` gitignored 영속 + 서버 시작시 자동 로드 + ledger에 값 기록 금지. (4) "에이전트가 user 언어가 아닌 다른 언어로 출력하는 문제" → 프롬프트에 "intent의 goal에서도 user 언어 matching, channel이 English-only면 예외" 추가. (5) **핵심 AIL 문법 발견**: `goal:`은 parse_expr()로 파싱되어 첫 identifier만 goal이 되고 나머지 prose는 drop됨. 해결: 다단어 goal은 `goal: "quoted string"` 필수. 프롬프트에 가장 흔한 저자 실수로 명시. 507 tests passing (+10).
 
 ---
 

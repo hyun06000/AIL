@@ -256,6 +256,38 @@ def test_chat_ui_enter_sends_shift_enter_newlines(tmp_path):
     assert "Shift+Enter" in html
 
 
+def test_prompt_teaches_agent_to_take_actions_not_refuse(tmp_path):
+    """v1.12.7 — field test: user asked 'post to communities', agent
+    replied 'I can't post on your behalf'. Wrong — AIL has http.post
+    with headers, the agent CAN post to Discord/Mastodon/GitHub/etc.
+    The prompt must override the default chatbot-refusal instinct
+    and teach the canonical side-effect primitives."""
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "", "app.ail": ""},
+        history=[],
+        user_message="Discord 서버에 홍보글 올려줘",
+    )
+    # The override framing must be present.
+    assert "Override the default" in prompt
+    assert "refusal reflex" in prompt
+    # Side-effect primitives explicitly catalogued.
+    assert "perform http.post" in prompt
+    assert "perform schedule.every" in prompt
+    assert "perform env.read" in prompt
+    # Concrete post examples so the agent has templates, not memory.
+    assert "DISCORD_WEBHOOK_URL" in prompt
+    assert "MASTODON_TOKEN" in prompt
+    assert "GITHUB_TOKEN" in prompt
+    # Explicit anti-refusal list.
+    assert "I can't post on your behalf" in prompt
+    assert "I'm just an AI" in prompt
+    # Honesty about services without APIs (HN, GeekNews, X).
+    assert "Hacker News" in prompt
+    assert "no posting API" in prompt or "no API" in prompt
+
+
 def test_prompt_prefers_live_data_over_training_knowledge(tmp_path):
     """v1.12.6 — field-test correction. Previous v1.12.6 draft told
     the agent to use `intent` directly for 'knowledge' questions,
@@ -546,9 +578,9 @@ def test_chat_ui_renders_inline_run_widget_not_one_shot_button(tmp_path):
         }],
     )
     # The `addRunWidget` function exists and is wired to both actions.
-    # Signature now takes (service, inputUsed) — check both call sites.
-    assert "addRunWidget(false, inputUsedForNext)" in html
-    assert "addRunWidget(true, inputUsedForNext)" in html
+    # v1.13.0 adds envRequiredForNext as a third arg.
+    assert "addRunWidget(false, inputUsedForNext, envRequiredForNext)" in html
+    assert "addRunWidget(true, inputUsedForNext, envRequiredForNext)" in html
     # No more one-way-trip redirect to /authoring-complete from a
     # button click — that endpoint is gone from the UI JS.
     assert "authoring-complete" not in html
@@ -647,6 +679,163 @@ def test_run_endpoint_parse_error_has_no_traceback(tmp_path):
     # Clean error — no traceback leakage.
     assert body["diagnostic"] == ""
     assert "Traceback" not in body.get("error", "")
+
+
+# ---------- v1.13.0: chat-safe env var handling ----------
+
+
+def test_list_required_env_vars_detects_env_read_calls(tmp_path):
+    from ail.agentic.authoring_chat import list_required_env_vars
+    src = '''
+fn get_cred() -> Text {
+    r = perform env.read("DISCORD_WEBHOOK_URL")
+    return unwrap(r)
+}
+fn get_token() -> Text {
+    t = perform env.read("MASTODON_TOKEN")
+    if is_error(t) {
+        // fallback to another var
+        t = perform env.read("AIL_MASTODON_TOKEN")
+    }
+    return unwrap(t)
+}
+entry main(input: Text) { return get_cred() }
+'''
+    vars = list_required_env_vars(src)
+    assert vars == ["DISCORD_WEBHOOK_URL", "MASTODON_TOKEN", "AIL_MASTODON_TOKEN"]
+
+
+def test_list_required_env_vars_empty_for_no_env_calls(tmp_path):
+    from ail.agentic.authoring_chat import list_required_env_vars
+    assert list_required_env_vars('entry main(x: Text) { return x }') == []
+    assert list_required_env_vars("") == []
+
+
+def test_authoring_chat_response_includes_env_required(tmp_path):
+    proj = Project.init(tmp_path / "env")
+    # Seed app.ail that references DISCORD_WEBHOOK_URL.
+    proj.write_app_source(
+        'entry main(input: Text) {\n'
+        '    w = perform env.read("DISCORD_WEBHOOK_URL")\n'
+        '    return unwrap(w)\n'
+        '}\n'
+    )
+    adapter = _ScriptedChatAdapter([
+        "<reply>ok</reply><action>ready_to_run</action>",
+    ])
+    chat = AuthoringChat(proj, adapter)
+    out = chat.turn("describe")
+    assert "env_required" in out
+    names = [e["name"] for e in out["env_required"]]
+    assert "DISCORD_WEBHOOK_URL" in names
+
+
+def test_set_env_endpoint_persists_and_sets_process_env(tmp_path, monkeypatch):
+    import json as _json
+    monkeypatch.delenv("AIL_TEST_WEBHOOK", raising=False)
+
+    proj = Project.init(tmp_path / "set")
+    proj.write_app_source(
+        'entry main(input: Text) { return input }')
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/authoring-set-env",
+        data=_json.dumps({
+            "name": "AIL_TEST_WEBHOOK",
+            "value": "https://discord.com/api/webhooks/secret",
+        }).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=2) as r:
+        assert r.status == 200
+
+    # Process env updated.
+    assert os.environ.get("AIL_TEST_WEBHOOK") == \
+        "https://discord.com/api/webhooks/secret"
+
+    # Persisted to gitignored secrets file.
+    secrets_path = proj.state_dir / "secrets.json"
+    assert secrets_path.is_file()
+    data = _json.loads(secrets_path.read_text(encoding="utf-8"))
+    assert data["AIL_TEST_WEBHOOK"] == \
+        "https://discord.com/api/webhooks/secret"
+
+    # Ledger records the name, not the value.
+    ledger = (proj.state_dir / "ledger.jsonl").read_text(encoding="utf-8")
+    assert "AIL_TEST_WEBHOOK" in ledger
+    assert "https://discord.com/api/webhooks/secret" not in ledger
+
+
+def test_set_env_rejects_invalid_name(tmp_path):
+    import json as _json
+    proj = Project.init(tmp_path / "invalid")
+    proj.write_app_source(
+        'entry main(input: Text) { return input }')
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    for bad_name in ["", "has spaces", "has-dash", "../evil"]:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/authoring-set-env",
+            data=_json.dumps({"name": bad_name, "value": "x"}).encode("utf-8"),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=2)
+            raise AssertionError(f"{bad_name!r} should have been rejected")
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+
+
+def test_load_project_secrets_into_env(tmp_path, monkeypatch):
+    import json as _json
+    from ail.agentic.authoring_chat import load_project_secrets
+
+    monkeypatch.delenv("AIL_LOADED_SECRET", raising=False)
+
+    proj = Project.init(tmp_path / "loadme")
+    # Seed a secrets file.
+    (proj.state_dir / "secrets.json").write_text(
+        _json.dumps({"AIL_LOADED_SECRET": "hello"}),
+        encoding="utf-8",
+    )
+
+    load_project_secrets(proj)
+    assert os.environ.get("AIL_LOADED_SECRET") == "hello"
+
+
+def test_project_init_writes_gitignore_for_dot_ail(tmp_path):
+    proj = Project.init(tmp_path / "gitigno")
+    gi = proj.root / ".gitignore"
+    assert gi.is_file()
+    content = gi.read_text(encoding="utf-8")
+    assert ".ail/" in content
+
+
+def test_chat_ui_renders_env_secret_input_widget(tmp_path):
+    from ail.agentic.authoring_ui import render_authoring_page
+    html = render_authoring_page(
+        project_name="x", host="127.0.0.1", port=8080, history=[])
+    # Masked input + save endpoint present in the widget code.
+    assert "authoring-set-env" in html
+    assert "env-block" in html
+    assert "type = 'password'" in html or "type = \"password\"" in html
 
 
 def test_chat_ui_service_card_links_to_service_route(tmp_path):

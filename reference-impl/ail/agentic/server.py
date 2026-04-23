@@ -386,12 +386,22 @@ def _make_handler(project: Project):
                 # Tell the UI whether the entry uses its input
                 # parameter so the Run widget can hide the input
                 # textarea for input-free programs (v1.12.5 fix).
+                # Also list env vars the program references so the
+                # widget can surface a masked secret input when any
+                # are unset (v1.13.0).
+                import os as _os
                 try:
                     from .web_ui import entry_uses_input
+                    from .authoring_chat import list_required_env_vars
                     app_source = project.app_path.read_text(encoding="utf-8")
                     outcome["input_used"] = entry_uses_input(app_source)
+                    outcome["env_required"] = [
+                        {"name": n, "set": n in _os.environ}
+                        for n in list_required_env_vars(app_source)
+                    ]
                 except Exception:
                     outcome["input_used"] = True
+                    outcome["env_required"] = []
 
                 # Record the run result into the chat history so the
                 # agent has context on the next turn — "fix the error
@@ -435,6 +445,43 @@ def _make_handler(project: Project):
                 from .authoring_chat import unmark_authored
                 unmark_authored(project)
                 project.append_ledger({"event": "back_to_chat"})
+                self._send_text(200, "ok\n")
+                return
+
+            # Chat-safe secret entry. POST body = JSON {"name": "...",
+            # "value": "..."}. Writes to process env AND to
+            # .ail/secrets.json (gitignored). Values are NEVER echoed,
+            # logged, or appended to chat_history.jsonl. Ledger only
+            # records that a name was set, not the value.
+            if self.path == "/authoring-set-env":
+                import json as _json
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                try:
+                    raw = self.rfile.read(length).decode("utf-8") if length else ""
+                    payload = _json.loads(raw)
+                    name = str(payload.get("name", "")).strip()
+                    value = str(payload.get("value", ""))
+                except (ValueError, UnicodeDecodeError):
+                    self._send_text(400, "invalid json body\n")
+                    return
+                if not name or not name.replace("_", "").isalnum():
+                    self._send_text(400,
+                        "env var name must be alphanumeric + underscores\n")
+                    return
+                if not value:
+                    self._send_text(400, "value required\n")
+                    return
+                from .authoring_chat import save_project_secret
+                try:
+                    save_project_secret(project, name, value)
+                except OSError as e:
+                    self._send_text(500, f"could not save secret: {e}\n")
+                    return
+                project.append_ledger({
+                    "event": "env_set",
+                    "name": name,
+                    # NB: no `value` — never log secrets.
+                })
                 self._send_text(200, "ok\n")
                 return
 
@@ -514,6 +561,11 @@ def serve_project(
     # below polls it and drives recurring entry invocations.
     schedule_file = project.state_dir / "schedule.json"
     _os.environ.setdefault("AIL_SCHEDULE_FILE", str(schedule_file))
+    # v1.13.0: load any chat-entered secrets into env. `setdefault`
+    # semantics: an explicit shell export still wins over the stored
+    # value. File is gitignored by the scaffolder.
+    from .authoring_chat import load_project_secrets
+    load_project_secrets(project)
     """Block, serving the project until SIGINT. Returns exit code.
 
     If `watch` is True (default), a background thread polls INTENT.md

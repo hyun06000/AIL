@@ -96,6 +96,25 @@ def render_authoring_page(
       background: #047857; color: #fff; cursor: pointer; }}
     .run-card .run-inline:hover {{ opacity: 0.9; }}
     .run-card .run-inline:disabled {{ opacity: 0.5; cursor: wait; }}
+    .env-block {{ border: 1px solid #fde68a; background: #fffbeb;
+      border-radius: 6px; padding: 10px 12px; display: flex;
+      flex-direction: column; gap: 6px; }}
+    .env-block .env-title {{ font-size: 12px; font-weight: 600;
+      color: #92400e; }}
+    .env-row {{ display: flex; gap: 6px; align-items: center; }}
+    .env-row label {{ font-family: ui-monospace, SFMono-Regular, Menlo,
+      monospace; font-size: 12px; min-width: 180px; color: #111; }}
+    .env-row input {{ flex: 1; font-family: ui-monospace, Menlo,
+      monospace; font-size: 12px; padding: 6px 8px;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: #fff; color: #111; }}
+    .env-row input:focus {{ outline: 2px solid #111; outline-offset: -1px; }}
+    .env-row button {{ font-family: inherit; font-size: 12px;
+      padding: 6px 10px; border-radius: 4px; border: 0;
+      background: #111; color: #fff; cursor: pointer; }}
+    .env-row .status {{ font-size: 11px; color: #047857;
+      font-family: ui-monospace, Menlo, monospace; }}
+    .env-row .status.err {{ color: #b91c1c; }}
     .run-result {{ background: #f0fdf4;
       border: 1px solid #bbf7d0; border-radius: 10px;
       padding: 12px 14px; margin: 4px 0 8px 14px; max-width: 80%; }}
@@ -234,9 +253,9 @@ def render_authoring_page(
       }}
 
       if (action === 'ready_to_run') {{
-        addRunWidget(false, inputUsedForNext);
+        addRunWidget(false, inputUsedForNext, envRequiredForNext);
       }} else if (action === 'ready_to_serve' || action === 'ready_to_deploy') {{
-        addRunWidget(true, inputUsedForNext);
+        addRunWidget(true, inputUsedForNext, envRequiredForNext);
       }}
     }}
 
@@ -245,6 +264,11 @@ def render_authoring_page(
     // input textarea. Defaults to true so pre-v1.12.5 history
     // replays don't lose the input box.
     let inputUsedForNext = true;
+    // Env vars the latest-written app.ail references via env.read.
+    // Each entry: {name, set}. When not set, the run widget surfaces
+    // a masked input so the user can provide the secret without
+    // leaving the chat (v1.13.0).
+    let envRequiredForNext = [];
 
     // Inline widget that the user can invoke repeatedly without
     // leaving the chat. For `ready_to_run` it's a plain run box.
@@ -254,8 +278,9 @@ def render_authoring_page(
     // `inputUsed` controls whether to render the input textarea —
     // when false (entry doesn't reference input), the widget is a
     // bare Run button with no confusing empty input field.
-    function addRunWidget(service, inputUsed) {{
+    function addRunWidget(service, inputUsed, envRequired) {{
       if (typeof inputUsed === 'undefined') inputUsed = true;
+      if (!envRequired) envRequired = [];
       const card = document.createElement('div');
       card.className = 'run-card' + (service ? ' service' : '');
 
@@ -280,6 +305,70 @@ def render_authoring_page(
         title.className = 'title';
         title.textContent = '▶ 실행 / Run';
         card.appendChild(title);
+      }}
+
+      // Env-var requirement block — shown when the authored app.ail
+      // calls `perform env.read("VAR")` for any var that isn't set.
+      // Masked input; value NEVER goes into chat history or ledger.
+      const unset = envRequired.filter(e => !e.set);
+      if (unset.length > 0) {{
+        const env = document.createElement('div');
+        env.className = 'env-block';
+        const title = document.createElement('div');
+        title.className = 'env-title';
+        title.textContent = '환경변수 필요 / Secrets this program needs:';
+        env.appendChild(title);
+        unset.forEach(e => {{
+          const row = document.createElement('div');
+          row.className = 'env-row';
+          const lbl = document.createElement('label');
+          lbl.textContent = e.name;
+          row.appendChild(lbl);
+          const field = document.createElement('input');
+          field.type = 'password';
+          field.placeholder = '값 붙여넣기 / paste value';
+          field.autocomplete = 'off';
+          row.appendChild(field);
+          const setBtn = document.createElement('button');
+          setBtn.type = 'button';
+          setBtn.textContent = '저장 / Set';
+          const status = document.createElement('span');
+          status.className = 'status';
+          const save = async () => {{
+            const v = field.value;
+            if (!v) return;
+            setBtn.disabled = true;
+            try {{
+              const r = await fetch('/authoring-set-env', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ name: e.name, value: v }}),
+              }});
+              if (r.ok) {{
+                status.textContent = '✓ saved';
+                status.className = 'status';
+                field.value = '';
+                field.placeholder = '✓ set (clear to update)';
+              }} else {{
+                status.textContent = '✗ ' + await r.text();
+                status.className = 'status err';
+              }}
+            }} catch (err) {{
+              status.textContent = '✗ ' + err.message;
+              status.className = 'status err';
+            }} finally {{
+              setBtn.disabled = false;
+            }}
+          }};
+          setBtn.onclick = save;
+          field.onkeydown = (ev) => {{
+            if (ev.key === 'Enter') {{ ev.preventDefault(); save(); }}
+          }};
+          row.appendChild(setBtn);
+          row.appendChild(status);
+          env.appendChild(row);
+        }});
+        card.appendChild(env);
       }}
 
       let input = null;
@@ -439,6 +528,9 @@ def render_authoring_page(
         // next Run widget renders with or without the input box.
         if (typeof data.input_used !== 'undefined') {{
           inputUsedForNext = data.input_used;
+        }}
+        if (Array.isArray(data.env_required)) {{
+          envRequiredForNext = data.env_required;
         }}
         addAgent(data.reply || '(empty)', data.files || [], data.action || null);
       }} catch (e) {{

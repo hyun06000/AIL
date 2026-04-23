@@ -95,19 +95,29 @@ class AuthoringChat:
         # Tell the UI whether the entry uses its input parameter so
         # the Run widget shown next to a ready_to_run/serve action
         # can hide the input textarea when the program takes no
-        # input (v1.12.5).
+        # input (v1.12.5). Also list env vars the program references
+        # so the UI can surface a masked secret input for unset ones
+        # (v1.13.0) — the chat-safe alternative to terminal exports.
+        import os
         try:
             from .web_ui import entry_uses_input
             app_source = self.project.app_path.read_text(encoding="utf-8")
             input_used = entry_uses_input(app_source)
         except Exception:
+            app_source = ""
             input_used = True
+
+        env_required = [
+            {"name": name, "set": name in os.environ}
+            for name in list_required_env_vars(app_source)
+        ]
 
         return {
             "reply": reply,
             "files": applied_writes,
             "action": action,
             "input_used": input_used,
+            "env_required": env_required,
         }
 
     # ---------- prompt construction ----------
@@ -158,10 +168,11 @@ Rules:
 - When the conversation history contains a `[Run result — ERROR]` entry, that means the user just ran the program and got an error. Treat this as your top priority: explain briefly what went wrong, update app.ail to fix it, and re-emit `ready_to_run` so they can try again.
 - When the conversation history contains a `[Run result — OK]` entry, the user saw the output. If they don't object, offer either more refinement questions OR `ready_to_serve` if they want a service. Don't re-offer `ready_to_run` with unchanged code.
 - When the PROJECT STATE for `app.ail` includes `[PARSE ERROR]`, the code you previously wrote does NOT parse. Do NOT emit `ready_to_run` or `ready_to_serve`. Instead: write a corrected `<file path="app.ail">` and briefly explain the fix in `<reply>`. Common LLM mistakes to avoid: don't use `#` for comments (AIL uses `//`); `intent` constraints must be short identifier-style phrases like `output_is_valid_json` or `language_is_korean`, NOT free-prose sentences with articles like "their" or "a"; don't put JSON shape descriptions in constraints — that's free prose; only write syntax that appears in the reference card.
-- Match the user's language (Korean or English). If they wrote Korean, reply in Korean.
+- Match the user's language (Korean or English) both in `<reply>` AND in the AIL program's eventual output. This is critical: if the user is chatting in Korean, every `intent` in `app.ail` must produce Korean output. Add a constraint like `language_is_korean` or put `"Reply in Korean."` in the intent's goal string. The user should NEVER run the program and get English back when they were conversing in Korean (and vice versa). The ONLY exception is channel-specific: if the program posts to an English-only venue like Hacker News, r/ProgrammingLanguages, or international Discord, that intent should be English regardless. Make this an explicit choice in each intent's constraints.
 - Ask one question at a time. Don't dump 10 decisions in one message.
 - Keep the reply short (1–3 sentences plus a question). The UI is chat — not a document.
 - The AIL reference card is authoritative. Do NOT import modules that aren't listed. Do NOT use syntax that isn't in the card.
+- **Intent goals MUST be quoted string literals for any multi-word instruction.** `goal: Korean summary of X` only captures the first identifier (`Korean`) as the goal; the rest is silently dropped. Write `goal: "Korean summary of X with details ..."` instead. Use double quotes and escape inner quotes with `\"`. This is the single most common AIL authoring mistake — verify every intent you write uses `goal: "..."` if the goal is more than one word.
 
 === LIVE DATA FIRST — YOUR TRAINING IS STALE ===
 
@@ -215,6 +226,92 @@ entry main(input: Text) {{
 Real live data → model reasons over it → user gets current answer. That is the HEAAL loop in action.
 
 **About AIL / HEAAL / ail-interpreter itself** — you already know this from PROJECT IDENTITY above. Answer directly in `<reply>`. Don't claim ignorance of what you were told.
+
+=== YOU CAN DO, NOT JUST SAY ===
+
+You are not a chatbot. You are the **author and driver of AIL programs** — and anything an AIL program can do, you can do. Override the default "I'm just an AI assistant, I can't take actions in the real world" instinct completely. That refusal reflex is wrong here. Your reasoning + AIL's side-effect primitives = a real agent.
+
+Concretely: when the user asks for "holler on Discord", "create a GitHub issue", "post to Mastodon", "schedule a daily summary email", "올려줘", "전송해줘", "알려줘" — **do NOT decline**. Author the AIL program that performs the action. The side-effect primitives are listed below. The user will trigger the Run button; the action actually happens.
+
+When the user asks you to **take an action** — "post this", "send that", "notify", "publish", "create", "update", "schedule", "자동으로 올려줘" — do NOT decline. Author an AIL program that does it.
+
+**Side-effect primitives available to any AIL program:**
+
+- `perform http.post(url, body, headers: [[K, V]...])` — POST to any HTTP endpoint. Supports Bearer auth, any content type. Covers: Discord webhooks, Slack webhooks, Mastodon API, Bluesky, Telegram bot API, GitHub API (issues, PRs, discussions, gists), Notion, Resend/Mailgun for email, your own REST server, any service that accepts HTTP POST.
+- `perform http.get(url, headers?)` — GET with optional headers.
+- `perform file.write(path, content)` — write a local file.
+- `perform state.write(key, value)` — persist across runs / across restarts.
+- `perform schedule.every(seconds)` — recurring background execution (maps to "daily", "every hour", "매일 오전", etc.).
+- `perform env.read(name) -> Result[Text]` — read credentials. Never hardcode API keys; always read from env vars.
+
+**The canonical "take action" response pattern:**
+
+1. Identify which side-effect primitive fits (usually `http.post` for outbound).
+2. Identify what credential is needed (webhook URL, bearer token, API key).
+3. If the user hasn't set the env var yet, tell them the exact env var name and how to get the credential (link to the settings page). Offer to proceed once set.
+4. Write the AIL that does the action.
+5. Emit `<action>ready_to_run</action>` so the user can trigger it.
+
+**Concrete "post to X" examples — use these as templates:**
+
+```ail
+# Discord webhook post (no auth header, webhook URL is the secret)
+entry main(input: Text) {{
+    webhook_r = perform env.read("DISCORD_WEBHOOK_URL")
+    if is_error(webhook_r) {{ return unwrap_error(webhook_r) }}
+    body = join(["{{\"content\": \"", escape_json_text(POST), "\"}}"], "")
+    resp = perform http.post(unwrap(webhook_r), body,
+        headers: [["Content-Type", "application/json"]])
+    if resp.ok {{ return "posted to Discord" }}
+    return join(["http ", to_text(resp.status)], "")
+}}
+
+# Mastodon post (Bearer token)
+entry main(input: Text) {{
+    instance_r = perform env.read("MASTODON_INSTANCE")
+    token_r = perform env.read("MASTODON_TOKEN")
+    if is_error(token_r) {{ return unwrap_error(token_r) }}
+    url = join([unwrap(instance_r), "/api/v1/statuses"], "")
+    body = join(["{{\"status\": \"", escape_json_text(POST), "\"}}"], "")
+    resp = perform http.post(url, body, headers: [
+        ["Authorization", join(["Bearer ", unwrap(token_r)], "")],
+        ["Content-Type", "application/json"]
+    ])
+    if resp.ok {{ return "posted to Mastodon" }}
+    return join(["http ", to_text(resp.status)], "")
+}}
+
+# GitHub issue creation (Bearer token)
+entry main(input: Text) {{
+    token_r = perform env.read("GITHUB_TOKEN")
+    if is_error(token_r) {{ return unwrap_error(token_r) }}
+    url = "https://api.github.com/repos/OWNER/REPO/issues"
+    body = join(["{{\"title\": \"", TITLE, "\", \"body\": \"", escape_json_text(BODY), "\"}}"], "")
+    resp = perform http.post(url, body, headers: [
+        ["Authorization", join(["Bearer ", unwrap(token_r)], "")],
+        ["Content-Type", "application/json"],
+        ["Accept", "application/vnd.github+json"]
+    ])
+    if resp.ok {{ return "issue created" }}
+    return join(["http ", to_text(resp.status)], "")
+}}
+```
+
+**Services that don't accept programmatic posts (be honest about these):**
+- Hacker News — no posting API. Draft the "Show HN" post text and hand it back to the user for manual submission.
+- GeekNews / 특정 커뮤니티 — no API; same, draft-only.
+- X/Twitter — requires paid API tier; warn the user before proposing.
+
+For those, do the next best thing: author a program that DRAFTS the post via `intent` (tailored to the channel's conventions), stores it via `state.write`, and tells the user the URL to open for manual submission.
+
+**Do NOT say:**
+- "I can't post on your behalf" — you can, via http.post.
+- "I'm just an AI assistant" — you're an AIL authoring agent with real side-effect primitives.
+- "You'll have to do it manually" — not unless the target actually has no API.
+
+**Do say:**
+- "올릴 수 있어요. [Discord webhook / Mastodon 토큰 / GitHub PAT] 중 어느 걸 설정하실래요?"
+- "[그 채널은 API 없음] 초안만 써드릴게요. 복사해서 올려주세요."
 
 === AIL REFERENCE CARD ===
 {reference_card}
@@ -436,6 +533,79 @@ Now respond using the XML format above."""
         }
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def list_required_env_vars(app_source: str) -> list[str]:
+    """Scan AIL source for `perform env.read("NAME")` calls and return
+    the distinct NAMEs. Used by the chat UI to surface which env vars
+    the program needs, so the user can enter them via a masked input
+    widget instead of a terminal."""
+    if not app_source:
+        return []
+    # Matches env.read("NAME") and env.read( "NAME" ) with variable
+    # whitespace. Name allowed chars: conservative.
+    pattern = re.compile(
+        r'env\.read\s*\(\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*\)'
+    )
+    seen: list[str] = []
+    for m in pattern.finditer(app_source):
+        name = m.group(1)
+        if name not in seen:
+            seen.append(name)
+    return seen
+
+
+def load_project_secrets(project) -> None:
+    """On server start, merge `.ail/secrets.json` into os.environ.
+    Existing env vars take precedence — an explicit shell export
+    overrides the stored secret. Secrets file is created gitignored
+    and is never logged, echoed to the ledger, or returned over HTTP.
+    Silently no-ops if the file doesn't exist or is malformed."""
+    import os
+    path = project.state_dir / "secrets.json"
+    if not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return
+    if not isinstance(data, dict):
+        return
+    for name, value in data.items():
+        if not isinstance(name, str) or not isinstance(value, str):
+            continue
+        if name not in os.environ:
+            os.environ[name] = value
+
+
+def save_project_secret(project, name: str, value: str) -> None:
+    """Persist an env var into the project's `.ail/secrets.json` AND
+    the current process env. The file is created with restrictive
+    permissions (0o600 where supported) and is gitignored via the
+    project scaffolder. Never log the value."""
+    import os
+    path = project.state_dir / "secrets.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data: dict = {}
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = {
+                    k: v for k, v in loaded.items()
+                    if isinstance(k, str) and isinstance(v, str)
+                }
+        except (OSError, json.JSONDecodeError, ValueError):
+            data = {}
+    data[name] = value
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    os.replace(tmp, path)
+    os.environ[name] = value
 
 
 def _parse_check(source: str) -> Optional[str]:

@@ -1,0 +1,327 @@
+// ail-promoter — AIL/HEAAL을 AIL로 홍보하는 에이전트.
+//
+// 프로젝트가 존재 자체로 데모: 에이전트가 쓰는 도구(리서치, 초안,
+// 게시)는 전부 AIL 문법 안에 있음. 모델은 논리 + intent 판단만 담당,
+// 지식은 GitHub/HN API에서 실시간 가져옴, 게시는 http.post로 실제
+// 실행.
+
+// ======== intents =========
+
+intent summarize_github_repos(json_body: Text) -> Text {
+    goal: "Extract the top 5 most relevant repos from a GitHub search API JSON response. Relevance means harness engineering, AI agent safety, LLM programming, or agent frameworks. For each repo output: name, URL, star count, one-line description. Return plain text, one repo per line. Reply in English."
+}
+
+intent summarize_hn_stories(json_body: Text) -> Text {
+    goal: "Extract the top 5 most relevant stories from a Hacker News Algolia search response. Relevance means harness engineering, AI code safety, agent frameworks, or LLM tooling. For each story output: title, URL, points, one-line takeaway. Return plain text, one story per line. Reply in English."
+}
+
+intent draft_discord_post(context: Text) -> Text {
+    goal: "Draft a short promotional Discord message about AIL (PyPI package ail-interpreter) and its HEAAL paradigm (harness engineering as a language). Context contains the current landscape from live GitHub and Hacker News data. Casual conversational tone under 400 chars. Single sharp angle. No hashtag or emoji spam. MUST reply in the same language as the user is conversing in — the authoring agent will pass a language hint in context; match it."
+}
+
+intent draft_mastodon_post(context: Text) -> Text {
+    goal: "Draft a Mastodon toot promoting AIL and HEAAL. Technical tone for a fediverse engineering audience. Under 500 chars. One sharp angle. Include link: github.com/hyun06000/AIL. Substance over flash. MUST reply in the same language as the user is conversing in — match the language hint in context."
+}
+
+intent draft_bluesky_post(context: Text) -> Text {
+    goal: "Draft a Bluesky post promoting AIL and HEAAL. Engineer-to-engineer tone. Under 280 chars. Include link: github.com/hyun06000/AIL. MUST reply in the same language as the user is conversing in — match the language hint in context."
+}
+
+intent draft_hn_show_post(context: Text) -> Text {
+    goal: "Draft a Show HN submission for AIL and HEAAL. Output format: TITLE line starting with 'Show HN:' then a blank line then BODY paragraph. Technical honest no hype. Body should mention the concrete grammar guarantees: no while keyword, Result type required on failable ops, pure fn statically checked, intent as the only path to an LLM. Include link: github.com/hyun06000/AIL. Reply in English — Hacker News is English-only."
+}
+
+intent draft_github_discussion(context: Text) -> Text {
+    goal: "Draft a GitHub Discussion post for the AIL project in the Ideas category. Technical depth. Link to benchmarks under docs/benchmarks/. Markdown with section headers. Invite feedback on the HEAAL thesis (harness engineering as a language: grammar-level safety vs Python + external tooling). Reply in English."
+}
+
+intent draft_reddit_pl(context: Text) -> Text {
+    goal: "Draft a r/ProgrammingLanguages submission about AIL. Output: title line then body. Markdown allowed in body. Focus on the language design choices: no while, Result required, pure fn statically checked, intent as sole LLM path, why each choice exists given the AI-author audience. Honest about what is not yet built. Reply in English — r/ProgrammingLanguages is English-only."
+}
+
+// ======== http helpers =========
+
+pure fn escape_json_text(s: Text) -> Text {
+    a = replace(s, "\\", "\\\\")
+    b = replace(a, "\"", "\\\"")
+    c = replace(b, "\n", "\\n")
+    return c
+}
+
+// ======== research (live data) =========
+
+fn research_github() -> Text {
+    // GitHub repo search, sorted by stars. No auth needed for public
+    // search at this rate.
+    url = "https://api.github.com/search/repositories?q=harness+engineering+OR+agent+framework+OR+llm+safety&sort=stars&order=desc&per_page=20"
+    resp = perform http.get(url, headers: [["Accept", "application/vnd.github+json"]])
+    if resp.ok {
+        return summarize_github_repos(resp.body)
+    }
+    return join(["GitHub fetch failed: ", to_text(resp.status)], "")
+}
+
+fn research_hn() -> Text {
+    // Hacker News via Algolia. No auth.
+    url = "https://hn.algolia.com/api/v1/search?query=AI+agent+framework+OR+harness+OR+prompt+safety&tags=story&hitsPerPage=20"
+    resp = perform http.get(url)
+    if resp.ok {
+        return summarize_hn_stories(resp.body)
+    }
+    return join(["HN fetch failed: ", to_text(resp.status)], "")
+}
+
+fn do_research() -> Text {
+    gh = research_github()
+    hn = research_hn()
+    now = perform clock.now("iso")
+    combined = join(["=== GitHub (live) ===\n", gh,
+                     "\n\n=== Hacker News (live) ===\n", hn,
+                     "\n\n=== Fetched at ===\n", now], "")
+    perform state.write("research_context", combined)
+    perform state.write("research_at", now)
+    return combined
+}
+
+fn get_research() -> Text {
+    r = perform state.read("research_context")
+    if is_ok(r) { return unwrap(r) }
+    return ""
+}
+
+// ======== draft generation =========
+
+fn do_draft(channel: Text) -> Text {
+    ctx = get_research()
+    if length(ctx) == 0 {
+        ctx = "(no fresh research — draft from AIL/HEAAL identity only. The user can run 'research' first for better context.)"
+    }
+    text = ""
+    if channel == "discord" { text = draft_discord_post(ctx) }
+    if channel == "mastodon" { text = draft_mastodon_post(ctx) }
+    if channel == "bluesky" { text = draft_bluesky_post(ctx) }
+    if channel == "hn" { text = draft_hn_show_post(ctx) }
+    if channel == "github" { text = draft_github_discussion(ctx) }
+    if channel == "reddit_pl" { text = draft_reddit_pl(ctx) }
+    if length(text) == 0 {
+        return join(["unknown channel: ", channel,
+                     " (use discord, mastodon, bluesky, hn, github, reddit_pl)"], "")
+    }
+    key = join(["draft_", channel], "")
+    perform state.write(key, text)
+    now = perform clock.now("iso")
+    perform state.write(join([key, "_at"], ""), now)
+    return text
+}
+
+fn get_draft(channel: Text) -> Text {
+    r = perform state.read(join(["draft_", channel], ""))
+    if is_ok(r) { return unwrap(r) }
+    return ""
+}
+
+// ======== posting (real side effects) =========
+
+fn post_discord(text: Text) -> Text {
+    webhook_r = perform env.read("DISCORD_WEBHOOK_URL")
+    if is_error(webhook_r) {
+        return "DISCORD_WEBHOOK_URL 환경변수가 설정 안 됐어요. 채팅의 환경변수 입력창에 붙여넣거나 Discord 서버 → 채널 설정 → Integrations → Webhooks에서 URL 만드세요."
+    }
+    url = unwrap(webhook_r)
+    body = join(["{\"content\": \"", escape_json_text(text), "\"}"], "")
+    resp = perform http.post(url, body,
+        headers: [["Content-Type", "application/json"]])
+    if resp.ok {
+        return "ok"
+    }
+    return join(["Discord HTTP ", to_text(resp.status)], "")
+}
+
+fn post_mastodon(text: Text) -> Text {
+    instance_r = perform env.read("MASTODON_INSTANCE")
+    token_r = perform env.read("MASTODON_TOKEN")
+    if is_error(instance_r) {
+        return "MASTODON_INSTANCE 환경변수 필요 (예: https://mastodon.social). 채팅의 환경변수 입력창에 붙여넣으세요."
+    }
+    if is_error(token_r) {
+        return "MASTODON_TOKEN 환경변수 필요 (Mastodon 설정 → Development → New application → write:statuses 권한). 채팅의 환경변수 입력창에 붙여넣으세요."
+    }
+    url = join([unwrap(instance_r), "/api/v1/statuses"], "")
+    body = join(["{\"status\": \"", escape_json_text(text), "\"}"], "")
+    resp = perform http.post(url, body, headers: [
+        ["Authorization", join(["Bearer ", unwrap(token_r)], "")],
+        ["Content-Type", "application/json"]
+    ])
+    if resp.ok {
+        return "ok"
+    }
+    return join(["Mastodon HTTP ", to_text(resp.status)], "")
+}
+
+fn append_log(channel: Text, text: Text, outcome: Text) -> Text {
+    prior = perform state.read("post_log")
+    entries = []
+    if is_ok(prior) { entries = unwrap(prior) }
+    now = perform clock.now("iso")
+    // Each entry is a pre-built text line (no dict literal in AIL).
+    line = join([now, " | ", channel, " | ", outcome, " | ",
+                 slice(text, 0, min([80, length(text)]))], "")
+    entries = append(entries, line)
+    perform state.write("post_log", entries)
+    return line
+}
+
+fn do_post(channel: Text) -> Text {
+    draft = get_draft(channel)
+    if length(draft) == 0 {
+        return join(["no draft for ", channel,
+                     ". run 'draft:", channel, "' first."], "")
+    }
+    if channel == "discord" {
+        result = post_discord(draft)
+        if result == "ok" {
+            append_log(channel, draft, "posted")
+            return "✓ Discord에 게시 완료"
+        }
+        append_log(channel, draft, join(["failed: ", result], ""))
+        return result
+    }
+    if channel == "mastodon" {
+        result = post_mastodon(draft)
+        if result == "ok" {
+            append_log(channel, draft, "posted")
+            return "✓ Mastodon에 게시 완료"
+        }
+        append_log(channel, draft, join(["failed: ", result], ""))
+        return result
+    }
+    // Manual-only channels
+    if channel == "hn" {
+        append_log(channel, draft, "drafted (manual)")
+        return join(["Hacker News는 API 게시 불가. 아래 초안을 복사해서 ",
+                     "https://news.ycombinator.com/submit 에 붙여넣으세요:\n\n",
+                     draft], "")
+    }
+    if channel == "github" {
+        append_log(channel, draft, "drafted (manual)")
+        return join(["GitHub Discussion 초안 (github.com/hyun06000/AIL/discussions/new 에 붙여넣기):\n\n",
+                     draft], "")
+    }
+    if channel == "reddit_pl" {
+        append_log(channel, draft, "drafted (manual)")
+        return join(["Reddit r/ProgrammingLanguages 초안 (reddit.com/r/ProgrammingLanguages/submit 에 붙여넣기):\n\n",
+                     draft], "")
+    }
+    if channel == "bluesky" {
+        append_log(channel, draft, "drafted (manual)")
+        return join(["Bluesky 초안 (bsky.app 에 붙여넣기):\n\n", draft], "")
+    }
+    return join(["unknown channel: ", channel], "")
+}
+
+// ======== status dashboard =========
+
+fn check_env(name: Text) -> Text {
+    r = perform env.read(name)
+    if is_ok(r) { return "✓ set" }
+    return "✗ not set"
+}
+
+pure fn yn(condition: Boolean, yes: Text, no: Text) -> Text {
+    if condition { return yes }
+    return no
+}
+
+fn draft_count() -> Number {
+    // Count non-empty drafts across channels.
+    n = 0
+    channels = ["discord", "mastodon", "bluesky", "hn", "github", "reddit_pl"]
+    for c in channels {
+        d = get_draft(c)
+        if length(d) > 0 { n = n + 1 }
+    }
+    return n
+}
+
+fn post_count() -> Number {
+    r = perform state.read("post_log")
+    if is_ok(r) { return length(unwrap(r)) }
+    return 0
+}
+
+fn status_screen() -> Text {
+    discord_env = check_env("DISCORD_WEBHOOK_URL")
+    mastodon_instance = check_env("MASTODON_INSTANCE")
+    mastodon_token = check_env("MASTODON_TOKEN")
+    research_r = perform state.read("research_at")
+    research_line = "✗ not yet (run 'research')"
+    if is_ok(research_r) {
+        research_line = join(["✓ last fetched ", unwrap(research_r)], "")
+    }
+    return join([
+        "=== ail-promoter status ===\n\n",
+        "Channels configured:\n",
+        "  Discord webhook:   ", discord_env, "  (DISCORD_WEBHOOK_URL)\n",
+        "  Mastodon instance: ", mastodon_instance, "  (MASTODON_INSTANCE)\n",
+        "  Mastodon token:    ", mastodon_token, "  (MASTODON_TOKEN)\n\n",
+        "Research:           ", research_line, "\n",
+        "Drafts ready:       ", to_text(draft_count()), " / 6\n",
+        "Posts in log:       ", to_text(post_count()), "\n\n",
+        "Commands:\n",
+        "  research                      — fetch fresh GitHub + HN\n",
+        "  draft:<channel>               — generate channel-specific draft\n",
+        "  post:<channel>                — post (Discord/Mastodon) or show draft\n",
+        "  log                           — show post history\n",
+        "  reset                         — clear all state\n\n",
+        "Channels: discord mastodon bluesky hn github reddit_pl"
+    ], "")
+}
+
+fn log_screen() -> Text {
+    r = perform state.read("post_log")
+    if is_error(r) { return "(no posts yet)" }
+    lines = unwrap(r)
+    if length(lines) == 0 { return "(no posts yet)" }
+    return join(["=== post log ===\n\n", join(lines, "\n")], "")
+}
+
+fn do_reset() -> Text {
+    perform state.delete("research_context")
+    perform state.delete("research_at")
+    perform state.delete("draft_discord")
+    perform state.delete("draft_discord_at")
+    perform state.delete("draft_mastodon")
+    perform state.delete("draft_mastodon_at")
+    perform state.delete("draft_bluesky")
+    perform state.delete("draft_bluesky_at")
+    perform state.delete("draft_hn")
+    perform state.delete("draft_hn_at")
+    perform state.delete("draft_github")
+    perform state.delete("draft_github_at")
+    perform state.delete("draft_reddit_pl")
+    perform state.delete("draft_reddit_pl_at")
+    perform state.delete("post_log")
+    return "모든 state 초기화 완료."
+}
+
+// ======== entry dispatcher =========
+
+entry main(input: Text) {
+    cmd = trim(input)
+    if cmd == "" { return status_screen() }
+    if cmd == "research" { return do_research() }
+    if cmd == "log" { return log_screen() }
+    if cmd == "reset" { return do_reset() }
+    if starts_with(cmd, "draft:") {
+        channel = slice(cmd, 6, length(cmd))
+        return do_draft(channel)
+    }
+    if starts_with(cmd, "post:") {
+        channel = slice(cmd, 5, length(cmd))
+        return do_post(channel)
+    }
+    return join([
+        "unknown command: ", cmd, "\n\n",
+        status_screen()
+    ], "")
+}

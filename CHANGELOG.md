@@ -4,6 +4,116 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.13.0 — 2026-04-23
+
+**The self-promotion agent, plus the infrastructure that makes it
+possible.** This release began as "build an agent that promotes AIL
+with AIL" and grew into the first HEAAL-complete authoring stack:
+the agent knows it has real side-effect powers, can enter its own
+secrets safely from chat, and understands the quirks of writing
+AIL itself.
+
+### Added — `examples/agentic/ail-promoter/`
+
+The flagship self-promoter. AIL written in AIL, promoting AIL.
+
+- **Live research** via `perform http.get` against GitHub
+  (`api.github.com/search/repositories`) and Hacker News
+  (`hn.algolia.com/api/v1/search`). No training-data guessing — real
+  repos and real stories fetched fresh every run.
+- **Channel-tailored drafts** via `intent`: Discord, Mastodon,
+  Bluesky, Show HN, GitHub Discussion, r/ProgrammingLanguages.
+  Each intent has a channel-appropriate goal (char limit, tone,
+  link format).
+- **Real posting** via `perform http.post`:
+  - Discord webhook (no auth header — the URL is the secret).
+  - Mastodon Bearer-token auth via `env.read("MASTODON_TOKEN")`.
+- **Draft-only channels** (HN, GitHub Discussion, Reddit, Bluesky):
+  no programmatic posting API, so the agent hands back formatted
+  text for the user to submit manually.
+- **State tracking**: `state.write` for drafts, research cache,
+  post log.
+- **Dashboard `view.html`**: status of configured channels, per-
+  channel Generate-Draft + Post buttons, post history.
+
+### Added — chat-safe secret entry (`perform env.read` wired into UI)
+
+Problem: an AIL program calling `perform env.read("DISCORD_WEBHOOK_URL")`
+previously needed the user to `export` in the terminal, kill the
+server, and restart. Not chat-native.
+
+Fix:
+
+- New helper `list_required_env_vars(app_source)` scans the program
+  for `env.read("NAME")` calls.
+- `/authoring-chat` and `/authoring-run` responses include
+  `env_required: [{name, set}]`.
+- Run widget renders a masked input row for each unset name.
+- `POST /authoring-set-env` (JSON body `{name, value}`) writes the
+  value to `os.environ` AND to `.ail/secrets.json`. The file is
+  auto-gitignored by `Project.init` writing `.gitignore`.
+- `load_project_secrets` runs on `serve_project` startup, merging
+  stored secrets into env (explicit shell exports still win).
+- **Values never hit the chat history, the ledger, or any HTTP
+  response.** Only the name is logged on set.
+
+### Authoring prompt — two more corrections
+
+1. **Language matching extends to AIL output.** If the user is
+   conversing in Korean, every `intent` in `app.ail` must produce
+   Korean output — add `language_is_korean` or put "Reply in Korean."
+   in the goal string. Channel-specific exception: if the venue is
+   English-only (HN, r/ProgrammingLanguages), that intent stays
+   English regardless. The chat language and the program output
+   language must stay in sync.
+
+2. **Goal strings must be quoted.** `goal: Korean summary of X`
+   parses as `Identifier("Korean")` — the rest is silently dropped.
+   Use `goal: "Korean summary of X with full instructions..."`.
+   Documented as the single most common AIL authoring mistake.
+
+### Authoring prompt — agentic capability override (from v1.12.7
+work, now consolidated)
+
+"YOU CAN DO, NOT JUST SAY" section. Overrides the default chatbot
+refusal reflex with explicit framing: you are the author and driver
+of AIL programs; anything an AIL program can do, you can do. Concrete
+worked examples for Discord / Mastodon / GitHub / Slack / Bluesky
+posts. Explicit anti-list of phrases not to produce ("I can't post
+on your behalf", "I'm just an AI assistant"). Explicit handling of
+channels without APIs (HN, GeekNews, X/Twitter): draft-only with
+manual submit.
+
+### Scaffolder — `.gitignore` on `ail init`
+
+`Project.init` now writes `.gitignore` with `.ail/` if none exists.
+Ensures `secrets.json`, the ledger, and authored state don't leak
+into commits.
+
+### Tests
+
++10 new tests covering:
+
+- env var detection from source (3).
+- `/authoring-chat` + `/authoring-run` include `env_required` (2).
+- `/authoring-set-env` persists + never-logs value, rejects bad
+  names (2).
+- `load_project_secrets` merges JSON into env (1).
+- `.gitignore` written on init (1).
+- Chat UI renders the masked secret input widget (1).
+
+507 passing (+10 from 497).
+
+### Why this release matters
+
+v1.12.x made the chat a real authoring surface. v1.13.0 makes the
+chat a real **agentic** surface: the agent knows it can act, can
+ask for the secrets it needs safely, and demonstrates the full
+loop in a working self-promotion example that runs in any fresh
+clone.
+
+---
+
 ## v1.12.6 — 2026-04-23
 
 **Live data first.** Field test found the agent scraping
