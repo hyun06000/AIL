@@ -200,3 +200,64 @@ def test_http_post_json_handles_error_status(echo_server):
     out = _run(src)
     assert out.startswith("404")
     assert "not found" in out
+
+
+# ---------- base64_encode / base64_decode ----------
+
+def test_base64_encode_roundtrip():
+    src = """
+entry main(x: Text) {
+    encoded = base64_encode("hello world")
+    result = base64_decode(encoded)
+    if is_error(result) { return unwrap_error(result) }
+    return unwrap(result)
+}
+"""
+    assert _run(src) == "hello world"
+
+
+def test_base64_encode_ascii_output():
+    src = """
+entry main(x: Text) {
+    return base64_encode("hello")
+}
+"""
+    import base64
+    expected = base64.b64encode(b"hello").decode("ascii")
+    assert _run(src) == expected
+
+
+def test_base64_encode_korean():
+    src = """
+entry main(x: Text) {
+    encoded = base64_encode("안녕하세요")
+    result = base64_decode(encoded)
+    if is_error(result) { return "fail" }
+    return unwrap(result)
+}
+"""
+    assert _run(src) == "안녕하세요"
+
+
+def test_base64_decode_invalid_returns_error():
+    src = """
+entry main(x: Text) {
+    result = base64_decode("not valid base64!!!")
+    if is_error(result) { return "error" }
+    return "ok"
+}
+"""
+    assert _run(src) == "error"
+
+
+def test_base64_encode_github_contents_pattern():
+    src = """
+entry main(x: Text) {
+    content = "# Hello\\nThis is a README."
+    encoded = base64_encode(content)
+    return encoded
+}
+"""
+    import base64
+    expected = base64.b64encode(b"# Hello\nThis is a README.").decode("ascii")
+    assert _run(src) == expected

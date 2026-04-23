@@ -4,6 +4,20 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.47.0 — 2026-04-24
+
+**`base64_encode` / `base64_decode` builtins added.**
+
+Root cause: the GitHub Contents API (`PUT /repos/.../contents/...`) requires the `content` field to be base64-encoded. The agentic runtime had no base64 primitive, so agents repeatedly failed with 404 regardless of correct permissions, SHA, or branch — field test surfaced in the awesome-harness-engineering README workflow (32 turns, all 404).
+
+- `base64_encode(value: Text) -> Text` — pure, returns encoded text directly (never fails on valid UTF-8 input)
+- `base64_decode(value: Text) -> Result[Text]` — pure, returns `ok(text)` or `error(msg)`
+- Reference card updated with signatures and GitHub Contents API usage note
+- Authoring prompt updated: rule 5 added to JSON API authoring rules with CORRECT/WRONG example
+- 5 new tests in `test_json_effects.py`
+
+---
+
 ## v1.46.5 — 2026-04-24
 
 **GitHub GraphQL category lookup pattern corrected in authoring prompt.**

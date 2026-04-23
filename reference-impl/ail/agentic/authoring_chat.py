@@ -697,6 +697,8 @@ When the user asks you to **take an action** — "post this", "send that", "noti
 - `perform env.read(name) -> Result[Text]` — read credentials. Never hardcode API keys; always read from env vars.
 - `perform human.approve(plan: Text) -> Result[Boolean]` — **plan-validate-execute gate**. Call this BEFORE any irreversible side effect (posting to a public channel, sending a message, creating an issue/PR/discussion, charging a card, deleting data). The runtime writes the `plan` text to a file the UI renders as an approval card with Approve / Decline buttons, and blocks the program until the user decides. Returns `ok(true)` on Approve (continue with the side effect), `error("user declined: ...")` on Decline or timeout. The user sees the plan BEFORE anything irreversible happens — no "post then ask". See the "PLAN BEFORE IRREVERSIBLE ACTION" section below for the required shape.
 - `encode_json(value) -> Result[Text]`, `parse_json(text) -> Result[Any]` — pure helpers. `parse_json` is how you read API responses **structurally** instead of pattern-matching substrings in `resp.body`.
+- `base64_encode(value: Text) -> Text` — pure helper. Returns base64-encoded text directly (not a Result). **Required** for any API that mandates base64 in a JSON field — most commonly the **GitHub Contents API** (`PUT /repos/OWNER/REPO/contents/PATH` requires `"content": base64_encode(file_content)`). Also needed for any binary-over-JSON protocol.
+- `base64_decode(value: Text) -> Result[Text]` — pure helper. Decodes base64 back to UTF-8 text. Returns `ok(text)` on success, `error(msg)` on invalid input.
 - `strip_html(source: Text) -> Text` — pure helper. Strips all HTML tags and returns plain text. Use this when an HTTP response is HTML (web pages, RSS, etc.) and you only need the readable content — pass the stripped text to `intent`, not the raw HTML.
 
 **NEVER PASS RAW HTTP RESPONSES TO `intent` — extract first:**
@@ -958,6 +960,19 @@ When the program needs to look something up on the web, use `perform search.web(
 2. **Always use `http.post_json` for JSON APIs.** Build the body as a pair-list: `[["title", title], ["body", body]]`. Nest the same way: `[["input", [["title", t], ["categoryId", c]]]]`.
 3. **Always `parse_json(resp.body)` before claiming success.** HTTP 200 ≠ logical success for GraphQL or many REST APIs (GraphQL returns 200 with an `errors` field when the query failed). After `resp.ok`, parse the body and read the expected fields; if they are missing, return the raw body so the user can see what actually came back.
 4. **Never fabricate the return value.** Your program's return string must be derived from the API response, not literals like `"True"` or `"posted"`. If you cannot verify success, say so with the raw response included — that is more useful than a confident lie.
+5. **GitHub Contents API (`PUT /repos/.../contents/...`) requires `base64_encode`.** The `content` field MUST be base64-encoded — sending plain text returns 404 regardless of permissions or branch. Always use `base64_encode(file_content)`:
+
+```ail
+// ✅ CORRECT — GitHub Contents API file create/update
+content_b64 = base64_encode(new_content)
+r = perform http.post_json(
+    "https://api.github.com/repos/OWNER/REPO/contents/PATH",
+    [["message", "commit msg"], ["content", content_b64], ["sha", existing_sha], ["branch", "main"]],
+    headers: [["Authorization", "Bearer " + token], ["Accept", "application/vnd.github+json"]])
+
+// ❌ WRONG — plain text content → always 404
+r = perform http.post_json(url, [["message", "msg"], ["content", new_content], ["sha", sha]])
+```
 
 **The canonical "take action" response pattern:**
 

@@ -298,8 +298,10 @@ noise reduction for downstream LLM consumption.
 ```
 parse_json(source: Text) -> Result[Any]         // ok(value) on success, error(msg) on JSONDecodeError
 encode_json(value: Any) -> Result[Text]         // ok(text) on success, error(msg) on non-encodable input
+base64_encode(value: Text) -> Text              // base64-encode UTF-8 text; returns encoded Text directly (never fails)
+base64_decode(value: Text) -> Result[Text]      // ok(text) on success, error(msg) if invalid base64 or non-UTF-8
 ```
-Both are pure — no I/O, no LLM. `parse_json` returns a Record for JSON objects,
+All four are pure — no I/O, no LLM. `parse_json` returns a Record for JSON objects,
 a List for arrays, Text / Number / Boolean primitives; use `get(value, key)`
 after unwrapping. `encode_json` is the companion for building request bodies:
 a list of two-element `[key, value]` pairs is emitted as a JSON object, any
@@ -307,6 +309,10 @@ other list as a JSON array, and primitives pass through. Escaping is the
 runtime's job; authors must not hand-roll JSON via `join([...])`. `http.post_json`
 calls `encode_json` internally — use it instead of `encode_json` + `http.post`
 whenever you are talking to a JSON API.
+
+`base64_encode` / `base64_decode` are required whenever an API spec says the field
+must be base64-encoded — most commonly the GitHub Contents API (`content` field in
+PUT /repos/.../contents/...) and any binary-over-JSON protocol.
 
 Origin kinds: `"literal"`, `"input"`, `"fn"`, `"intent"`, `"builtin"`, `"attempt"`, `"effect"`.
 Intent and effect origins additionally carry `at` (ISO-8601 timestamp).

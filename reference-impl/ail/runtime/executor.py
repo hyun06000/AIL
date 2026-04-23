@@ -2122,6 +2122,35 @@ class Executor:
                         {"_result": True, "ok": False,
                          "error": f"{type(e).__name__}: {e}"}, conf)
 
+        if name == "base64_encode":
+            # base64_encode(value: Text) -> Text
+            # Pure. Encodes a text string to base64. Required for GitHub
+            # Contents API (PUT /repos/.../contents/...) which mandates
+            # base64-encoded `content` fields. Also covers any API that
+            # accepts binary/encoded payloads. Returns plain Text, not
+            # a Result — encoding never fails on valid input.
+            if len(raw) >= 1:
+                import base64 as _b64
+                text = raw[0] if isinstance(raw[0], str) else str(raw[0])
+                encoded = _b64.b64encode(text.encode("utf-8")).decode("ascii")
+                return ConfidentValue(encoded, conf)
+
+        if name == "base64_decode":
+            # base64_decode(value: Text) -> Result[Text]
+            # Pure. Decodes a base64 string back to UTF-8 text. Returns
+            # ok(text) on success, error(msg) if the input is not valid
+            # base64 or the bytes are not valid UTF-8.
+            if len(raw) >= 1 and isinstance(raw[0], str):
+                import base64 as _b64
+                try:
+                    decoded = _b64.b64decode(raw[0]).decode("utf-8")
+                    return ConfidentValue(
+                        {"_result": True, "ok": True, "value": decoded}, conf)
+                except Exception as e:
+                    return ConfidentValue(
+                        {"_result": True, "ok": False,
+                         "error": f"{type(e).__name__}: {e}"}, conf)
+
         if name == "ail_parse_check":
             # ail_parse_check(source: Text) -> Result[Text]
             # Returns ok(source) if the given source parses as a valid AIL
