@@ -1117,7 +1117,21 @@ Project name: {self.project.root.name}
 {user_message}
 === END MESSAGE ===
 
-Now respond using the XML format above."""
+Now respond. Use EXACTLY this format — no deviations:
+
+<reply>your reply to the user (1-2 sentences, in their language)</reply>
+<file path="DESCRIPTIVE_NAME.ail">
+full contents of the .ail program
+</file>
+<action>ready_to_run</action>
+
+CHECKLIST before you send:
+- [ ] Did I include a <file> tag with the actual .ail source? (If I described what the program does, the file MUST be here.)
+- [ ] Is <action>ready_to_run</action> present?
+- [ ] Does entry main start with `// INPUT: ...` if it uses input?
+- [ ] Did I accumulate a log string and return it (for agentic programs)?
+
+If the answer to any checkbox is NO and the task required it — go back and add it before responding."""
 
     def _format_state(self, state: dict[str, str]) -> str:
         lines = []
