@@ -472,7 +472,7 @@ entry main(input: Text) {{
     resp = perform http.post_json(url,
         [["status", POST]],
         headers: [["Authorization", join(["Bearer ", unwrap(token_r)], "")]])
-    if !resp.ok {{ return join(["http ", to_text(resp.status), ": ", resp.body], "") }}
+    if not resp.ok {{ return join(["http ", to_text(resp.status), ": ", resp.body], "") }}
     parsed = parse_json(resp.body)
     if is_error(parsed) {{ return join(["unparseable response: ", resp.body], "") }}
     data = unwrap(parsed)
@@ -497,7 +497,7 @@ entry main(input: Text) {{
             ["Authorization", join(["Bearer ", unwrap(token_r)], "")],
             ["Accept", "application/vnd.github+json"]
         ])
-    if !resp.ok {{ return join(["http ", to_text(resp.status), ": ", resp.body], "") }}
+    if not resp.ok {{ return join(["http ", to_text(resp.status), ": ", resp.body], "") }}
     parsed = parse_json(resp.body)
     if is_error(parsed) {{ return join(["unparseable: ", resp.body], "") }}
     data = unwrap(parsed)

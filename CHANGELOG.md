@@ -4,6 +4,57 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.15.4 — 2026-04-23
+
+**Two chained bugs: `!` in prompt → parse fails → textarea with no hint.**
+
+hyun06000 saw an empty-placeholder textarea below `GITHUB_TOKEN`
+entry on a program that shouldn't need any input at all.
+
+Root cause chain:
+1. v1.15.0 prompt examples (Mastodon + GitHub GraphQL) used
+   `if !resp.ok` — but AIL has no `!` operator (it uses `not`).
+   Agents copied the pattern verbatim and produced a program that
+   fails at lex time.
+2. `entry_uses_input` defaults to `True` on parse failure ("safer
+   to show the box than hide it from a program that needs it").
+   So the broken program got a textarea.
+3. The authoring UI's run widget had no single-program
+   parse-error affordance — the parse flag only rendered when
+   there were 2+ programs (picker row). With one program, the
+   error never surfaced in the run card.
+
+### Fixes
+
+- **Prompt**: `if !resp.ok` → `if not resp.ok` in both http.post_json
+  examples.
+- **UI**: `renderDynamic` now branches on `!meta().parses` first —
+  shows a red "⚠ 파싱 에러" banner with the lex/parse message and
+  a 🔧 "Ask agent to fix" button, and SKIPS the textarea/env/run
+  block. Running a program that won't parse is worse than showing
+  why it won't.
+- **Server**: `render_authoring_page` now takes a `programs`
+  parameter and seeds it into `programsForNext` at page-load time.
+  Previously the initial render used a fallback dummy
+  `{parses: true, ...}`, which meant a broken program on page
+  reload rendered as if healthy. The server calls
+  `list_project_programs(project)` and passes the result through.
+
+### Tests
+
+- `test_authoring_page_shows_parse_error_banner_when_program_broken`
+  — seeds a broken program into the page, asserts the banner
+  text renders and the parse-error branch precedes the
+  textarea-construction branch in the script source.
+
+### Still needs a restart
+
+As with v1.15.2/3 — running `ail up` processes hold the old
+module in memory. Ctrl+C and restart to pick up the prompt + UI
+fixes.
+
+---
+
 ## v1.15.3 — 2026-04-23
 
 **Overwrite-to-iterate regression: agent kept flattening prior

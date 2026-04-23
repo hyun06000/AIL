@@ -318,14 +318,25 @@ def _make_handler(project: Project):
                 from .authoring_chat import project_is_fresh
                 if project_is_fresh(project):
                     from .authoring_ui import render_authoring_page
-                    from .authoring_chat import AuthoringChat
+                    from .authoring_chat import (
+                        AuthoringChat, list_project_programs,
+                    )
                     chat = AuthoringChat(project, adapter=None)
                     history = chat._load_history()
+                    # Seed the current programs list so the run widget
+                    # on initial render (before any new turn) already
+                    # knows parse state, env_required, input_hint —
+                    # otherwise it falls back to a dummy that claims
+                    # everything parses, and broken programs get a
+                    # confusing textarea instead of a parse-error
+                    # banner on page reload.
+                    programs = list_project_programs(project)
                     html = render_authoring_page(
                         project_name=project.root.name,
                         host=self.server.server_address[0],
                         port=self.server.server_address[1],
                         history=history,
+                        programs=programs,
                     )
                     body = html.encode("utf-8")
                     self.send_response(200)

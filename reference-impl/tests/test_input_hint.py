@@ -71,6 +71,59 @@ def test_hint_ignored_below_first_20_lines():
     assert extract_input_hint(src) is None
 
 
+def test_authoring_page_shows_parse_error_banner_when_program_broken():
+    """Field test 2026-04-23: broken `.ail` (e.g. `if !resp.ok`, which
+    AIL lexes as an unknown character) showed a textarea with a
+    generic placeholder instead of surfacing the parse error. Cause:
+    `entry_uses_input` defaults to True on parse failure, and the
+    run widget rendered the input box without ever revealing that
+    the underlying program wouldn't run. The fix seeds real program
+    metadata into the initial render and the widget branches on
+    `!meta().parses` to show a banner + 🔧 button instead of the
+    textarea."""
+    broken_program = {
+        "name": "broken.ail",
+        "bytes": 100,
+        "parses": False,
+        "parse_error": "LexError: 5:3: unexpected character '!'",
+        "entry_present": True,
+        "input_used": True,
+        "input_hint": None,
+        "env_required": [],
+    }
+    html = render_authoring_page(
+        project_name="p",
+        host="127.0.0.1",
+        port=8080,
+        history=[
+            {"user": "build X", "reply": "built",
+             "files": [{"path": "broken.ail", "bytes": 100}],
+             "action": "ready_to_run"}
+        ],
+        programs=[broken_program],
+    )
+    # The embedded programsForNext carries the broken program's
+    # parse state, so the widget's render branch on !meta().parses
+    # can show the banner instead of the textarea.
+    assert '"parses": false' in html
+    assert '"parse_error"' in html
+    assert "파싱 에러" in html
+    # The banner logic must come before (or branch away from) the
+    # textarea-creation block, otherwise a broken program still
+    # renders an empty input box.
+    banner_idx = html.find("파싱 에러")
+    textarea_idx = html.find("createElement('textarea')")
+    assert banner_idx != -1 and textarea_idx != -1
+    # The parse-error branch returns before creating the textarea;
+    # the textarea branch reads meta().input_hint, which only runs
+    # when parses is true. Assert they're both present but the
+    # banner branch precedes the one that builds the textarea.
+    # (textContent-level assertion: the banner block exists AND is
+    # reachable from renderDynamic before the input block.)
+    render_dyn_idx = html.find("function renderDynamic()")
+    assert render_dyn_idx < banner_idx < textarea_idx
+
+
 def test_authoring_page_declares_let_state_before_history_replay():
     """Regression guard: `let programsForNext` / `let inputUsedForNext`
     must appear in the JS before the `INITIAL_HISTORY.forEach` that

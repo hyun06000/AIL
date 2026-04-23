@@ -14,14 +14,24 @@ from html import escape
 
 
 def render_authoring_page(
-    *, project_name: str, host: str, port: int, history: list
+    *, project_name: str, host: str, port: int, history: list,
+    programs: list | None = None,
 ) -> str:
     """Render the chat shell. History is seeded into the page so a
-    reload preserves the conversation across restarts."""
+    reload preserves the conversation across restarts.
+
+    `programs` is the current per-`.ail` metadata (from
+    `list_project_programs`). Seeding it into the page lets the Run
+    widget show the real parse state / env_required / input_hint on
+    initial render — without it the widget falls back to a dummy
+    `{name: 'app.ail', parses: true, ...}` and a broken program
+    looks like it has a working textarea.
+    """
     name = escape(project_name or "ail project")
     history_json = _history_to_json_embed(history)
     # Safely quoted project name for embedding in JS.
     import json as _json
+    programs_json = _json.dumps(programs or [])
     json_project_name = _json.dumps(project_name or "ail-project")
 
     return f"""<!doctype html>
@@ -205,10 +215,19 @@ def render_authoring_page(
     // halted the forEach after the first agent turn and left the chat
     // looking empty after a page reload. (Function declarations are
     // hoisted; `let` is not.)
-    let programsForNext = [];
-    let activeProgramForNext = null;
-    let inputUsedForNext = true;
-    let envRequiredForNext = [];
+    //
+    // `programsForNext` is seeded from the server-rendered list so
+    // that parse state / env_required / input_hint are accurate on
+    // the first run-widget render after a page reload. Without
+    // seeding, the widget falls back to a dummy {{parses: true}} and
+    // a broken program's parse-error banner never shows.
+    let programsForNext = {programs_json};
+    let activeProgramForNext = programsForNext.length > 0
+      ? programsForNext[0].name : null;
+    let inputUsedForNext = programsForNext.length > 0
+      ? !!programsForNext[0].input_used : true;
+    let envRequiredForNext = programsForNext.length > 0
+      ? (programsForNext[0].env_required || []) : [];
 
     // Replay history embedded by the server on first render.
     const INITIAL_HISTORY = {history_json};
@@ -402,7 +421,52 @@ def render_authoring_page(
       }}
 
       function renderDynamic() {{
-      // Env-var requirement block — shown when the authored app.ail
+      // Parse-error banner. If the selected program doesn't parse,
+      // nothing downstream is trustworthy — `entry_uses_input`
+      // conservatively returns True on parse failure, so without
+      // this banner the user sees a textarea with a generic
+      // placeholder and no idea that the underlying .ail is broken.
+      // Field test 2026-04-23: exactly that happened on a program
+      // whose author (prior prompt) emitted `if !resp.ok` which
+      // AIL rejects at lex time.
+      if (!meta().parses) {{
+        const parseBanner = document.createElement('div');
+        parseBanner.className = 'env-block';
+        parseBanner.style.borderColor = '#fca5a5';
+        parseBanner.style.background = '#fef2f2';
+        const title = document.createElement('div');
+        title.className = 'env-title';
+        title.style.color = '#b91c1c';
+        title.textContent = '⚠ 파싱 에러 — 먼저 수정이 필요해요 / Parse error';
+        parseBanner.appendChild(title);
+        const detail = document.createElement('div');
+        detail.style.fontSize = '12px';
+        detail.style.color = '#7f1d1d';
+        detail.style.fontFamily = 'ui-monospace, Menlo, monospace';
+        detail.style.whiteSpace = 'pre-wrap';
+        detail.style.wordBreak = 'break-word';
+        detail.textContent = (meta().parse_error || '')
+          .toString().slice(0, 400);
+        parseBanner.appendChild(detail);
+        const fixBar = document.createElement('div');
+        fixBar.style.marginTop = '8px';
+        const fixBtn = document.createElement('button');
+        fixBtn.className = 'run-inline';
+        fixBtn.style.background = '#b91c1c';
+        fixBtn.textContent = '🔧 에이전트에게 수정 요청 / Ask agent to fix';
+        fixBtn.onclick = () => {{
+          fixBtn.disabled = true;
+          send('이 프로그램이 파싱되지 않아요. 에러를 보고 고쳐주세요. / '
+               + 'This program has a parse error — please fix it.');
+        }};
+        fixBar.appendChild(fixBtn);
+        parseBanner.appendChild(fixBar);
+        dynSlot.appendChild(parseBanner);
+        // Skip the Run UI entirely — running a broken program just
+        // re-surfaces the same error the user can already see above.
+        return;
+      }}
+      // Env-var requirement block — shown when the authored .ail
       // calls `perform env.read("VAR")` for any var that isn't set.
       // Masked input; value NEVER goes into chat history or ledger.
       const unset = envRequired.filter(e => !e.set);
