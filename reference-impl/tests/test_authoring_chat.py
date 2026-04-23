@@ -233,6 +233,24 @@ def test_two_turn_conversation_reaches_ready_to_run(tmp_path):
     assert project_is_fresh(proj) is False  # entry present
 
 
+def test_chat_ui_enter_sends_shift_enter_newlines(tmp_path):
+    """v1.12.2 — standard chat UX. Enter sends, Shift+Enter adds a
+    newline. Hangul/Japanese IME composition must not submit on Enter
+    (guarded by isComposing + keyCode 229)."""
+    from ail.agentic.authoring_ui import render_authoring_page
+    html = render_authoring_page(
+        project_name="x", host="127.0.0.1", port=8080, history=[])
+    # Handler fires on Enter without Shift
+    assert "e.key === 'Enter' && !e.shiftKey" in html
+    # IME safety
+    assert "!e.isComposing" in html
+    assert "keyCode !== 229" in html
+    # Submits the composer form
+    assert "requestSubmit()" in html
+    # Placeholder mentions the convention
+    assert "Shift+Enter" in html
+
+
 def test_prompt_includes_heaal_identity_and_research_guidance(tmp_path):
     """v1.12.1 regression — agent claimed ignorance of HEAAL and
     refused to web-search, even though AIL has perform http.get. The

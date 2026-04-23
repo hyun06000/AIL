@@ -104,7 +104,8 @@ def render_authoring_page(
     </div>
 
     <form class="composer" id="composer" onsubmit="return onSend(event);">
-      <textarea id="msg" rows="1" placeholder="예: 텍스트 감정을 분석하는 서비스를 만들고 싶어요"
+      <textarea id="msg" rows="1"
+                placeholder="메시지 입력 후 Enter로 전송 (Shift+Enter 줄바꿈)"
                 autocomplete="off" spellcheck="false"></textarea>
       <button type="submit" class="send" id="send">전송</button>
     </form>
@@ -133,7 +134,13 @@ def render_authoring_page(
     }});
 
     msgEl.addEventListener('keydown', (e) => {{
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {{
+      // Standard chat UX: Enter sends, Shift+Enter inserts a newline.
+      // isComposing + keyCode 229 guards Korean/Japanese IME so that
+      // Enter while composing Hangul commits the composition rather
+      // than sending a half-typed message.
+      if (e.key === 'Enter' && !e.shiftKey
+          && !e.isComposing && e.keyCode !== 229) {{
+        e.preventDefault();
         document.getElementById('composer').requestSubmit();
       }}
     }});

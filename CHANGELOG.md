@@ -4,6 +4,23 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.12.2 — 2026-04-23
+
+Small chat UI fix. Previous: Ctrl/Cmd+Enter sent, plain Enter added
+a newline. New: Enter sends, Shift+Enter adds a newline — the
+standard everyone expects (Slack, Discord, ChatGPT, Claude.ai).
+
+Hangul / Japanese IME composition is guarded so that pressing Enter
+to commit a half-typed composition does NOT submit a half-typed
+message. Uses both `isComposing` and `keyCode !== 229` for cross-
+browser coverage.
+
+Placeholder text updated to announce the convention.
+
++1 test pinning the handler. 484 passing.
+
+---
+
 ## v1.12.1 — 2026-04-23
 
 **Field-test fix.** hyun06000 opened `ail init` and asked the
