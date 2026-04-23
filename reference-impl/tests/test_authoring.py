@@ -344,6 +344,31 @@ def test_ask_records_author_model():
     assert result.author_model == "scripted-author"
 
 
+def test_ask_records_author_model_with_model_id():
+    """When the adapter exposes both `name` and `model`, the combined
+    `provider/model-id` form is recorded so `ail ask --show-source` can
+    tell the user exactly which model answered."""
+    class NamedScriptedAuthor(ScriptedAuthor):
+        name = "scripted"
+        model = "scripted-3b-Q4"
+    author = NamedScriptedAuthor(
+        author_responses=['entry main(x: Text) { return 1 }'])
+    result = ask("anything", adapter=author)
+    assert result.author_model == "scripted/scripted-3b-Q4"
+
+
+def test_adapter_name_falls_back_to_class_name():
+    """Last-resort label when an adapter exposes neither `name` nor
+    `model` — at least the class is visible in traces."""
+    from ail.authoring import _adapter_name
+
+    class BareAdapter:
+        def invoke(self, **kw):
+            raise NotImplementedError
+
+    assert _adapter_name(BareAdapter()) == "BareAdapter"
+
+
 def test_ask_call_log_shows_author_then_intent_order():
     # Confirms the authoring step happens once, then the generated
     # program is executed (and its intent, if any, runs at execution

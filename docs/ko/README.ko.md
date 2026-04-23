@@ -127,8 +127,10 @@ ail ask "1부터 100까지 합" --show-source
 #     return total
 # }
 # entry main(x: Text) { return sum_range(1, 100) }
-# --- confidence=1.000 retries=0 author=anthropic ---
+# --- confidence=1.000 retries=0 author=anthropic/claude-sonnet-4-5-20250929 ---
 ```
+
+`author=` 필드는 `공급자/모델-ID` 형태로 출력됩니다 — 환경 변수가 의도한 모델로 잘 라우팅됐는지 확인할 수 있습니다.
 
 프로그램을 파일로 저장하고 나중에 재실행:
 

@@ -1447,7 +1447,23 @@ def _load_reference_card() -> str:
 
 
 def _adapter_name(adapter: ModelAdapter) -> str:
-    return getattr(adapter, "name", adapter.__class__.__name__)
+    """Human-readable "who wrote this?" label for the trace.
+
+    Returns `provider/model-id` when the adapter exposes both — e.g.
+    `anthropic/claude-sonnet-4-5-20250929`, `ollama/ail-coder:7b-v3`,
+    `openai_compat/qwen2.5-coder:7b`. Falls back to just the provider
+    when no model attribute exists (MockAdapter), or the class name as
+    a last resort. This is what `ail ask --show-source` prints, so a
+    user can verify their env vars actually routed to the model they
+    expected.
+    """
+    provider = getattr(adapter, "name", None)
+    model = getattr(adapter, "model", None)
+    if provider and model:
+        return f"{provider}/{model}"
+    if provider:
+        return provider
+    return adapter.__class__.__name__
 
 
 def _default_adapter() -> ModelAdapter:

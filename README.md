@@ -127,8 +127,10 @@ ail ask "Sum 1 to 100" --show-source
 #     return total
 # }
 # entry main(x: Text) { return sum_range(1, 100) }
-# --- confidence=1.000 retries=0 author=anthropic ---
+# --- confidence=1.000 retries=0 author=anthropic/claude-sonnet-4-5-20250929 ---
 ```
+
+The `author=` field shows `provider/model-id` so you can verify your environment variables routed to the model you expected.
 
 Save the program to a file and replay it later:
 

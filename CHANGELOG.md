@@ -4,6 +4,39 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.11 — 2026-04-23
+
+Trace transparency: `ail ask --show-source` now prints
+`author=provider/model-id` instead of just `author=provider`, so a
+user can verify their environment variables actually routed to the
+model they expected.
+
+### Before
+
+```
+--- confidence=1.000 retries=0 author=anthropic ---
+```
+
+### After
+
+```
+--- confidence=1.000 retries=0 author=anthropic/claude-sonnet-4-5-20250929 ---
+--- confidence=1.000 retries=0 author=ollama/ail-coder:7b-v3 ---
+--- confidence=1.000 retries=0 author=openai_compat/qwen2.5-coder:7b ---
+```
+
+`_adapter_name()` now reads both `name` (provider) and `model`
+attributes from the adapter and joins them with `/`. Falls back to
+provider-only for adapters without a model (MockAdapter), or the
+class name as last resort.
+
+### Tests
+
+- +2 tests in `test_authoring.py`: combined-label case and class-name
+  fallback. 401 passing total.
+
+---
+
 ## v1.9.10 — 2026-04-23
 
 Fifth of the six L2 v2 primitives: **HTML output mode**. An `entry`
