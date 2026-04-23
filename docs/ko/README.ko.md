@@ -219,6 +219,15 @@ ail up word-counter
 | `clock.now` / `state.*` effects | v1.9.5–v1.9.8 | 상태 보존 및 시간 인식 프로그램 |
 | Input-aware UI / HTML 출력 모드 | v1.9.9–v1.9.10 | 브라우저 UI가 entry의 input 사용 여부 / HTML 반환 여부에 맞춰 적응 |
 | `schedule.every` effect | v1.9.12 | entry 주기적 재호출 — 대시보드 / cron 스타일 작업 |
+| `http.post` / `http.post_json` effects | v1.10+ | REST API POST; `post_json`은 body 직렬화 + Content-Type 자동 설정 |
+| `http.graphql` effect | v1.15 | GraphQL 쿼리 POST — HTTP 상태·`errors` 배열·`data` null을 `Result` 하나로 통합 |
+| `env.read` effect | v1.14+ | 프로젝트 시크릿에서 자격증명 읽기 (UI에서 마스킹, 소스에 노출 없음) |
+| `human.approve` effect | v1.14+ | 비가역 작업 전 브라우저 UI에 승인 카드 표시 |
+| `search.web` effect | v1.28+ | 웹 검색 — JSON 결과 배열 반환 |
+| `perform log` effect | v1.43 | 실행 중 브라우저 로그에 실시간 메시지 스트리밍 |
+| `encode_json` 빌트인 | v1.15 | AIL 값을 JSON 텍스트로 직렬화 — `parse_json`의 순수 함수 짝 |
+| 브라우저 저작 채팅 (`ail up`) | v1.14+ | CLI `ail chat` 대신 인브라우저 채팅; 에이전트 메모리 = 채팅 히스토리 |
+| 프로젝트당 다중 프로그램 | v1.20+ | `ail up` 디렉토리 하나에 독립적인 `.ail` 프로그램 여러 개 |
 
 표준 라이브러리 (Python이 아닌 AIL로 작성): `stdlib/core`, `stdlib/language`, `stdlib/utils`
 

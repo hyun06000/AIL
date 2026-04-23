@@ -4,6 +4,102 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.46.5 — 2026-04-24
+
+**GitHub GraphQL category lookup pattern corrected in authoring prompt.**
+
+`repository(id: $r)` does not exist in the GitHub API. The canonical example now uses `node(id: $r) { ... on Repository { discussionCategories... } }` for ID-based lookup. Added explicit KEY RULES comment to prevent regression.
+
+---
+
+## v1.46.4 — 2026-04-24
+
+**`http.graphql` positional headers argument was silently ignored.**
+
+`perform http.graphql(url, query, variables, headers)` — headers as the 4th positional arg was never read. Only `headers:` keyword form worked. Fix: check `args[3]` first, fall back to `kwargs["headers"]`. Field test: GitHub API returned 403 despite token being loaded.
+
+---
+
+## v1.46.3 — 2026-04-24
+
+**Removed `slice(guide_r.body, 0, 6000)` from canonical agentic example.**
+
+The pattern kept appearing in generated agents because the authoring prompt example contained it. Pass `guide_r.body` directly to the intent model.
+
+---
+
+## v1.46.2 — 2026-04-24
+
+**Removed Moltbook from authoring prompt examples.**
+
+Moltbook appeared 5 times in the prompt as concrete example URLs/filenames. The model learned to default to Moltbook when a destination was unspecified. Replaced all occurrences with generic service examples.
+
+---
+
+## v1.46.1 — 2026-04-24
+
+**Fix: fresh requests don't inherit destination from old chat history.**
+
+"ail 홍보하자" with no service name → agent assumed Moltbook because prior history contained Moltbook work. Added explicit rule: prior history counts only when the current message is clearly continuing that work. Fresh requests must ask "어디에 올릴까요?".
+
+---
+
+## v1.46.0 — 2026-04-24
+
+**Plan+execute pattern replaces `ail.run` dispatch in authoring prompt.**
+
+Root cause of parse errors in agentic programs: authoring prompt told the model to use `ail.run` with intent-generated AIL code. Intent models lack the reference card → syntax errors (LBRACE, missing pair lists) every 2–3 steps. History feedback alone cannot fix this.
+
+New canonical pattern:
+- `make_plan` intent: reads service guide, returns JSON step array
+- `decide_step` intent: returns next HTTP call as JSON (NOT AIL code)
+- `entry main`: executes GET/POST directly, saves state via `save_key`/`save_path`
+
+---
+
+## v1.45.0 — 2026-04-24
+
+**Intent models never receive the authoring system prompt.**
+
+v1.44.x propagated the 101KB authoring system prompt to all intents inside sub-executors. Architecturally wrong: intent models execute data tasks (JSON response); only the authoring model (the chat UI) needs AIL authoring rules.
+
+Removed: `authoring_system_prompt` param from `Executor`, `run()`, and server `ail_run()`. Removed: `_authoring_system_prompt` context injection in executor. Removed: `build_base_authoring_prompt` / `build_base_system_prompt`.
+
+Rule: authoring prompt lives in `AuthoringChat` only. Never in the runtime.
+
+---
+
+## v1.44.1 — 2026-04-24
+
+**Fix: sub-executor intent extracts `<file>` content, not `<reply>`.**
+
+v1.44.0 caused 100% parse errors in agentic programs: `next_action` intent got `_authoring_system_prompt` → model output XML format `<reply>description</reply><file>AIL code</file>` → old code extracted `<reply>` (description) → `perform ail.run(description)` → `ParseError` on every step.
+
+Fix: extract `<file>` tag content first, fall back to `<reply>` for `DONE: url` responses.
+
+---
+
+## v1.44.0 — 2026-04-24
+
+**Clickable file tags in chat UI + sub-executor authoring system prompt.**
+
+File tags in the authoring chat (e.g. `✓ moltbook_promo.ail`) are now clickable — toggle arrow reveals the generated AIL source in an expandable dark code block (lazy-loaded, cached after first load). Fetches via new `/authoring-file?path=X` endpoint.
+
+Also: sub-executor intents now receive the full authoring system prompt so `perform ail.run()` sub-programs can produce correct AIL. (Reverted in v1.45.0 — architecturally wrong.)
+
+---
+
+## v1.43.0 — 2026-04-24
+
+**Live log streaming + abort button + conversation reset.**
+
+- `perform log(msg)` → real-time output in browser run panel (400ms polling via `/run-log-poll`).
+- Abort button: `AbortController` cancels in-flight chat request with visible "취소됨" indicator.
+- Reset button: clears chat history via `/authoring-reset-chat` + `location.reload()`.
+- Authoring prompt: replaced broken SEQUENTIAL/AUTONOMOUS examples with validated loop patterns; removed 3-question autonomous threshold (write immediately when destination is given).
+
+---
+
 ## v1.31.0 — 2026-04-24
 
 **에이전트 버블 + 실행결과 내 URL 자동 링크 처리.**

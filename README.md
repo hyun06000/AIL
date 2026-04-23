@@ -219,6 +219,15 @@ Design notes: [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md)
 | `clock.now` / `state.*` effects | v1.9.5–v1.9.8 | Stateful and time-aware programs |
 | Input-aware UI / HTML output mode | v1.9.9–v1.9.10 | Browser UI adapts to whether entry uses input / returns HTML |
 | `schedule.every` effect | v1.9.12 | Recurring `entry` re-invocation — dashboards and cron-style workloads |
+| `http.post` / `http.post_json` effects | v1.10+ | POST to REST APIs; `post_json` serializes body + sets Content-Type automatically |
+| `http.graphql` effect | v1.15 | POST a GraphQL query — collapses HTTP status / `errors` array / `data` null into one `Result` |
+| `env.read` effect | v1.14+ | Read credentials from project secrets (masked input in UI, never in source) |
+| `human.approve` effect | v1.14+ | Show an approval card in the browser UI before irreversible actions |
+| `search.web` effect | v1.28+ | Web search — returns JSON array of results |
+| `perform log` effect | v1.43 | Stream a message to the browser run-log in real time |
+| `encode_json` builtin | v1.15 | Serialize AIL value to JSON text — pure counterpart to `parse_json` |
+| Browser authoring chat (`ail up`) | v1.14+ | In-browser chat replaces CLI `ail chat`; agent's memory is the chat history |
+| Multi-program per project | v1.20+ | One `ail up` directory can hold multiple independent `.ail` programs |
 
 Standard library (written in AIL, not Python): `stdlib/core`, `stdlib/language`, `stdlib/utils`
 

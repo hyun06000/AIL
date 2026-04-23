@@ -6,8 +6,8 @@ AIL is an early-stage research project. Only the latest released minor version r
 
 | Version | Supported |
 |---|---|
-| 1.8.x (latest) | ✅ |
-| < 1.8 | ❌ |
+| 1.46.x (latest) | ✅ |
+| < 1.46 | ❌ |
 
 The PyPI package is `ail-interpreter`. Check your installed version with:
 

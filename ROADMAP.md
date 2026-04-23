@@ -4,16 +4,18 @@ No dates. This is a project with a direction, not a schedule.
 
 ---
 
-## Current state (v1.9.0)
+## Current state (v1.46.5)
 
-L1 language, L2 runtime skeleton, benchmark, fine-tune pipeline, and the first L2 layer (agentic projects) are all working.
+L1 language, L2 runtime (v2 complete), benchmark, fine-tune pipeline all working. Field-tested in production by hyun06000.
 
-- **Language (L1):** `fn`, `pure fn`, `intent`, `attempt`, `match`, `evolve`, `Result`, provenance, calibration, implicit parallelism, effect system, `EXPR[INDEX]` subscript sugar, `parse_json`, `ail_parse_check`. v1.8 grammar freeze in effect (see `spec/09-stability.md`).
+- **Language (L1):** `fn`, `pure fn`, `intent`, `attempt`, `match`, `evolve`, `Result`, provenance, calibration, implicit parallelism, effect system, `EXPR[INDEX]` subscript sugar, `parse_json`, `encode_json`, `ail_parse_check`. v1.8 grammar freeze in effect.
+- **Effect system:** `http.get`, `http.post`, `http.post_json`, `http.graphql`, `file.read`, `file.write`, `clock.now`, `state.*`, `schedule.every`, `env.read`, `human.approve`, `search.web`, `log`, `ail.run`.
 - **Runtimes:** Python reference implementation (full feature set + agentic layer) and a Go interpreter (core feature set).
-- **Fine-tune:** `ail-coder:7b-v3` (qwen2.5-coder-7b + QLoRA on 291 validated samples).
-- **Benchmark:** 50-prompt corpus, AIL vs Python, HEAAL Score methodology, empirically anchored across four model families (Anthropic, Alibaba, Meta, Mistral).
-- **Agentic projects (L2 v0+v1):** `ail init`, `ail up`, INTENT.md-centered project layout, file watcher + auto reload, `ail chat` (natural-language project edits), `ail up --auto-fix N` (autonomous diagnosis on test failure). 3 working example projects.
-- **HEAAL claim boundary:** grammar floor lifts AIL above Python at every tier where the author model clears the AIL parse threshold (Sonnet +2.3 → qwen14b +11.3 → llama8b +30.6). Below parse threshold (mistral7b at 0% parse) the floor has nothing to lift and fine-tuning is the remedy.
+- **Fine-tune:** `ail-coder:7b-v3` (qwen2.5-coder-7b + QLoRA on 291 validated samples). Serving via Ollama.
+- **Benchmark:** 50-prompt corpus, AIL vs Python, HEAAL Score methodology. Fine-tuned 7B: AIL 87.7 vs Python 58.0. Frontier (Sonnet anti_python): AIL 96.1 vs Python 75.9.
+- **Agentic projects (L2 v2 complete):** `ail init`, `ail up`, browser-based authoring chat (agent memory = chat history), `human.approve` gates, `env.read` credential UI, live log streaming, multi-program per project, abort/reset controls. 7 working example projects.
+- **Authoring architecture:** plan+execute pattern — `make_plan` intent reads service guide, `decide_step` intent returns structured HTTP call spec, main entry executes directly. Intent models never receive the authoring system prompt.
+- **HEAAL claim boundary:** grammar floor lifts AIL above Python at every tier where the author model clears the AIL parse threshold (Sonnet +2.3 → qwen14b +11.3 → llama8b +30.6). Below parse threshold (mistral7b at 0% parse) the floor has nothing to lift.
 
 Details: [`docs/benchmarks/2026-04-22_heaal_boundary_summary.md`](docs/benchmarks/2026-04-22_heaal_boundary_summary.md).
 
