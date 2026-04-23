@@ -226,11 +226,16 @@ def test_two_turn_conversation_reaches_ready_to_run(tmp_path):
     chat = AuthoringChat(proj, _ScriptedChatAdapter([r1, r2]))
 
     chat.turn("단어 세는 서비스")
-    assert project_is_fresh(proj) is True  # still no entry
+    # Chat-mode project. Fresh remains True throughout authoring; only
+    # an explicit mark_authored transitions to service UI (v1.12.3).
+    assert project_is_fresh(proj) is True
 
     out2 = chat.turn("에러로")
     assert out2["action"] == "ready_to_run"
-    assert project_is_fresh(proj) is False  # entry present
+    # Still fresh — ready_to_run means "runnable in chat", not "deployed".
+    assert project_is_fresh(proj) is True
+    # app.ail now has real content.
+    assert "entry main" in proj.app_path.read_text(encoding="utf-8")
 
 
 def test_chat_ui_enter_sends_shift_enter_newlines(tmp_path):
@@ -353,6 +358,158 @@ def test_authored_project_serves_service_ui_on_get(tmp_path):
     # Service UI (textarea page), not chat.
     assert "authoring-chat" not in body
     assert "<textarea" in body
+
+
+def test_authoring_run_endpoint_runs_and_returns_json(tmp_path):
+    """v1.12.3 — clicking Run no longer kills the chat. POST
+    /authoring-run executes app.ail, returns a JSON outcome, and
+    records it to history so the agent sees it on the next turn."""
+    import json as _json
+
+    proj = Project.init(tmp_path / "runchat")
+    proj.write_app_source(
+        'entry main(input: Text) { return "hello from app" }')
+
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/authoring-run",
+        data=b"", method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=2) as r:
+        body = _json.loads(r.read().decode("utf-8"))
+    assert body["ok"] is True
+    assert "hello from app" in body["value"]
+
+    # Run result recorded in chat history so the agent has context.
+    hist_path = proj.state_dir / "chat_history.jsonl"
+    assert hist_path.is_file()
+    entries = [_json.loads(line) for line in
+               hist_path.read_text(encoding="utf-8").strip().splitlines()
+               if line]
+    assert any(e.get("kind") == "run_result" and e.get("ok") for e in entries)
+
+
+def test_back_to_chat_endpoint_removes_authored_marker(tmp_path):
+    """v1.12.3 — reversible transition. Once authored, the user can
+    return to the chat to iterate. Conversation history is preserved."""
+    proj = Project.init(tmp_path / "back")
+    proj.write_app_source(
+        'entry main(input: Text) { return input }')
+    # Seed chat history so post-rollback the project counts as chat-mode.
+    (proj.state_dir / "chat_history.jsonl").write_text(
+        '{"ts": 1, "user": "hi", "reply": "ok", "files": [], "action": null}\n',
+        encoding="utf-8",
+    )
+    mark_authored(proj)
+    assert (proj.state_dir / "authored_at").is_file()
+
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/back-to-chat",
+        data=b"", method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=2) as r:
+        assert r.status == 200
+
+    assert not (proj.state_dir / "authored_at").is_file()
+    # GET / now serves the chat UI again.
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as r:
+        body = r.read().decode("utf-8")
+    assert "ail authoring" in body
+
+
+def test_service_ui_shows_back_link_when_chat_history_exists(tmp_path):
+    """The back-to-chat button only appears on the service UI when
+    there's actually a chat to return to."""
+    proj = Project.init(tmp_path / "backlink")
+    proj.write_app_source(
+        'entry main(input: Text) { return input }')
+    # Seed chat history so the affordance activates.
+    (proj.state_dir / "chat_history.jsonl").write_text(
+        '{"ts": 1, "user": "x", "reply": "y", "files": [], "action": null}\n',
+        encoding="utf-8",
+    )
+    mark_authored(proj)
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as r:
+        body = r.read().decode("utf-8")
+    # The visible button (not just JS referencing the id) is rendered.
+    assert 'class="back-link"' in body
+    # Default-language (no Korean preamble in INTENT.md) → English label.
+    assert "Back to chat" in body
+
+
+def test_service_ui_no_back_link_without_chat_history(tmp_path):
+    """Legacy examples with no chat history shouldn't show a stray
+    'back to chat' link that goes nowhere."""
+    proj = Project.init(tmp_path / "nobacklink")
+    proj.write_app_source(
+        'entry main(input: Text) { return input }')
+    # No chat_history.jsonl.
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as r:
+        body = r.read().decode("utf-8")
+    # No visible button (even though the JS handler string exists
+    # unconditionally, the `class="back-link"` element is conditional).
+    assert 'class="back-link"' not in body
+
+
+def test_history_format_includes_run_results_for_agent_context(tmp_path):
+    """The agent's context on the next turn must show the run outcome
+    so it knows to fix an error or move on from a success."""
+    proj = Project.init(tmp_path / "hist")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    chat._append_run_result("", {
+        "ok": False,
+        "value": "",
+        "error": "ParseError: unexpected token",
+        "diagnostic": "",
+    })
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "", "app.ail": ""},
+        history=chat._load_history(),
+        user_message="fix it",
+    )
+    assert "Run result — ERROR" in prompt
+    assert "ParseError" in prompt
+
+
+def test_parse_recognizes_ready_to_serve_action(tmp_path):
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    _, _, action = chat._parse_response(
+        "<reply>ok</reply><action>ready_to_serve</action>")
+    assert action == "ready_to_serve"
 
 
 def test_authoring_complete_endpoint_transitions_state(tmp_path):

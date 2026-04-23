@@ -228,12 +228,18 @@ def _make_handler(project: Project):
                     app_source = project.app_path.read_text(encoding="utf-8")
                 except Exception:
                     app_source = ""
+                # Offer the "back to chat" affordance only when there's
+                # an actual chat history to return to. Projects that
+                # never went through authoring (committed examples,
+                # legacy flows) don't get a stray button.
+                has_chat = (project.state_dir / "chat_history.jsonl").is_file()
                 html = render_page(
                     project_name=project.root.name,
                     intent_preamble=extract_preamble(intent_text),
                     host=self.server.server_address[0],
                     port=self.server.server_address[1],
                     input_used=entry_uses_input(app_source),
+                    show_back_to_chat=has_chat,
                 )
                 body = html.encode("utf-8")
                 self.send_response(200)
@@ -278,12 +284,77 @@ def _make_handler(project: Project):
                 self.wfile.write(payload)
                 return
 
-            # Handoff from authoring to running: marks project as ready
-            # so subsequent GET / serves the service UI.
+            # Run the authored app.ail once and return the outcome as
+            # JSON so the chat UI can render it inline as a "run result"
+            # bubble. No state transition — the user stays in the chat
+            # and can ask for fixes. Replaces the v1.12.0–2 behavior
+            # where clicking "Run" killed the chat and switched to the
+            # service UI.
+            if self.path == "/authoring-run":
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                run_input = self.rfile.read(length).decode("utf-8") if length else ""
+                try:
+                    result, trace = ail_run(str(project.app_path), input=run_input)
+                    value = result.value
+                    is_err = _looks_like_error(value)
+                    rendered = _render_value(value)
+                    diagnostic = _diagnose_from_trace(trace) if is_err else ""
+                    outcome = {
+                        "ok": not is_err,
+                        "value": str(rendered),
+                        "diagnostic": diagnostic,
+                    }
+                except Exception as e:
+                    import traceback
+                    outcome = {
+                        "ok": False,
+                        "value": "",
+                        "error": f"{type(e).__name__}: {e}",
+                        "diagnostic": traceback.format_exc()[:1000],
+                    }
+
+                # Record the run result into the chat history so the
+                # agent has context on the next turn — "fix the error
+                # you just saw".
+                try:
+                    from .authoring_chat import AuthoringChat
+                    chat = AuthoringChat(project, adapter=None)
+                    chat._append_run_result(run_input, outcome)
+                except Exception:
+                    pass
+
+                project.append_ledger({
+                    "event": "authoring_run",
+                    "ok": outcome.get("ok", False),
+                    "input_chars": len(run_input),
+                })
+                import json as _json
+                payload = _json.dumps(outcome, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
+            # Explicit service handoff: mark project as deployed so
+            # future GET / serves the service UI. Only fires on an
+            # explicit user decision ("서비스로 띄워줘"), no longer on
+            # every "run" click.
             if self.path == "/authoring-complete":
                 from .authoring_chat import mark_authored
                 mark_authored(project)
                 project.append_ledger({"event": "authoring_complete"})
+                self._send_text(200, "ok\n")
+                return
+
+            # Reversible back-out: remove the authored marker so GET /
+            # serves the chat UI again. The user can iterate further
+            # in the conversation. Chat history is preserved.
+            if self.path == "/back-to-chat":
+                from .authoring_chat import unmark_authored
+                unmark_authored(project)
+                project.append_ledger({"event": "back_to_chat"})
                 self._send_text(200, "ok\n")
                 return
 

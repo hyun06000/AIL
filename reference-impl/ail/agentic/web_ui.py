@@ -101,6 +101,7 @@ _STRINGS = {
         "about_label": "About this service",
         "run_button": "Run",
         "no_input_hint": "This service takes no input. Press Run to invoke it.",
+        "back_to_chat": "← Back to chat",
     },
     "ko": {
         "placeholder": "여기에 입력을 적어 보세요",
@@ -116,6 +117,7 @@ _STRINGS = {
         "about_label": "이 서비스에 관하여",
         "run_button": "실행",
         "no_input_hint": "이 서비스는 입력이 필요 없습니다. 실행 버튼을 누르세요.",
+        "back_to_chat": "← 대화로 돌아가기",
     },
 }
 
@@ -127,12 +129,17 @@ def render_page(
     host: str,
     port: int,
     input_used: bool = True,
+    show_back_to_chat: bool = False,
 ) -> str:
     """Render the single-page form as an HTML string.
 
     When `input_used` is False, the textarea is replaced with a short
     note and a bare Run button — a service whose `entry` ignores its
     input shouldn't show a typing box that does nothing.
+
+    When `show_back_to_chat` is True, a small header link lets the
+    user return to the authoring chat (reverts the authored marker;
+    conversation history is preserved on disk).
     """
     lang = detect_language(intent_preamble)
     t = _STRINGS.get(lang, _STRINGS["en"])
@@ -146,6 +153,14 @@ def render_page(
     empty_json = _json_string(t["empty_result"])
 
     button_label = t["send"] if input_used else t["run_button"]
+
+    back_to_chat_html = ""
+    if show_back_to_chat:
+        back_to_chat_html = (
+            f'    <div class="back-row">'
+            f'<a href="#" id="back-to-chat" class="back-link">'
+            f'{escape(t["back_to_chat"])}</a></div>\n'
+        )
     if input_used:
         input_block = (
             f'      <label class="tip" for="input">{escape(t["edit_here_tip"])}</label>\n'
@@ -263,11 +278,17 @@ def render_page(
       color: #92400e; margin-top: 16px;
     }}
     .status {{ font-size: 12px; color: var(--muted); }}
+    .back-row {{ margin-bottom: 12px; }}
+    .back-link {{ font-size: 13px; color: var(--muted);
+      text-decoration: none; display: inline-block;
+      padding: 4px 10px; border: 1px solid var(--border);
+      border-radius: 6px; background: #fff; }}
+    .back-link:hover {{ background: #f3f4f6; color: #111; }}
   </style>
 </head>
 <body>
   <div class="page">
-    <h1>{name}</h1>
+{back_to_chat_html}    <h1>{name}</h1>
     <div class="endpoint">http://{escape(host)}:{port}/</div>
 
     <div class="card">
@@ -334,6 +355,21 @@ def render_page(
     if (inputEl) {{
       inputEl.addEventListener("keydown", (e) => {{
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send();
+      }});
+    }}
+
+    const backLink = document.getElementById("back-to-chat");
+    if (backLink) {{
+      backLink.addEventListener("click", async (e) => {{
+        e.preventDefault();
+        try {{
+          const r = await fetch("/back-to-chat", {{ method: "POST" }});
+          if (r.ok) {{
+            window.location.href = "/";
+          }}
+        }} catch (err) {{
+          // leave the user where they are; they can still use the service
+        }}
       }});
     }}
   </script>

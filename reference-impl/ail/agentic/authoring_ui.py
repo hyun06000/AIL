@@ -63,12 +63,31 @@ def render_authoring_page(
       background: #f3f4f6; border-radius: 4px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 11px; }}
-    .action-bar {{ margin: 8px 0; display: flex;
-      justify-content: flex-start; padding-left: 14px; }}
+    .action-bar {{ margin: 8px 0; display: flex; flex-direction: column;
+      gap: 6px; align-items: flex-start; padding-left: 14px; }}
     .run-btn {{ font-family: inherit; font-size: 14px; font-weight: 500;
       padding: 10px 20px; border-radius: 8px; border: 0;
       background: #047857; color: #fff; cursor: pointer; }}
     .run-btn:hover {{ opacity: 0.9; }}
+    .serve-btn {{ font-family: inherit; font-size: 14px; font-weight: 500;
+      padding: 10px 20px; border-radius: 8px; border: 1px solid #047857;
+      background: #fff; color: #047857; cursor: pointer; }}
+    .serve-btn:hover {{ background: #f0fdf4; }}
+    .run-result {{ background: #f0fdf4;
+      border: 1px solid #bbf7d0; border-radius: 10px;
+      padding: 12px 14px; margin: 4px 0 8px 14px; max-width: 80%; }}
+    .run-result.err {{ background: #fef2f2; border-color: #fecaca; }}
+    .run-result .label {{ font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: #047857; margin-bottom: 6px; }}
+    .run-result.err .label {{ color: #b91c1c; }}
+    .run-result pre {{ margin: 0; white-space: pre-wrap;
+      word-break: break-word; font-family: ui-monospace,
+      SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px;
+      line-height: 1.5; color: #111; }}
+    .run-result .diag {{ margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid #fecaca; font-size: 12px;
+      color: #6b7280; white-space: pre-wrap; }}
     .composer {{ position: sticky; bottom: 0; padding: 12px 0;
       background: var(--bg); border-top: 1px solid var(--border);
       display: flex; gap: 8px; align-items: flex-end; }}
@@ -122,8 +141,12 @@ def render_authoring_page(
     if (INITIAL_HISTORY.length > 0) {{
       hint.remove();
       INITIAL_HISTORY.forEach(entry => {{
-        addUser(entry.user);
-        addAgent(entry.reply, entry.files || [], entry.action || null);
+        if (entry.kind === 'run_result') {{
+          addRunResult(entry);
+        }} else {{
+          addUser(entry.user);
+          addAgent(entry.reply, entry.files || [], entry.action || null);
+        }}
       }});
       scrollBottom();
     }}
@@ -192,11 +215,41 @@ def render_authoring_page(
         bar.className = 'action-bar';
         const btn = document.createElement('button');
         btn.className = 'run-btn';
-        btn.textContent = '▶ 실행해보기 / Run it now';
+        btn.textContent = '▶ 실행해보기 / Run it';
         btn.onclick = runNow;
         bar.appendChild(btn);
         thread.appendChild(bar);
+      }} else if (action === 'ready_to_serve' || action === 'ready_to_deploy') {{
+        const bar = document.createElement('div');
+        bar.className = 'action-bar';
+        const btn = document.createElement('button');
+        btn.className = 'serve-btn';
+        btn.textContent = '🌐 서비스로 띄우기 / Start as service';
+        btn.onclick = startAsService;
+        bar.appendChild(btn);
+        thread.appendChild(bar);
       }}
+    }}
+
+    function addRunResult(r) {{
+      const box = document.createElement('div');
+      box.className = 'run-result' + (r.ok ? '' : ' err');
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = r.ok ? '실행 결과 / Result' : '실행 실패 / Error';
+      box.appendChild(label);
+      const pre = document.createElement('pre');
+      pre.textContent = r.ok
+        ? (r.value || '(empty)')
+        : (r.error || r.value || '(no message)');
+      box.appendChild(pre);
+      if (r.diagnostic) {{
+        const d = document.createElement('div');
+        d.className = 'diag';
+        d.textContent = r.diagnostic;
+        box.appendChild(d);
+      }}
+      thread.appendChild(box);
     }}
 
     function addError(msg) {{
@@ -267,13 +320,46 @@ def render_authoring_page(
     }}
 
     async function runNow() {{
+      // Run the current app.ail once, render the result as a bubble
+      // in the conversation, and stay in the chat. The user can then
+      // say "fix this" or "try again" without leaving the page.
+      const placeholder = document.createElement('div');
+      placeholder.className = 'run-result';
+      placeholder.style.background = '#f3f4f6';
+      placeholder.style.borderColor = '#e5e7eb';
+      placeholder.textContent = '실행 중…';
+      thread.appendChild(placeholder);
+      scrollBottom();
+      try {{
+        const r = await fetch('/authoring-run', {{ method: 'POST' }});
+        const text = await r.text();
+        placeholder.remove();
+        let data;
+        try {{
+          data = JSON.parse(text);
+        }} catch (e) {{
+          addError('실행 결과 파싱 실패: ' + text.slice(0, 200));
+          return;
+        }}
+        addRunResult(data);
+        scrollBottom();
+      }} catch (e) {{
+        placeholder.remove();
+        addError('네트워크 오류: ' + e.message);
+      }}
+    }}
+
+    async function startAsService() {{
+      if (!confirm('이 프로그램을 HTTP 서비스로 띄울까요?\\n' +
+                   '화면이 서비스 UI로 바뀝니다. 나중에 상단의 ' +
+                   '"← 대화로 돌아가기" 버튼으로 복귀할 수 있어요.\\n\\n' +
+                   'Start as a long-running HTTP service?')) return;
       try {{
         const r = await fetch('/authoring-complete', {{ method: 'POST' }});
         if (!r.ok) {{
-          addError('실행 전환 실패: ' + await r.text());
+          addError('전환 실패: ' + await r.text());
           return;
         }}
-        // Reload — server now serves the service UI.
         window.location.href = '/';
       }} catch (e) {{
         addError('네트워크 오류: ' + e.message);
@@ -289,17 +375,30 @@ def render_authoring_page(
 
 def _history_to_json_embed(history: list) -> str:
     """Serialize chat history for embedding in the page. Each entry is
-    sanitized to only include the fields the UI needs."""
+    sanitized to only include the fields the UI needs. Both regular
+    turns and run_result entries are supported so reloading the page
+    preserves the full conversation including run outputs."""
     import json
     safe = []
     for entry in history:
         if not isinstance(entry, dict):
             continue
+        kind = entry.get("kind")
+        if kind == "run_result":
+            safe.append({
+                "kind": "run_result",
+                "ok": bool(entry.get("ok", False)),
+                "value": str(entry.get("value", "")),
+                "error": str(entry.get("error", "")),
+                "diagnostic": str(entry.get("diagnostic", "")),
+            })
+            continue
         safe.append({
             "user": str(entry.get("user", "")),
             "reply": str(entry.get("reply", "")),
             "files": entry.get("files", []) if isinstance(entry.get("files"), list) else [],
-            "action": entry.get("action") if entry.get("action") in ("ready_to_run", "ready_to_deploy") else None,
+            "action": entry.get("action") if entry.get("action") in (
+                "ready_to_run", "ready_to_serve", "ready_to_deploy"
+            ) else None,
         })
-    # Safe to inline since we control all field types.
     return json.dumps(safe, ensure_ascii=False).replace("</", "<\\/")

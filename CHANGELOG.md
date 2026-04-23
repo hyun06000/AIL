@@ -4,6 +4,91 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.12.3 — 2026-04-23
+
+**Dead-end fix.** hyun06000 field-tested v1.12.0–2 and found the
+"Run it now" button was a trap: clicking it killed the chat, swapped
+in the service UI, and left the user with no way back. If the
+generated program was wrong (wrong input shape, runtime error, etc.)
+the user was stuck — couldn't edit, couldn't retry, couldn't return
+to the chat.
+
+Root cause: "Run" was conflated with "deploy as long-running service".
+Every first-run was forced into `ail up` mode even when the user just
+wanted a one-shot preview (the `ail ask` case).
+
+### Redesigned — Run happens INSIDE the chat
+
+- The "Run it" button now calls `POST /authoring-run`, which executes
+  `app.ail` once and returns the outcome as JSON.
+- The outcome renders as a **result bubble** in the conversation
+  (green for success, red for error + diagnostic from v1.10.1).
+- No page redirect. The chat stays active; the user can immediately
+  say "고쳐줘 / fix it" or "이렇게 바꿔줘" and iterate.
+- The run outcome is recorded to `chat_history.jsonl` as a
+  `run_result` entry, so the agent sees the error (or the value) on
+  the next turn and can act on it.
+
+### Added — `POST /authoring-run`
+
+Executes the project, returns `{ok, value, diagnostic, error}`.
+Records the outcome to history. Ledger event: `authoring_run`.
+
+### Added — `POST /back-to-chat`
+
+Reversible transition. Deletes `.ail/authored_at` so GET / serves
+the chat UI again. Chat history preserved — it's just the "service
+mode" marker that goes. Ledger event: `back_to_chat`.
+
+### Added — "← Back to chat" button on the service UI
+
+Shown on the service-UI page header whenever `chat_history.jsonl`
+exists for the project. Click → POSTs `/back-to-chat` → reloads →
+chat UI with full history. Korean + English labels.
+
+### Added — separate `<action>ready_to_serve</action>` for deployment
+
+- `ready_to_run` → now means **run in chat** (default, safe, reversible).
+- `ready_to_serve` → **deploy as service** (explicit opt-in, confirm
+  dialog). Only shown when the user has said they want a long-running
+  service. Still marks `authored_at` and transitions the UI.
+- `ready_to_deploy` recognized as an alias for `ready_to_serve` for
+  backward compatibility.
+
+### Updated — agent system prompt
+
+Teaches the distinction between `ready_to_run` and `ready_to_serve`.
+Also: when history contains `[Run result — ERROR]`, the agent
+prioritizes fixing the issue and re-emitting `ready_to_run`. When
+`[Run result — OK]`, it offers refinement or `ready_to_serve`.
+
+### Updated — `project_is_fresh`
+
+New rule: if `chat_history.jsonl` exists and `authored_at` doesn't,
+return True (serve chat) regardless of `app.ail` content. So the
+"back to chat" round-trip actually returns to chat, not back to the
+service UI. Legacy examples (no chat history) keep their current
+behavior — served as services because they have `entry main`.
+
+### Tests
+
++6 new tests in `test_authoring_chat.py`:
+
+- `/authoring-run` runs and returns JSON
+- `/authoring-run` records to history
+- `/back-to-chat` removes marker + next GET / serves chat again
+- Back link appears on service UI when chat history exists
+- Back link absent when no chat history
+- History format includes run results in agent prompt
+- `ready_to_serve` recognized by the XML parser
+
+2 stale assertions in `test_two_turn_conversation_reaches_ready_to_run`
+updated for new fresh-project semantics.
+
+490 passing total (+6 from 484).
+
+---
+
 ## v1.12.2 — 2026-04-23
 
 Small chat UI fix. Previous: Ctrl/Cmd+Enter sent, plain Enter added

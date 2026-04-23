@@ -140,7 +140,11 @@ Rules:
 - Include <file> only when you're writing or updating that file. Omit it to leave the file unchanged.
 - When you include <file>, provide the COMPLETE new contents, not a diff. Everything between the tags replaces the file entirely.
 - Allowed files: INTENT.md, app.ail, view.html, tests/*.
-- <action>ready_to_run</action> ONLY when INTENT.md is substantive AND app.ail is a parseable AIL program that matches INTENT.md. Not before.
+- Two action values are recognized:
+  - `<action>ready_to_run</action>` — once app.ail is parseable and you think it matches the user's ask. This surfaces a "Run it" button in the chat; clicking executes the program once and renders the output INSIDE the conversation as a result bubble. The user stays in the chat and can say "이거 수정해줘" to iterate. This is the DEFAULT action for most tasks (one-shot answers, scripts, previews).
+  - `<action>ready_to_serve</action>` — ONLY when the user has explicitly said they want a long-running HTTP service / dashboard / webhook. Clicking this transitions the page to the service UI (textarea or view.html). It's a one-way trip; offer it sparingly and only when deployment is the explicit goal.
+- When the conversation history contains a `[Run result — ERROR]` entry, that means the user just ran the program and got an error. Treat this as your top priority: explain briefly what went wrong, update app.ail to fix it, and re-emit `ready_to_run` so they can try again.
+- When the conversation history contains a `[Run result — OK]` entry, the user saw the output. If they don't object, offer either more refinement questions OR `ready_to_serve` if they want a service. Don't re-offer `ready_to_run` with unchanged code.
 - Match the user's language (Korean or English). If they wrote Korean, reply in Korean.
 - Ask one question at a time. Don't dump 10 decisions in one message.
 - Keep the reply short (1–3 sentences plus a question). The UI is chat — not a document.
@@ -196,6 +200,18 @@ Now respond using the XML format above."""
             return "(no prior turns)"
         parts = []
         for entry in history:
+            kind = entry.get("kind")
+            if kind == "run_result":
+                if entry.get("ok"):
+                    parts.append(
+                        f"[Run result — OK] {entry.get('value', '')[:500]}")
+                else:
+                    err = entry.get("error") or entry.get("value") or ""
+                    parts.append(f"[Run result — ERROR] {str(err)[:500]}")
+                    diag = entry.get("diagnostic") or ""
+                    if diag:
+                        parts.append(f"[Diagnostic] {str(diag)[:500]}")
+                continue
             parts.append(f"User: {entry.get('user', '')}")
             parts.append(f"Agent: {entry.get('reply', '')}")
             files = entry.get("files") or []
@@ -244,7 +260,9 @@ Now respond using the XML format above."""
         action_match = re.search(r"<action>(.*?)</action>", stripped, re.DOTALL)
         if action_match:
             action = action_match.group(1).strip()
-            if action not in ("ready_to_run", "ready_to_deploy"):
+            if action not in (
+                "ready_to_run", "ready_to_serve", "ready_to_deploy"
+            ):
                 action = None
 
         return reply, files, action
@@ -334,25 +352,49 @@ Now respond using the XML format above."""
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
+    def _append_run_result(self, run_input: str, outcome: dict) -> None:
+        """Record a run-in-chat outcome to history so the next agent
+        turn sees what happened. The UI also renders this as a
+        result bubble."""
+        p = self._history_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "ts": time.time(),
+            "kind": "run_result",
+            "input": run_input,
+            "ok": outcome.get("ok", False),
+            "value": str(outcome.get("value", ""))[:2000],
+            "error": str(outcome.get("error", ""))[:1000],
+            "diagnostic": str(outcome.get("diagnostic", ""))[:2000],
+        }
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
 
 def project_is_fresh(project) -> bool:
-    """True when the project hasn't been through authoring handoff yet.
+    """True when GET / should serve the authoring chat UI.
 
-    Fresh projects get the chat UI on GET /; authored projects get the
-    existing service UI (textarea / view.html). The handoff marker is
-    .ail/authored_at, written when the user clicks "Run it now".
+    Three cases:
+      1. `authored_at` marker present → return False (service UI).
+      2. No marker, `chat_history.jsonl` present → chat project in
+         mid-iteration. Serve chat regardless of app.ail state so the
+         user can keep editing. Also enables "back to chat" to return
+         here even when app.ail is fully authored.
+      3. No marker, no chat history, app.ail contains an `entry` block
+         → legacy hand-written project. Serve service UI (current
+         behavior for word-counter, visit-counter, etc.).
+      4. Otherwise → fresh project. Serve chat.
     """
     marker = project.state_dir / "authored_at"
     if marker.is_file():
         return False
-    # Also treat projects with a non-empty app.ail as authored (for legacy
-    # examples that were hand-written and committed with INTENT.md +
-    # app.ail).
+    chat_history = project.state_dir / "chat_history.jsonl"
+    if chat_history.is_file():
+        return True
     app = project.root / "app.ail"
     if app.is_file():
         try:
             content = app.read_text(encoding="utf-8").strip()
-            # Strip comments and whitespace to see if there's real code.
             stripped = re.sub(r"//[^\n]*", "", content).strip()
             if stripped and "entry" in stripped:
                 return False
@@ -370,3 +412,15 @@ def mark_authored(project) -> None:
         json.dumps({"ts": time.time()}, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def unmark_authored(project) -> None:
+    """Reverse `mark_authored`. The user can return to the authoring
+    chat to iterate further. Chat history is preserved — only the
+    service-mode marker goes. Idempotent."""
+    marker = project.state_dir / "authored_at"
+    if marker.is_file():
+        try:
+            marker.unlink()
+        except OSError:
+            pass
