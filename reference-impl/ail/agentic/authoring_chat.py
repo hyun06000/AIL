@@ -542,6 +542,27 @@ intent summarize_pricing(page3_text) -> Text
 return join([signup, features, pricing], "\\n\\n---\\n\\n")
 ```
 
+**AUTONOMOUS AGENTS — `perform ail.run`:**
+
+When the user wants a program that writes and runs sub-programs on its own (goal-directed, self-improving, or multi-step autonomous loops), use `perform ail.run(code, input?)`.
+
+Canonical pattern — "meta-agent that writes its own tool":
+```ail
+entry main(input: Text) {{
+    goal = input
+    intent write_program(goal) -> Text  # generates .ail source
+    result = unwrap(perform ail.run(program, goal))
+    intent evaluate_result(goal, result) -> Text
+    return evaluation
+}}
+```
+
+Rules:
+- The sub-program runs with the **same harness** — `human.approve` gate, purity constraints, and `Result` wrapping all apply. Generated code cannot escape the executor.
+- Recursion depth ≥ 3 triggers a trace warning. Depth ≥ 8 returns `error("recursion depth exceeded")` — design a base case before that.
+- Use `schedule.every` + `state.*` for the outer loop of a recurring autonomous agent; use `ail.run` for the inner "decide and act" step that may itself generate sub-programs.
+- Always check `is_error(result)` after `perform ail.run` — parse errors in the generated code surface as `Result-error`.
+
 **WEB SEARCH — `perform search.web`:**
 
 When the program needs to look something up on the web, use `perform search.web(query, count?)`.
