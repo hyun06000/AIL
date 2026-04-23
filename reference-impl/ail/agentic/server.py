@@ -243,6 +243,26 @@ def _make_handler(project: Project):
             # teammates, other apps). Always renders the textarea /
             # view.html page even for projects that still have an
             # active authoring chat.
+            # v1.13.2: chat export. Returns the full conversation as
+            # a markdown document for local save / sharing. Served
+            # inline (not attachment) so the browser can either
+            # display it or save-as depending on how the link is
+            # clicked. The UI triggers a download via blob anyway.
+            if self.path == "/authoring-chat-export":
+                from .authoring_chat import export_history_as_markdown
+                md = export_history_as_markdown(project)
+                body = md.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                self.send_header(
+                    "Content-Disposition",
+                    f'inline; filename="{project.root.name}-chat.md"',
+                )
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             if self.path in ("/service", "/service/"):
                 view_path = project.root / "view.html"
                 if view_path.is_file():

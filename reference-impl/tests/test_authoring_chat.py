@@ -1012,6 +1012,127 @@ def test_active_program_marker_updated_on_write(tmp_path):
         == "second.ail"
 
 
+def test_prompt_teaches_project_purpose_carries_forward(tmp_path):
+    """v1.13.2 — field test: user project was 'AIL/HEAAL 홍보', agent
+    later wrote a generic channel_recommender forgetting the subject.
+    Prompt must teach the agent to thread the project's purpose
+    through every new program's intent goals."""
+    proj = Project.init(tmp_path / "purp")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={
+            "INTENT.md": "# promo\n\nAIL/HEAAL 홍보 프로젝트\n",
+            "app.ail": "",
+        },
+        history=[],
+        user_message="추천 봇도 만들어줘",
+    )
+    assert "CARRIES THE PROJECT'S PURPOSE" in prompt
+    # The cautionary example about channel recommender is present.
+    assert "channel_recommender" in prompt or "channel recommender" in prompt
+    # Thread-through instruction: bake into intent goals.
+    assert "bake it into every `intent` goal" in prompt
+
+
+def test_export_history_as_markdown_empty(tmp_path):
+    from ail.agentic.authoring_chat import export_history_as_markdown
+    proj = Project.init(tmp_path / "emptychat")
+    md = export_history_as_markdown(proj)
+    assert proj.root.name in md
+    assert "no history yet" in md
+
+
+def test_export_history_as_markdown_renders_turns(tmp_path):
+    from ail.agentic.authoring_chat import export_history_as_markdown
+    proj = Project.init(tmp_path / "turns")
+    adapter = _ScriptedChatAdapter([
+        '<reply>hi there</reply>\n'
+        '<file path="app.ail">\nentry main(x: Text) { return x }\n</file>'
+        '\n<action>ready_to_run</action>',
+    ])
+    chat = AuthoringChat(proj, adapter)
+    chat.turn("make it")
+
+    md = export_history_as_markdown(proj)
+    assert "## Turn 1" in md
+    assert "**User**" in md
+    assert "make it" in md
+    assert "**Agent**" in md
+    assert "hi there" in md
+    assert "app.ail" in md
+    assert "ready_to_run" in md
+
+
+def test_export_history_includes_run_results(tmp_path):
+    from ail.agentic.authoring_chat import (
+        AuthoringChat, export_history_as_markdown,
+    )
+    proj = Project.init(tmp_path / "results")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([
+        '<reply>ok</reply>',
+    ]))
+    chat.turn("ping")
+    # Simulate a run result being appended (the server does this on
+    # /authoring-run; tests call the helper directly).
+    chat._append_run_result("", {
+        "ok": True, "value": "hello output", "diagnostic": "",
+    })
+    chat._append_run_result("", {
+        "ok": False, "value": "", "error": "ParseError: x",
+        "diagnostic": "",
+    })
+    md = export_history_as_markdown(proj)
+    assert "### Run result" in md
+    assert "hello output" in md
+    assert "ParseError" in md
+
+
+def test_export_endpoint_returns_markdown_with_disposition(tmp_path):
+    import json as _json
+    proj = Project.init(tmp_path / "exportep")
+    (proj.state_dir / "chat_history.jsonl").write_text(
+        _json.dumps({
+            "ts": 1, "user": "hi", "reply": "hello",
+            "files": [], "action": None,
+        }) + "\n",
+        encoding="utf-8",
+    )
+    proj.write_app_source(
+        'entry main(input: Text) { return input }')
+
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    with urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/authoring-chat-export", timeout=2
+    ) as r:
+        assert r.status == 200
+        ctype = r.headers.get("Content-Type", "")
+        assert "text/markdown" in ctype
+        disp = r.headers.get("Content-Disposition", "")
+        assert "filename=" in disp
+        body = r.read().decode("utf-8")
+    assert "# " in body  # title heading
+    assert "**User**" in body
+    assert "hi" in body
+
+
+def test_chat_ui_has_export_and_copy_links(tmp_path):
+    from ail.agentic.authoring_ui import render_authoring_page
+    html = render_authoring_page(
+        project_name="x", host="127.0.0.1", port=8080, history=[])
+    assert 'id="export-chat"' in html
+    assert 'id="copy-chat"' in html
+    assert "/authoring-chat-export" in html
+    assert "navigator.clipboard.writeText" in html
+
+
 def test_prompt_teaches_intent_md_is_cumulative(tmp_path):
     """v1.13.1 — user complaint: 'INTENT.md도 계속 덮어쓰는 것 같은데,
     이러면 목적성이 계속 바뀌어서 곤란해. 하나의 챗 세션은 정보를

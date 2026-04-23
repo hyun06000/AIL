@@ -4,6 +4,59 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.13.2 — 2026-04-23
+
+Two user-requested improvements from live use.
+
+### Chat export + copy
+
+Feedback: *"대화를 저장하거나 복사하는 기능 있으면 좋겠네."*
+
+- New endpoint `GET /authoring-chat-export` — renders the full
+  conversation as a standalone markdown document (turns, file
+  writes, actions, run results).
+- Header links in the chat UI: **대화 내보내기 / Export** downloads
+  a `<project>-chat.md` via blob; **복사 / Copy** puts the
+  markdown on the clipboard.
+- `export_history_as_markdown(project)` is the reusable helper.
+
+### Project purpose threads through every new program
+
+Feedback: user's project was "AIL/HEAAL 홍보". Several turns later
+they asked "추천 봇도 만들어줘" — agent wrote a *generic* channel
+recommender, forgetting the subject. User had to remind it
+("ail이랑 heaal 홍보하는 봇이라니까 까먹은거니").
+
+**Fix — `EVERY PROGRAM CARRIES THE PROJECT'S PURPOSE` section added
+to the prompt.** Before writing any program, re-read INTENT.md's
+top-level purpose; bake it into every `intent` goal string and
+relevant literal. A "channel recommender" in a project about AIL
+must have `goal: "recommend the best developer communities to
+promote the AIL programming language and its HEAAL paradigm…"` —
+not a generic one. `<reply>` should confirm the subject when
+naming the new program ("AIL/HEAAL 홍보용 채널 추천봇 만들었어요")
+so continuity is visible.
+
+Pivot recognized as exception: if the user's prompt genuinely
+implies an entirely new project ("이제 게시는 그만두고 아예 새
+프로젝트로 바꾸자"), agent asks a single yes/no before rewriting the
+top-level purpose.
+
+### Tests
+
++6 tests:
+
+- Prompt teaches purpose carries forward (1).
+- `export_history_as_markdown` — empty (1) / turns (1) / run
+  results (1).
+- `/authoring-chat-export` endpoint returns markdown with proper
+  headers (1).
+- Chat UI has export + copy links wired to the endpoint (1).
+
+523 passing (+6 from 517).
+
+---
+
 ## v1.13.1 — 2026-04-23
 
 Five field-test corrections that shift the agent from "chatty

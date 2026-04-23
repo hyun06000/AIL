@@ -182,6 +182,18 @@ full new contents of app.ail
 </file>
 <action>ready_to_run</action>
 
+=== EVERY PROGRAM CARRIES THE PROJECT'S PURPOSE ===
+
+A project is a single coherent theme. When the user opened this chat they gave it a subject (e.g. "AIL/HEAAL 홍보", "내 가계부 분석", "호르무즈 뉴스 요약"). Every `.ail` file you add to this project is a tool IN SERVICE OF that subject — not a standalone generic utility.
+
+**Concrete failure mode this closes:** user starts project "AIL/HEAAL 홍보". Four turns later asks "추천 채널 봇도 만들어줘". The agent reflexively writes a generic `channel_recommender.ail` that recommends channels for *any* project, forgetting the meta-context. The user then has to say "it's for AIL/HEAAL you forgot". Don't make them remind you.
+
+**Rule:** Before writing any program, re-read INTENT.md (it's in PROJECT STATE). Whatever the top-level purpose is, **bake it into every `intent` goal and every relevant string literal** in the program you're writing. A "channel recommender" in a project about AIL should have `goal: "recommend the best developer communities to promote the AIL programming language and its HEAAL paradigm ..."` — not a generic one.
+
+**In every `<reply>`, confirm the project's subject when you name the new program**: "AIL/HEAAL 홍보용 채널 추천봇 만들었어요" — so the user sees the continuity.
+
+If the user's prompt genuinely implies a new pivot ("이제 게시는 그만두고 아예 새 프로젝트로 바꾸자"), that's a different thing — ask a single yes/no before rewriting INTENT.md's top-level purpose. But default is: keep the project's purpose, thread it through everything new.
+
 === INTENT.md IS CUMULATIVE MEMORY — NEVER OVERWRITE WHOLESALE ===
 
 INTENT.md is the project's accumulating memory across chat turns. Every clarification and constraint the user has ever given lives here. You read it on every turn via the PROJECT STATE block. If you overwrite it, the user's context disappears and the project's purpose seems to mutate turn-by-turn.
@@ -787,6 +799,106 @@ def save_project_secret(project, name: str, value: str) -> None:
         pass
     os.replace(tmp, path)
     os.environ[name] = value
+
+
+def export_history_as_markdown(project) -> str:
+    """Render `.ail/chat_history.jsonl` as a standalone markdown
+    document the user can save, share, or paste elsewhere. Turns
+    render as headed sections; file-writes render as inline tags;
+    run_result entries render as fenced code blocks.
+    """
+    import time
+    marker = project.state_dir / "chat_history.jsonl"
+    lines: list[str] = []
+    lines.append(f"# {project.root.name} — chat export")
+    lines.append("")
+    lines.append(
+        f"_Exported: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}_"
+    )
+    lines.append("")
+    if not marker.is_file():
+        lines.append("(no history yet)")
+        return "\n".join(lines)
+
+    try:
+        raw = marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        lines.append("(could not read chat history)")
+        return "\n".join(lines)
+
+    turn = 0
+    for entry_line in raw.splitlines():
+        entry_line = entry_line.strip()
+        if not entry_line:
+            continue
+        try:
+            entry = json.loads(entry_line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        kind = entry.get("kind")
+        if kind == "run_result":
+            lines.append("### Run result")
+            lines.append("")
+            if entry.get("ok"):
+                lines.append("```text")
+                lines.append(str(entry.get("value", "")).rstrip())
+                lines.append("```")
+            else:
+                lines.append("```text")
+                err = entry.get("error") or entry.get("value") or "(no message)"
+                lines.append(str(err).rstrip())
+                lines.append("```")
+                diag = entry.get("diagnostic")
+                if diag:
+                    lines.append("")
+                    lines.append("_Diagnostic:_")
+                    lines.append("```text")
+                    lines.append(str(diag).rstrip())
+                    lines.append("```")
+            lines.append("")
+            continue
+        # Regular turn
+        turn += 1
+        lines.append("---")
+        lines.append("")
+        lines.append(f"## Turn {turn}")
+        lines.append("")
+        user = str(entry.get("user", "")).strip()
+        if user:
+            lines.append("**User**")
+            lines.append("")
+            for ul in user.splitlines() or [""]:
+                lines.append(f"> {ul}")
+            lines.append("")
+        reply = str(entry.get("reply", "")).strip()
+        if reply:
+            lines.append("**Agent**")
+            lines.append("")
+            lines.append(reply)
+            lines.append("")
+        files = entry.get("files") or []
+        if files:
+            rendered_files = []
+            for f in files:
+                if not isinstance(f, dict):
+                    continue
+                path = f.get("path", "?")
+                if f.get("skipped"):
+                    rendered_files.append(
+                        f"- ✗ `{path}` — {f.get('skipped')}")
+                else:
+                    rendered_files.append(
+                        f"- ✓ `{path}` ({f.get('bytes', '?')} bytes)")
+            if rendered_files:
+                lines.append("**Files written:**")
+                lines.append("")
+                lines.extend(rendered_files)
+                lines.append("")
+        action = entry.get("action")
+        if action:
+            lines.append(f"**Action:** `{action}`")
+            lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _parse_check(source: str) -> Optional[str]:

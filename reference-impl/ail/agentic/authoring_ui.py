@@ -20,6 +20,9 @@ def render_authoring_page(
     reload preserves the conversation across restarts."""
     name = escape(project_name or "ail project")
     history_json = _history_to_json_embed(history)
+    # Safely quoted project name for embedding in JS.
+    import json as _json
+    json_project_name = _json.dumps(project_name or "ail-project")
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -46,6 +49,9 @@ def render_authoring_page(
     header {{ margin-bottom: 12px; }}
     h1 {{ margin: 0; font-size: 18px; letter-spacing: -0.01em; }}
     .sub {{ color: var(--muted); font-size: 13px; margin-top: 2px; }}
+    .sub a {{ color: var(--muted); text-decoration: underline;
+      text-decoration-color: #d1d5db; cursor: pointer; }}
+    .sub a:hover {{ color: #111; text-decoration-color: #111; }}
     .thread {{ flex: 1; overflow-y: auto; padding: 12px 0;
       display: flex; flex-direction: column; gap: 10px; }}
     .turn {{ display: flex; }}
@@ -163,7 +169,10 @@ def render_authoring_page(
   <div class="page">
     <header>
       <h1>{name}</h1>
-      <div class="sub">ail authoring · {escape(host)}:{port} · 채팅으로 프로젝트를 만드세요</div>
+      <div class="sub">ail authoring · {escape(host)}:{port} · 채팅으로 프로젝트를 만드세요
+        · <a href="#" id="export-chat">대화 내보내기 / Export</a>
+        · <a href="#" id="copy-chat">복사 / Copy</a>
+      </div>
     </header>
 
     <div class="thread" id="thread">
@@ -641,6 +650,47 @@ def render_authoring_page(
       return false;
     }}
 
+
+    // Chat export / copy affordances.
+    async function fetchChatMarkdown() {{
+      const r = await fetch('/authoring-chat-export');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.text();
+    }}
+
+    document.getElementById('export-chat').addEventListener('click',
+      async (e) => {{
+        e.preventDefault();
+        try {{
+          const md = await fetchChatMarkdown();
+          const blob = new Blob([md], {{ type: 'text/markdown' }});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = {json_project_name} + '-chat.md';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        }} catch (err) {{
+          addError('내보내기 실패 / export failed: ' + err.message);
+        }}
+    }});
+
+    document.getElementById('copy-chat').addEventListener('click',
+      async (e) => {{
+        e.preventDefault();
+        try {{
+          const md = await fetchChatMarkdown();
+          await navigator.clipboard.writeText(md);
+          const link = e.currentTarget;
+          const orig = link.textContent;
+          link.textContent = '✓ 복사됨 / copied';
+          setTimeout(() => {{ link.textContent = orig; }}, 1500);
+        }} catch (err) {{
+          addError('복사 실패 / copy failed: ' + err.message);
+        }}
+    }});
 
     msgEl.focus();
   </script>
