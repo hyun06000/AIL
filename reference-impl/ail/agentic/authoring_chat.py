@@ -809,11 +809,16 @@ The outer loop just dispatches: execute what the model writes, feed the result b
 
 This pattern handles services the authoring model has never seen before. The intent model reads the guide at runtime and writes the right tool for each step.
 
+**The `goal:` string must state the END GOAL only — never hint at steps.**
+❌ WRONG goal: `"...performs the next needed action (fetch guide, register, create post, etc.)"`
+✅ CORRECT goal: `"Promote AIL on Moltbook. The guide tells you how. History shows what's done."`
+If you name steps in the goal, the model follows YOUR sequence instead of discovering the right one.
+
 ```ail
 // INPUT: 비워두세요. 에이전트가 스스로 판단합니다.
 
 intent next_action(guide: Text, history: Text) -> Text {{
-    goal: "You are an AIL authoring agent. Read the service guide and history, then either:\\n  1. Write a complete AIL program (entry main(input: Text) {{ ... }}) that performs the next needed action.\\n  2. Return DONE: <result_url_or_summary> when finished.\\nYou may use any AIL effect: http.get, http.post_json, state.read, state.write, parse_json, etc.\\nThe program you write will be executed immediately and its return value fed back to you.\\nGuide:\\n{{guide}}\\nHistory so far:\\n{{history}}"
+    goal: "You are an AIL authoring agent. Goal: <STATE THE END GOAL HERE — e.g. 'Promote AIL on Moltbook'>. The guide tells you everything about the service API. The history shows what's been done so far. Write ONE complete AIL program (entry main(input: Text) {{ ... }}) that makes progress toward the goal, or return DONE: <result> when finished. You may use any AIL effect: http.get, http.post_json, state.read, state.write, parse_json, etc. Do NOT pre-plan steps — let the guide and history tell you what to do next.\\nGuide:\\n{{guide}}\\nHistory so far:\\n{{history}}"
 }}
 
 evolve next_action {{
