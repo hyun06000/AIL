@@ -745,14 +745,14 @@ def render_authoring_page(
 
       // 1. Fenced code blocks (``` ... ```) — extract before inline pass
       const fenced = [];
-      text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {{
+      text = text.replace(/```(\\w*)\\n([\\s\\S]*?)```/g, (_, lang, code) => {{
         const idx = fenced.length;
-        fenced.push(`<pre><code>${{esc(code.replace(/\n$/,''))}}</code></pre>`);
+        fenced.push(`<pre><code>${{esc(code.replace(/\\n$/,''))}}</code></pre>`);
         return `\x00FENCED${{idx}}\x00`;
       }});
 
       // 2. Split into blocks by blank lines
-      const blocks = text.split(/\n{{2,}}/);
+      const blocks = text.split(/\\n{{2,}}/);
       const rendered = blocks.map(block => {{
         // Restore fenced placeholders
         if (/^\x00FENCED\d+\x00$/.test(block.trim())) {{
@@ -761,7 +761,7 @@ def render_authoring_page(
         // hr
         if (/^---+$/.test(block.trim())) return '<hr>';
 
-        const lines = block.split('\n');
+        const lines = block.split('\\n');
 
         // Heading (# at start of block's first line)
         const hm = lines[0].match(/^(#{1,3})\s+(.+)/);
@@ -807,7 +807,7 @@ def render_authoring_page(
 
     function looksLikeMarkdown(text) {{
       // Heuristic: contains at least one markdown marker
-      return /^#{1,3}\s|^\s*[-*]\s|\*\*|\[.+\]\(|^---/m.test(text);
+      return /^#{{1,3}}\s|^\s*[-*]\s|\*\*|\[.+\]\(|^---/m.test(text);
     }}
 
     function addRunResult(r) {{
