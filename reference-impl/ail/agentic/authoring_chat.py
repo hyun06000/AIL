@@ -565,6 +565,8 @@ Rules:
 
 **WEB SEARCH — `perform search.web`:**
 
+**TRIGGER RULE:** When the user asks you to research, look up, find, investigate, or check anything about the real world — keywords like "조사해줘", "찾아줘", "알아봐줘", "검색해줘", "어떤 X가 있어", "최신", "요즘" etc. — **you MUST write and run a `search.web` program first.** Do NOT answer from your training knowledge. Training data is stale; the user wants live results. Write the program, run it, then base your reply on what the program returns.
+
 When the program needs to look something up on the web, use `perform search.web(query, count?)`.
 - Returns `Result[List[Record]]`. Each Record has `title`, `url`, `snippet`.
 - The runtime tries Google (if `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX` are set), then SearXNG (if `SEARXNG_BASE_URL` is set), then DuckDuckGo — automatically. The author writes one line; the runtime finds the best available backend.

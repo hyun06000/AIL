@@ -4,6 +4,20 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.21.0 — 2026-04-24
+
+**Authoring prompt: force `search.web` on research requests.**
+
+Agent was answering "가장 큰 에이전트 전용 커뮤니티를 알려줘" from training
+data instead of writing a `search.web` program. Root cause: the `search.web`
+section said "when the program needs to look something up" — framed around
+program intent, not user intent. Added a TRIGGER RULE: any user request that
+involves researching, looking up, or investigating real-world information must
+produce a `search.web` program first; answering from training knowledge is
+forbidden for live-world queries.
+
+---
+
 ## v1.20.0 — 2026-04-24
 
 **`perform ail.run` — meta-programming / autonomous agent primitive.**
