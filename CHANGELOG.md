@@ -4,6 +4,56 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.15.3 — 2026-04-23
+
+**Overwrite-to-iterate regression: agent kept flattening prior
+programs into `app.ail`.**
+
+hyun06000's next promo-bot session ended with a single `app.ail`
+where v1.13.1 had left three distinct files per channel. The
+"new program = new file" rule existed since v1.13.1 but was a
+single sentence buried in the memory section — and the rest of the
+prompt mentioned `app.ail` as the canonical target 8+ times (XML
+protocol example, Finish-the-Job section, invocation constraints,
+file-docstring). The agent correctly tracked the dominant signal
+and the one sentence lost.
+
+### Prompt restructure
+
+- **YOUR RESPONSE FORMAT** example now uses `DESCRIPTIVE_NAME.ail`
+  as the placeholder and calls out that `app.ail` is a reserved
+  legacy slot, not a rolling catch-all.
+- **FINISH THE JOB** section scrubbed of all `app.ail` hardcoding;
+  now references "the `.ail` program" / "a descriptive filename".
+- **New dedicated section: `=== ONE PROGRAM, ONE FILE — NEVER OVERWRITE TO ITERATE ===`**
+  — hard rule with decision procedure for new-vs-iteration,
+  canonical Bluesky-overwrite failure example verbatim, and a
+  pre-emit checklist the agent runs before choosing a filename.
+- Invocation constraint: `"do not emit ready_to_run until the
+  relevant .ail program is coherent"` (was: "both INTENT.md and
+  app.ail").
+
+### Regression guard
+
+`tests/test_authoring_prompt_structure.py` — 5 assertions that lock
+in the shape of the prompt so a future edit that re-introduces the
+bias triggers a test failure:
+- `ONE PROGRAM, ONE FILE` section present.
+- Bluesky-overwrite anti-pattern verbatim.
+- YOUR RESPONSE FORMAT doesn't hardcode `app.ail`.
+- Carries forward the v1.15.0 `http.post_json` rule and v1.15.2
+  `# INPUT:` rule — these had no structural guard before.
+
+### Legacy test update
+
+`test_prompt_demands_finishing_the_job_in_one_turn` asserted the
+old "must include both INTENT.md and app.ail" phrasing, which
+contradicted v1.14.0's INTENT.md demotion and v1.15.3's descriptive-
+filename shift. Updated to require the `.ail` + `ready_to_run` +
+claim-reality rules; INTENT.md is now optional per v1.14.0.
+
+---
+
 ## v1.15.2 — 2026-04-23
 
 **Critical: chat page lost every message past the first on reload.**

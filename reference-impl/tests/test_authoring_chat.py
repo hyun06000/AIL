@@ -1038,29 +1038,29 @@ def test_prompt_demands_finishing_the_job_in_one_turn(tmp_path):
     """v1.13.3 — two consecutive field tests where agent:
     1. Wrote INTENT.md only, never app.ail, never ready_to_run.
     2. Claimed '완성!' and told user to paste secret into an input
-       box — but no env.read was in (non-existent) app.ail so no
-       input box appeared. User waited on a phantom UI.
+       box — but no env.read was in the (non-existent) program so
+       no input box appeared. User waited on a phantom UI.
 
-    Prompt must require finishing the job (INTENT.md + app.ail +
-    ready_to_run) AND must ban claim-reality mismatches."""
+    Prompt must require a runnable `.ail` + ready_to_run, and must
+    ban claim-reality mismatches. (v1.14.0 demoted INTENT.md to
+    optional — the `.ail` is the only required artifact.)"""
     proj = Project.init(tmp_path / "finisher")
     chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
     prompt = chat._build_goal_prompt(
-        state={"INTENT.md": "", "app.ail": ""},
+        state={"app.ail": ""},
         history=[],
         user_message="PR 자동 생성 봇 만들어줘",
     )
     # Explicit "finished" requirements.
     assert "FINISH THE JOB IN ONE TURN" in prompt
-    assert "must include both INTENT.md" in prompt or \
-        "MUST include both INTENT.md" in prompt
+    # The `.ail` file is mandatory; the action must be ready_to_run.
+    assert ".ail`" in prompt  # referenced in finish-rule section
+    assert "ready_to_run" in prompt
     # Counter-examples listed.
     assert "I'll build X" in prompt
     # Claim-reality matching rule.
     assert "Don't lie about what you did" in prompt
     assert "phantom UI" in prompt
-    # env.read → UI input-box dependency is spelled out.
-    assert "no call, no input box" in prompt
 
 
 def test_prompt_rejects_draft_only_as_first_choice(tmp_path):
