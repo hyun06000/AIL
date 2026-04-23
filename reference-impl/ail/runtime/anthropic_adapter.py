@@ -51,12 +51,16 @@ class AnthropicAdapter:
                     {"role": "assistant", "content": "<reply>"},
                 ],
             )
-            text = "<reply>" + "".join(
+            import re as _re
+            raw_text = "<reply>" + "".join(
                 block.text for block in resp.content if getattr(block, "type", None) == "text"
             ).strip()
-            import re as _re
-            m = _re.search(r"<reply>(.*?)</reply>", text, _re.DOTALL)
-            value = m.group(1).strip() if m else text
+            fm = _re.search(r"<file[^>]*>(.*?)</file>", raw_text, _re.DOTALL)
+            if fm:
+                value = fm.group(1).strip()
+            else:
+                rm = _re.search(r"<reply>(.*?)</reply>", raw_text, _re.DOTALL)
+                value = rm.group(1).strip() if rm else raw_text
             return ModelResponse(
                 value=value,
                 confidence=0.9,
