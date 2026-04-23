@@ -206,8 +206,31 @@ def _render_value(value):
 def _strip_value_envelopes(value, _depth: int = 0):
     """Peel off `{"value": X}` and `{"value": X, "confidence": N}`
     dict wrappers recursively (capped at 6 levels so a truly
-    pathological recursive structure can't loop us)."""
+    pathological recursive structure can't loop us).
+
+    Also handles string-encoded JSON envelopes — when a program calls
+    `to_text(result_dict)` or `encode_json(result_dict)` and the result
+    is a string like '{"value": "# actual content"}', this unwraps the
+    inner value so the user sees the content, not the JSON wrapper.
+    Only unwraps strings that are SOLELY a JSON envelope (the entire
+    string is `{...}` with nothing else); strings that merely CONTAIN
+    JSON as part of a larger document are left alone.
+    """
     if _depth >= 6:
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("{") and stripped.endswith("}"):
+            try:
+                import json as _json
+                parsed = _json.loads(stripped)
+                if isinstance(parsed, dict):
+                    keys = set(parsed.keys())
+                    if keys == {"value"} or keys == {"value", "confidence"}:
+                        return _strip_value_envelopes(
+                            parsed["value"], _depth + 1)
+            except (ValueError, TypeError):
+                pass
         return value
     if not isinstance(value, dict):
         return value

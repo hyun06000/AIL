@@ -509,6 +509,39 @@ names = join(map(slice(items, 0, 5), "repo_name"), ", ")
 intent summarize_repos(names) -> Text  # names is ~100 chars
 ```
 
+**NEVER put `to_text(dict)` or `encode_json(x)` in your return string:**
+
+If you call `to_text()` on a parsed JSON result (a dict/record), you get raw JSON like `{{"value": "..."}}` — unreadable to the user. The actual content is buried inside.
+
+```ail
+# WRONG — returns: {{"value": "# 가이드\n..."}}  ← user sees JSON
+guide = perform http.get(url)
+parsed = unwrap(parse_json(guide.body))
+return to_text(parsed)                    # ← this produces JSON
+
+# CORRECT — extract the field you want, return it directly
+guide = perform http.get(url)
+parsed = unwrap(parse_json(guide.body))
+return get(parsed, "guide_text")          # ← plain string
+```
+
+The same applies to building return strings with `encode_json()` — only use that when the program's PURPOSE is to return JSON to a machine, not a human.
+
+**Keep `intent` outputs focused — one topic per call:**
+
+`intent` calls the LLM internally. If you ask it to generate a comprehensive multi-section document in one call, the LLM may stop mid-response. Instead: one intent per section (or per item), then `join()` the pieces.
+
+```ail
+# RISKY — LLM may truncate a 3000-word guide
+intent write_full_guide(all_pages_text) -> Text
+
+# SAFER — three focused calls, assembled by the program
+intent summarize_signup(page1_text) -> Text
+intent summarize_features(page2_text) -> Text
+intent summarize_pricing(page3_text) -> Text
+return join([signup, features, pricing], "\\n\\n---\\n\\n")
+```
+
 **WEB SEARCH — `perform search.web`:**
 
 When the program needs to look something up on the web, use `perform search.web(query, count?)`.
