@@ -10,12 +10,26 @@ for local development and small-traffic demos. Production hardening
 from __future__ import annotations
 
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
 
 from .. import run as ail_run
 from .agent import _looks_like_error
 from .project import Project
+
+# Per-project live log buffer. Key = project root str.
+# Each entry: {"lines": [...], "lock": threading.Lock(), "run_id": int}
+_run_log: dict[str, dict] = {}
+_run_log_lock = threading.Lock()
+
+
+def _get_log_state(project_key: str) -> dict:
+    with _run_log_lock:
+        if project_key not in _run_log:
+            _run_log[project_key] = {
+                "lines": [], "lock": threading.Lock(), "run_id": 0}
+        return _run_log[project_key]
 
 
 def _friendly_api_error(exc: BaseException) -> str:
@@ -269,6 +283,32 @@ def _make_handler(project: Project):
             return
 
         def do_GET(self):  # noqa: N802 — stdlib name
+            if self.path.startswith("/run-log-poll"):
+                from urllib.parse import urlparse, parse_qs
+                import json as _json
+                qs = parse_qs(urlparse(self.path).query)
+                try:
+                    since = int(qs.get("since", ["0"])[0])
+                except ValueError:
+                    since = 0
+                log_state = _get_log_state(str(project.root))
+                with log_state["lock"]:
+                    lines = log_state["lines"][since:]
+                    total = len(log_state["lines"])
+                    run_id = log_state["run_id"]
+                body = _json.dumps({
+                    "lines": lines,
+                    "total": total,
+                    "run_id": run_id,
+                }, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             if self.path == "/authoring-env-list":
                 import json as _json
                 from .authoring_chat import list_project_secret_keys
@@ -552,8 +592,20 @@ def _make_handler(project: Project):
                 # without requiring a server restart.
                 from .authoring_chat import load_project_secrets
                 load_project_secrets(project)
+                # Reset the live log buffer for this run.
+                log_state = _get_log_state(str(project.root))
+                with log_state["lock"]:
+                    log_state["lines"] = []
+                    log_state["run_id"] += 1
+
+                def _log_cb(msg: str):
+                    with log_state["lock"]:
+                        log_state["lines"].append(msg)
+
                 try:
-                    result, trace = ail_run(str(program_path), input=run_input)
+                    result, trace = ail_run(
+                        str(program_path), input=run_input,
+                        log_callback=_log_cb)
                     value = result.value
                     is_err = _looks_like_error(value)
                     rendered = _render_value(value)

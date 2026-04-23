@@ -705,6 +705,33 @@ def render_authoring_page(
         pollTimer = setInterval(poll, 500);
         poll();  // immediate first check
 
+        // Live log polling — shows `perform log(msg)` lines in the
+        // placeholder while the run is in-flight.
+        let logSince = 0;
+        let logRunId = null;
+        const logPre = document.createElement('pre');
+        logPre.style.cssText = 'margin:6px 0 0;font-size:12px;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;color:#374151;';
+        placeholder.appendChild(logPre);
+        const logPoll = async () => {{
+          try {{
+            const lr = await fetch('/run-log-poll?since=' + logSince);
+            if (lr.status !== 200) return;
+            const ld = await lr.json();
+            if (logRunId === null) logRunId = ld.run_id;
+            if (ld.run_id !== logRunId) {{ logSince = 0; logRunId = ld.run_id; logPre.textContent = ''; }}
+            if (ld.lines && ld.lines.length > 0) {{
+              for (const line of ld.lines) {{
+                logPre.textContent += line + '\\n';
+              }}
+              logPre.scrollTop = logPre.scrollHeight;
+              scrollBottom();
+            }}
+            logSince = ld.total;
+          }} catch (e) {{}}
+        }};
+        const logTimer = setInterval(logPoll, 400);
+        logPoll();
+
         try {{
           const url = '/authoring-run?program=' + encodeURIComponent(selected);
           const r = await fetch(url, {{
@@ -712,6 +739,8 @@ def render_authoring_page(
             headers: {{ 'Content-Type': 'text/plain; charset=utf-8' }},
             body: input ? input.value : '',
           }});
+          clearInterval(logTimer);
+          await logPoll();  // final flush
           placeholder.remove();
           const text = await r.text();
           let data;
@@ -723,6 +752,7 @@ def render_authoring_page(
           addRunResult(data);
           scrollBottom();
         }} catch (e) {{
+          clearInterval(logTimer);
           placeholder.remove();
           addError('네트워크 오류: ' + e.message);
         }} finally {{

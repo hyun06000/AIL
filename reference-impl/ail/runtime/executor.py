@@ -72,7 +72,8 @@ class Executor:
     def __init__(self, program: Program, adapter: ModelAdapter,
                  ask_human=None, metric_fn=None, approve_review=None,
                  calibrator: Optional[Calibrator] = None,
-                 _ail_run_depth: int = 0):
+                 _ail_run_depth: int = 0,
+                 log_callback=None):
         """
         Parameters:
           program       — compiled AIL program
@@ -100,6 +101,7 @@ class Executor:
         self.approve_review = approve_review or (lambda _info: False)
         self.calibrator = calibrator if calibrator is not None else default_calibrator()
         self._ail_run_depth = _ail_run_depth
+        self.log_callback = log_callback
 
         # index declarations
         self.intents: dict[str, IntentDecl] = {}
@@ -444,6 +446,11 @@ class Executor:
         if name == "log":
             msg = (args[0].value if args else "")
             print(f"[log] {msg}")
+            if self.log_callback is not None:
+                try:
+                    self.log_callback(str(msg))
+                except Exception:
+                    pass
             return ConfidentValue(None, 1.0, origin=origin)
         if name == "http.get":
             return self._http_effect("GET", args, kwargs, origin)
@@ -1382,6 +1389,7 @@ class Executor:
                 approve_review=self.approve_review,
                 calibrator=self.calibrator,
                 _ail_run_depth=next_depth,
+                log_callback=self.log_callback,
             )
             result = sub.run_entry({"input": run_input})
             self.trace.record(
