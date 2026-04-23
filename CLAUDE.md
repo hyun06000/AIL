@@ -13,6 +13,7 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 5. **Harness IS the grammar.** AIL is not a harness around Python — it's a language where safety is grammatical. See [`docs/heaal.md`](docs/heaal.md).
 6. **Two runtimes must agree.** A feature that works only in Python is a Python feature. Go runtime is Phase-0 subset.
 7. **Benchmarks are the north star.** Every language change must be justified by benchmark impact (Rule 2 below).
+8. **No comments unless the WHY is non-obvious.** This codebase is read by AI. Comments that describe WHAT code does are token waste. Only add a comment when there is a hidden constraint, a subtle invariant, a workaround for a specific bug, or behavior that would genuinely surprise a reader. If removing the comment wouldn't confuse a future Claude, don't write it.
 
 ---
 

@@ -322,6 +322,33 @@ def _make_handler(project: Project):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+
+            if self.path.startswith("/authoring-file"):
+                from urllib.parse import urlparse, parse_qs
+                qs = parse_qs(urlparse(self.path).query)
+                fname = (qs.get("path", [""])[0] or "").strip()
+                if not fname or "/" in fname or "\\" in fname or ".." in fname:
+                    self._send_text(400, "invalid path\n")
+                    return
+                fpath = project.root / fname
+                try:
+                    fpath.relative_to(project.root.resolve())
+                except ValueError:
+                    self._send_text(400, "invalid path\n")
+                    return
+                try:
+                    content = fpath.read_text(encoding="utf-8")
+                except OSError:
+                    self._send_text(404, "not found\n")
+                    return
+                import json as _json
+                body = _json.dumps({"content": content}, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             # Classic service UI for external sharing. Users who set
             # `ready_to_serve` stay in the chat; /service is the
             # sharable URL they hand to non-chat consumers (curl,

@@ -77,10 +77,19 @@ def render_authoring_page(
       border: 1px solid var(--border); border-bottom-left-radius: 4px; }}
     .files {{ display: flex; flex-direction: column; gap: 4px;
       margin: 4px 0 10px 14px; font-size: 12px; color: var(--muted); }}
-    .file-tag {{ display: inline-block; padding: 2px 8px;
-      background: #f3f4f6; border-radius: 4px;
+    .file-tag {{ display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; background: #f3f4f6; border-radius: 4px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 11px; }}
+      font-size: 11px; cursor: pointer; user-select: none; }}
+    .file-tag:hover {{ background: #e5e7eb; }}
+    .file-tag .toggle-arrow {{ font-style: normal; font-size: 9px; opacity: 0.6; }}
+    .file-preview {{ display: none; margin: 2px 0 4px 0;
+      background: #1e1e2e; border-radius: 6px; overflow: hidden; }}
+    .file-preview.open {{ display: block; }}
+    .file-preview pre {{ margin: 0; padding: 12px 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px; color: #cdd6f4; white-space: pre; overflow-x: auto;
+      max-height: 400px; overflow-y: auto; }}
     .action-bar {{ margin: 8px 0; display: flex; flex-direction: column;
       gap: 6px; align-items: flex-start; padding-left: 14px; }}
     .run-btn {{ font-family: inherit; font-size: 14px; font-weight: 500;
@@ -394,15 +403,45 @@ def render_authoring_page(
         const box = document.createElement('div');
         box.className = 'files';
         files.forEach(f => {{
+          const wrapper = document.createElement('div');
+
           const tag = document.createElement('span');
           tag.className = 'file-tag';
           if (f.skipped) {{
             tag.textContent = '✗ ' + f.path + ' — ' + f.skipped;
             tag.style.color = '#b91c1c';
           }} else {{
-            tag.textContent = '✓ ' + f.path + ' (' + f.bytes + ' bytes)';
+            const arrow = document.createElement('span');
+            arrow.className = 'toggle-arrow';
+            arrow.textContent = '▶';
+            tag.appendChild(arrow);
+            tag.appendChild(document.createTextNode('✓ ' + f.path + ' (' + f.bytes + ' bytes)'));
+
+            const preview = document.createElement('div');
+            preview.className = 'file-preview';
+            const pre = document.createElement('pre');
+            preview.appendChild(pre);
+            wrapper.appendChild(preview);
+
+            let loaded = false;
+            tag.addEventListener('click', async () => {{
+              const isOpen = preview.classList.toggle('open');
+              arrow.textContent = isOpen ? '▼' : '▶';
+              if (isOpen && !loaded) {{
+                pre.textContent = '로딩 중…';
+                try {{
+                  const r = await fetch('/authoring-file?path=' + encodeURIComponent(f.path));
+                  const d = await r.json();
+                  pre.textContent = d.content;
+                }} catch(e) {{
+                  pre.textContent = '(읽기 실패)';
+                }}
+                loaded = true;
+              }}
+            }});
           }}
-          box.appendChild(tag);
+          wrapper.insertBefore(tag, wrapper.firstChild);
+          box.appendChild(wrapper);
         }});
         thread.appendChild(box);
       }}
@@ -865,8 +904,8 @@ def render_authoring_page(
       const blocks = text.split(/\\n{{2,}}/);
       const rendered = blocks.map(block => {{
         // Restore fenced placeholders
-        if (/^\x00FENCED\d+\x00$/.test(block.trim())) {{
-          return fenced[parseInt(block.match(/\d+/)[0])];
+        if (/^\x00FENCED\\d+\x00$/.test(block.trim())) {{
+          return fenced[parseInt(block.match(/\\d+/)[0])];
         }}
         // hr
         if (/^---+$/.test(block.trim())) return '<hr>';
@@ -874,23 +913,23 @@ def render_authoring_page(
         const lines = block.split('\\n');
 
         // Heading (# at start of block's first line)
-        const hm = lines[0].match(/^(#{1,3})\s+(.+)/);
+        const hm = lines[0].match(/^(#{1,3})\\s+(.+)/);
         if (hm) {{
           const lvl = hm[1].length;
           return `<h${{lvl}}>${{inlineRender(hm[2])}}</h${{lvl}}>`;
         }}
 
         // Unordered list
-        if (lines.every(l => /^\s*[-*]\s/.test(l) || l.trim() === '')) {{
-          const items = lines.filter(l => /^\s*[-*]\s/.test(l))
-            .map(l => `<li>${{inlineRender(l.replace(/^\s*[-*]\s+/, ''))}}</li>`);
+        if (lines.every(l => /^\\s*[-*]\\s/.test(l) || l.trim() === '')) {{
+          const items = lines.filter(l => /^\\s*[-*]\\s/.test(l))
+            .map(l => `<li>${{inlineRender(l.replace(/^\\s*[-*]\\s+/, ''))}}</li>`);
           return `<ul>${{items.join('')}}</ul>`;
         }}
 
         // Ordered list
-        if (lines.every(l => /^\s*\d+\.\s/.test(l) || l.trim() === '')) {{
-          const items = lines.filter(l => /^\s*\d+\.\s/.test(l))
-            .map(l => `<li>${{inlineRender(l.replace(/^\s*\d+\.\s+/, ''))}}</li>`);
+        if (lines.every(l => /^\\s*\\d+\\.\\s/.test(l) || l.trim() === '')) {{
+          const items = lines.filter(l => /^\\s*\\d+\\.\\s/.test(l))
+            .map(l => `<li>${{inlineRender(l.replace(/^\\s*\\d+\\.\\s+/, ''))}}</li>`);
           return `<ol>${{items.join('')}}</ol>`;
         }}
 
@@ -906,29 +945,26 @@ def render_authoring_page(
       // Inline code
       s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${{esc(c)}}</code>`);
       // Bold
-      s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      // Italic
-      s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
-      // Markdown links [text](url) — must come before bare URL pass
-      s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
+      s = s.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+      s = s.replace(/\\*(.+?)\\*/g, '<em>$1</em>');
+      s = s.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g,
         (_, t, u) => `<a href="${{esc(u)}}" target="_blank">${{esc(t)}}</a>`);
       // Bare URLs (http/https not already inside an href)
-      s = s.replace(/(?<!href=["'])https?:\/\/[^\s<>"')]+/g,
+      s = s.replace(/(?<!href=["'])https?:[/][/][^\\s<>"')]+/g,
         u => `<a href="${{esc(u)}}" target="_blank">${{esc(u)}}</a>`);
       return s;
     }}
 
     function linkifyText(text) {{
-      // For plain-text content: escape HTML, then linkify URLs.
       const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const escaped = esc(text);
-      return escaped.replace(/https?:\/\/[^\s<>"']+/g,
+      return escaped.replace(/https?:[/][/][^\\s<>"']+/g,
         u => `<a href="${{u}}" target="_blank">${{u}}</a>`);
     }}
 
     function looksLikeMarkdown(text) {{
       // Heuristic: contains at least one markdown marker
-      return /^#{{1,3}}\s|^\s*[-*]\s|\*\*|\[.+\]\(|^---/m.test(text);
+      return /^#{{1,3}}\\s|^\\s*[-*]\\s|\\*\\*|\\[.+\\]\\(|^---/m.test(text);
     }}
 
     function addRunResult(r) {{
