@@ -760,39 +760,98 @@ intent summarize_pricing(page3_text) -> Text
 return join([signup, features, pricing], "\\n\\n---\\n\\n")
 ```
 
+**SEQUENTIAL SCRIPT vs AUTONOMOUS AGENT — the most important design distinction:**
+
+An agent is NOT a script with steps pre-decided by the author. An agent is an autonomous entity that receives context + tools and DECIDES FOR ITSELF what to do.
+
+❌ **WRONG — sequential scripting (author decides every step):**
+```ail
+entry main(input: Text) {{
+    guide = perform http.get("https://service.com/skill.md")
+    endpoint = extract_endpoint(guide.body)   # author pre-decided this step is needed
+    payload = build_payload(input)            # author pre-decided this format
+    result = perform http.post_json(endpoint, payload)  # author pre-decided this order
+    post = compose_post(result.body)
+    perform http.post_json(post_url, post)
+}}
+```
+This is a script. The author is the decision-maker. The intent blocks are just text transformers. If any assumption is wrong, the program breaks.
+
+✅ **CORRECT — intent-driven agent (intent model decides):**
+```ail
+entry main(input: Text) {{
+    # 1. Gather context: give the agent everything it needs to know
+    guide_r = perform http.get("https://service.com/skill.md")
+    current_state = unwrap_or(perform state.read("agent_state"), "new")
+
+    # 2. Let the intent model decide what to do next
+    intent decide_next_action(guide: Text, state: Text, goal: Text) -> Text {{
+        goal: "Read the service guide and current agent state. Decide the single best next action to take toward the goal. Return JSON: {{action: 'register'|'post'|'wait', endpoint: '...', payload: {{...}}, reasoning: '...'}}"
+    }}
+    decision_json = decide_next_action(guide_r.body, current_state, "Register and promote AIL/HEAAL")
+    decision = unwrap(parse_json(decision_json))
+
+    # 3. Entry executes whatever the intent decided
+    if decision.action == "register" {{
+        result_r = perform http.post_json(decision.endpoint, decision.payload)
+        result = unwrap(parse_json(result_r.body))
+        perform state.write("agent_state", "registered")
+        perform state.write("api_key", result.token)
+        log = "✓ 등록 완료: " + result.token[:8] + "...\\n"
+    }}
+    if decision.action == "post" {{
+        api_key = unwrap(perform state.read("api_key"))
+        headers = {{"Authorization": "Bearer " + api_key}}
+        result_r = perform http.post_json(decision.endpoint, decision.payload, headers)
+        perform state.write("agent_state", "active")
+        log = "✓ 포스트 게시 완료\\n"
+    }}
+    perform schedule.every(86400)
+    return log
+}}
+```
+
+**Why this matters:**
+- The intent model reads the actual guide and figures out the endpoint, payload format, auth scheme — the author doesn't need to pre-decide these
+- If the service changes its API, the intent model adapts; a hardcoded script breaks
+- The agent is truly autonomous: give it goal + context, it figures out the path
+
+**For more complex agents — use `ail.run` so the intent model can execute its own tool calls:**
+```ail
+intent plan_action(guide: Text, state: Text, goal: Text) -> Text {{
+    goal: "Write an AIL snippet (just the body, no entry) that performs the correct next action. Use perform http.post_json / perform state.write etc. as needed."
+}}
+action_code = plan_action(guide_r.body, current_state, "...")
+result = perform ail.run("entry main(input: Text) {{\\n" + action_code + "\\n}}")
+```
+This gives the intent model actual tool execution power, not just text output.
+
 **RECURRING AUTONOMOUS AGENTS — `perform schedule.every`:**
 
-When the user wants an agent that acts on its own on a schedule ("매일 한 번 포스트", "every hour", "자동으로 돌아가게", "자율적으로 활동"), the pattern is:
+When the user wants an agent that acts on its own on a schedule ("매일 한 번 포스트", "every hour", "자동으로 돌아가게", "자율적으로 활동"), combine the intent-driven pattern above with scheduling:
 
 ```ail
 // INPUT: 첫 실행에만 필요한 설정 값을 입력하세요 (이후엔 schedule.every가 자동 재실행해요)
 entry main(input: Text) {{
-    already_set_up = unwrap_or(perform state.read("setup_done"), "no")
-    if already_set_up == "yes" {{
-        # recurring work: fetch, decide, post, etc.
-        intent compose_post(context: Text) -> Text
-        ...
-        perform human.approve(post_text)  # if irreversible
-        perform http.post_json(url, body, headers)
-        perform state.write("last_run", unwrap(perform clock.now()))
-    }} else {{
-        # first-run setup: register, store API key, etc.
-        result_r = perform http.post_json(...)
-        perform state.write("setup_done", "yes")
-        perform state.write("api_key", unwrap(parse_json(result_r.body)).token)
+    guide_r = perform http.get("https://service.com/skill.md")
+    current_state = unwrap_or(perform state.read("agent_state"), "new")
+    intent decide_next_action(guide: Text, state: Text) -> Text {{
+        goal: "Based on guide and state, decide: register (if new), post (if registered), or wait. Return JSON with action + payload."
     }}
-    perform schedule.every(86400)  # reschedule for 24 hours later
-    return "완료"
+    decision = unwrap(parse_json(decide_next_action(guide_r.body, current_state)))
+    # ... execute decision ...
+    perform schedule.every(86400)
+    return log
 }}
 ```
 
 **Critical rules for autonomous agents:**
-- `entry main(input: Text)` — ALWAYS declare `input` even if the recurring runs ignore it. This shows the **Run button** in the UI so the user can trigger the first run manually. Without it the Run button still appears (it always does), but with input the user can pass init data on first run.
-- `perform schedule.every(N)` — call this at the END of entry. It schedules the next run N seconds from now. Without it the agent runs once and stops.
-- `state.read` / `state.write` — use these to distinguish first-run setup from recurring work, and to persist credentials/state across runs.
-- **First run = user clicks Run button.** After that, `schedule.every` handles re-runs automatically. The user never needs to click again.
-- ❌ WRONG: telling the user "input을 참조 안 해서 런 버튼이 안 보여요" — the Run button ALWAYS appears. Never say this.
-- ❌ WRONG: Asking the user to choose between "manual trigger vs fully autonomous" — always provide BOTH: run button for first trigger, `schedule.every` for subsequent runs.
+- `entry main(input: Text)` — ALWAYS declare `input`. Run button always appears; input lets user pass config on first run.
+- `perform schedule.every(N)` — call at the END. Schedules next run N seconds from now.
+- `state.read` / `state.write` — persist state across runs so the agent knows what it's already done.
+- **First run = user clicks Run button.** `schedule.every` handles all subsequent runs automatically.
+- ❌ WRONG: telling the user "input을 참조 안 해서 런 버튼이 안 보여요" — the Run button ALWAYS appears.
+- ❌ WRONG: Asking the user to choose between "manual trigger vs fully autonomous".
 
 **AUTONOMOUS AGENTS — `perform ail.run`:**
 
