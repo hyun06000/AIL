@@ -57,13 +57,13 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 - `~/.pypirc` 직접 읽지 말 것 (transcript 노출). `twine`이 참조함.
 - PyPI는 yank만 가능, 삭제 불가. 버전·태그·CHANGELOG 일치 반드시 확인.
-- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0, 1.12.1, 1.12.2, 1.12.3 (로컬). PyPI는 1.10.1.
+- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0–1.12.4 (로컬). PyPI는 1.10.1.
 
 ---
 
 ## NOW — 2026-04-23
 
-**버전:** v1.12.3 (main = dev = origin, PyPI는 v1.10.1 상태). 서빙 모델: `ail-coder:7b-v3`.
+**버전:** v1.12.4 (main = dev = origin, PyPI는 v1.10.1 상태). 서빙 모델: `ail-coder:7b-v3`.
 
 **두 트랙 (상세: [`docs/heaal/README.md`](docs/heaal/README.md)):**
 - **AIL 트랙** — 언어 자체. R3/C4 기준선 AIL parse 80% / answer 70% vs Python 56%. Python 돌파 후 stable.
@@ -110,6 +110,7 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 - **v1.12.1 — authoring agent가 HEAAL / AIL 정체성을 알게 됨.** hyun06000 field test: "HEAAL이 뭐야?" → agent 모른다고 대답 + 웹검색 거부. 시스템 프롬프트에 PROJECT IDENTITY (AIL/HEAAL 한 문단) + KNOWLEDGE & RESEARCH 가이드 (모르는 주제면 "I can't search" 대신 "perform http.get로 가져오는 프로그램을 작성해드릴까요?" 제안) 추가.
 - **v1.12.2 — chat UI Enter=전송, Shift+Enter=줄바꿈.** 한글 IME 조합 중 Enter는 조합 완료로 처리 (isComposing + keyCode 229 guard).
 - **v1.12.3 — "Run"이 dead-end가 아니라 대화 내 실행으로.** hyun06000 field test: "실행해보기" 누르니 채팅 사라지고 서비스 UI로 교체됨, 잘못 생성된 프로그램을 고칠 방법 없음. 재설계: (1) Run 버튼 → `/authoring-run` → 결과가 채팅 내 result 버블로 나타남, 채팅 유지 (2) `ready_to_run`(대화 내 실행) vs `ready_to_serve`(장기 서비스 deploy, 명시적 선택) 구분 (3) `/back-to-chat` endpoint + 서비스 UI 상단의 "← 대화로 돌아가기" 버튼으로 언제든 대화 복귀 (4) run 결과가 history에 기록되어 다음 턴 에이전트가 에러 맥락 보고 수정 제안. `project_is_fresh` 로직 갱신: chat_history 있으면 그 자체로 채팅 모드.
+- **v1.12.4 — 채팅이 유일한 UI.** ready_to_run은 이제 한 번 누르고 사라지는 버튼이 아닌 **반복 호출 가능한 인라인 widget** (입력 textarea + Run 버튼, 결과 버블들이 누적). ready_to_serve는 **페이지 이동 없음** — 같은 widget이 초록색 "🌐 서비스 모드" 카드로 감싸져 나타나고 `/service` 공유 링크 포함. 새 route `GET /service` = classic textarea UI (외부 공유/curl용 새 탭). 페이지 전환 제로, confirm dialog 제로. 간단한 태스크(ail ask) ↔ 복잡한 태스크(ail up) 구분이 UI 전환이 아니라 카드 스타일 + 링크 유무로만 표현됨.
 
 ---
 

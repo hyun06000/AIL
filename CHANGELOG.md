@@ -4,6 +4,91 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.12.4 — 2026-04-23
+
+**Chat is the only UI.** Previously `ready_to_serve` clicked → page
+navigated away to the textarea service UI. Even with v1.12.3's "back
+to chat" button, that was still a page transition. Worse, once the
+program was "ready_to_run" the chat offered a one-shot Run button
+that disappeared after one click — if you wanted to call the service
+again with a different input you had to ask the agent for another
+turn.
+
+Reframe: the chat *is* the run surface. Calling the program is a
+widget you press repeatedly. Deploying as a service doesn't change
+the UI, it just adds a shareable URL.
+
+### Changed — `ready_to_run` renders an inline, repeatable widget
+
+Was: one "Run it" button, single click, result bubble, button gone.
+Now: an inline "Run" card with an optional input textarea + Run
+button. Press Run as many times as you want; each click produces a
+new result bubble below. Re-run with different inputs without
+bothering the agent.
+
+### Changed — `ready_to_serve` no longer navigates
+
+Was: click → confirm dialog → page swaps to service UI → chat dead.
+Now: click-free — the same widget renders, wrapped as a green
+"🌐 서비스 모드" card. Same repeatable call surface, plus a
+`/service` link for external consumers. The chat stays active; no
+confirm dialog, no page change.
+
+### Added — `GET /service`
+
+A dedicated route that serves the classic UI (view.html or the
+default textarea page) independent of chat state. This is the
+URL to hand out to non-chat consumers — curl users, teammates,
+other apps. Opens in a new tab when clicked from the service card
+so the chat tab stays alive.
+
+### Removed from the UI
+
+- The one-way `runNow()` JS (replaced by the repeatable widget).
+- The confirm-dialog `startAsService()` (serve no longer transitions).
+- Any remaining code that redirected after POST `/authoring-complete`
+  from chat — the endpoint still exists for backward compat and for
+  cases where someone actively WANTS to make the classic UI the
+  default on GET / (rare; involves manually marking the project).
+
+### Unchanged
+
+- `POST /authoring-run` still the call surface for the widget
+  (reads input from body, returns JSON outcome).
+- Chat history still records `run_result` entries so the agent sees
+  outcomes on the next turn.
+- `POST /back-to-chat` still works for anyone on an old authored
+  project with a marker.
+- Classic service UI still links back to chat via "← 대화로
+  돌아가기" when history exists (v1.12.3).
+
+### Agent prompt updated
+
+Teaches the agent that both actions keep the user in chat —
+`ready_to_run` for "simple task, one-shot or repeated call" and
+`ready_to_serve` for "they'll share this or want the /service link",
+but the UI difference is just framing (card color + share link), not
+navigation.
+
+### Tests
+
++3 tests in `test_authoring_chat.py`:
+
+- Inline run widget is wired (no more one-shot redirect button).
+- Service card links to /service route.
+- /service route serves the classic UI independently.
+
+493 passing (+3 from 490).
+
+### Why this matters
+
+"복잡한 태스크는 ail up으로 처리" — yes, but the UX should never
+force a page transition to express it. A dashboard, a webhook, a
+cron service are all just AIL programs you can call. The chat is
+the console.
+
+---
+
 ## v1.12.3 — 2026-04-23
 
 **Dead-end fix.** hyun06000 field-tested v1.12.0–2 and found the

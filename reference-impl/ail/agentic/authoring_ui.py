@@ -73,6 +73,29 @@ def render_authoring_page(
       padding: 10px 20px; border-radius: 8px; border: 1px solid #047857;
       background: #fff; color: #047857; cursor: pointer; }}
     .serve-btn:hover {{ background: #f0fdf4; }}
+    .run-card {{ background: #fff; border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 16px; margin: 4px 0 10px 14px;
+      max-width: 80%; display: flex; flex-direction: column; gap: 10px; }}
+    .run-card.service {{ background: #f0fdf4; border-color: #bbf7d0; }}
+    .run-card .title {{ font-size: 13px; font-weight: 600;
+      color: #047857; text-transform: uppercase; letter-spacing: 0.06em; }}
+    .run-card .desc {{ font-size: 13px; color: #374151; }}
+    .run-card .share-link {{ font-size: 13px; color: #047857;
+      text-decoration: none; display: inline-block; padding: 4px 0; }}
+    .run-card .share-link:hover {{ text-decoration: underline; }}
+    .run-card textarea {{ font-family: inherit; font-size: 14px;
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 6px; background: #fff; color: #111;
+      resize: vertical; min-height: 36px; max-height: 160px;
+      line-height: 1.4; }}
+    .run-card textarea:focus {{ outline: 2px solid #111;
+      outline-offset: -1px; }}
+    .run-card .run-inline {{ align-self: flex-start;
+      font-family: inherit; font-size: 13px; font-weight: 500;
+      padding: 8px 16px; border-radius: 6px; border: 0;
+      background: #047857; color: #fff; cursor: pointer; }}
+    .run-card .run-inline:hover {{ opacity: 0.9; }}
+    .run-card .run-inline:disabled {{ opacity: 0.5; cursor: wait; }}
     .run-result {{ background: #f0fdf4;
       border: 1px solid #bbf7d0; border-radius: 10px;
       padding: 12px 14px; margin: 4px 0 8px 14px; max-width: 80%; }}
@@ -211,24 +234,103 @@ def render_authoring_page(
       }}
 
       if (action === 'ready_to_run') {{
-        const bar = document.createElement('div');
-        bar.className = 'action-bar';
-        const btn = document.createElement('button');
-        btn.className = 'run-btn';
-        btn.textContent = '▶ 실행해보기 / Run it';
-        btn.onclick = runNow;
-        bar.appendChild(btn);
-        thread.appendChild(bar);
+        addRunWidget(false);
       }} else if (action === 'ready_to_serve' || action === 'ready_to_deploy') {{
-        const bar = document.createElement('div');
-        bar.className = 'action-bar';
-        const btn = document.createElement('button');
-        btn.className = 'serve-btn';
-        btn.textContent = '🌐 서비스로 띄우기 / Start as service';
-        btn.onclick = startAsService;
-        bar.appendChild(btn);
-        thread.appendChild(bar);
+        addRunWidget(true);
       }}
+    }}
+
+    // Inline widget that the user can invoke repeatedly without
+    // leaving the chat. For `ready_to_run` it's a plain run box.
+    // For `ready_to_serve` it's the same widget wrapped as a service
+    // card with a share link to /service (the classic service UI on
+    // a separate route, for handing out to non-chat consumers).
+    function addRunWidget(service) {{
+      const card = document.createElement('div');
+      card.className = 'run-card' + (service ? ' service' : '');
+
+      if (service) {{
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = '🌐 서비스 모드 / Service mode';
+        card.appendChild(title);
+        const desc = document.createElement('div');
+        desc.className = 'desc';
+        desc.textContent = '이 프로그램을 반복해서 호출할 수 있어요. ' +
+          '외부에 공유할 페이지도 준비돼 있어요.';
+        card.appendChild(desc);
+        const link = document.createElement('a');
+        link.className = 'share-link';
+        link.href = '/service';
+        link.target = '_blank';
+        link.textContent = '공유용 페이지 열기 / Open public page →';
+        card.appendChild(link);
+      }} else {{
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = '▶ 실행 / Run';
+        card.appendChild(title);
+      }}
+
+      const input = document.createElement('textarea');
+      input.rows = 1;
+      input.placeholder = service
+        ? '입력이 필요하면 여기 (비워두면 빈 입력) / input (optional)'
+        : '입력 (선택) / input (optional, leave blank if none)';
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.addEventListener('input', () => {{
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+      }});
+      input.addEventListener('keydown', (e) => {{
+        if (e.key === 'Enter' && !e.shiftKey
+            && !e.isComposing && e.keyCode !== 229) {{
+          e.preventDefault();
+          fire();
+        }}
+      }});
+      card.appendChild(input);
+
+      const runBtn = document.createElement('button');
+      runBtn.className = 'run-inline';
+      runBtn.textContent = '실행 / Run';
+      const fire = async () => {{
+        runBtn.disabled = true;
+        const placeholder = document.createElement('div');
+        placeholder.className = 'run-result';
+        placeholder.style.background = '#f3f4f6';
+        placeholder.style.borderColor = '#e5e7eb';
+        placeholder.textContent = '실행 중…';
+        thread.appendChild(placeholder);
+        scrollBottom();
+        try {{
+          const r = await fetch('/authoring-run', {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'text/plain; charset=utf-8' }},
+            body: input.value,
+          }});
+          placeholder.remove();
+          const text = await r.text();
+          let data;
+          try {{ data = JSON.parse(text); }}
+          catch (e) {{
+            addError('실행 결과 파싱 실패: ' + text.slice(0, 200));
+            return;
+          }}
+          addRunResult(data);
+          scrollBottom();
+        }} catch (e) {{
+          placeholder.remove();
+          addError('네트워크 오류: ' + e.message);
+        }} finally {{
+          runBtn.disabled = false;
+        }}
+      }};
+      runBtn.onclick = fire;
+      card.appendChild(runBtn);
+
+      thread.appendChild(card);
     }}
 
     function addRunResult(r) {{
@@ -319,52 +421,6 @@ def render_authoring_page(
       return false;
     }}
 
-    async function runNow() {{
-      // Run the current app.ail once, render the result as a bubble
-      // in the conversation, and stay in the chat. The user can then
-      // say "fix this" or "try again" without leaving the page.
-      const placeholder = document.createElement('div');
-      placeholder.className = 'run-result';
-      placeholder.style.background = '#f3f4f6';
-      placeholder.style.borderColor = '#e5e7eb';
-      placeholder.textContent = '실행 중…';
-      thread.appendChild(placeholder);
-      scrollBottom();
-      try {{
-        const r = await fetch('/authoring-run', {{ method: 'POST' }});
-        const text = await r.text();
-        placeholder.remove();
-        let data;
-        try {{
-          data = JSON.parse(text);
-        }} catch (e) {{
-          addError('실행 결과 파싱 실패: ' + text.slice(0, 200));
-          return;
-        }}
-        addRunResult(data);
-        scrollBottom();
-      }} catch (e) {{
-        placeholder.remove();
-        addError('네트워크 오류: ' + e.message);
-      }}
-    }}
-
-    async function startAsService() {{
-      if (!confirm('이 프로그램을 HTTP 서비스로 띄울까요?\\n' +
-                   '화면이 서비스 UI로 바뀝니다. 나중에 상단의 ' +
-                   '"← 대화로 돌아가기" 버튼으로 복귀할 수 있어요.\\n\\n' +
-                   'Start as a long-running HTTP service?')) return;
-      try {{
-        const r = await fetch('/authoring-complete', {{ method: 'POST' }});
-        if (!r.ok) {{
-          addError('전환 실패: ' + await r.text());
-          return;
-        }}
-        window.location.href = '/';
-      }} catch (e) {{
-        addError('네트워크 오류: ' + e.message);
-      }}
-    }}
 
     msgEl.focus();
   </script>

@@ -166,6 +166,55 @@ def _make_handler(project: Project):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            # Classic service UI for external sharing. Users who set
+            # `ready_to_serve` stay in the chat; /service is the
+            # sharable URL they hand to non-chat consumers (curl,
+            # teammates, other apps). Always renders the textarea /
+            # view.html page even for projects that still have an
+            # active authoring chat.
+            if self.path in ("/service", "/service/"):
+                view_path = project.root / "view.html"
+                if view_path.is_file():
+                    try:
+                        body = view_path.read_bytes()
+                    except OSError as e:
+                        self._send_text(500,
+                            f"could not read view.html: {e}\n")
+                        return
+                    self.send_response(200)
+                    self.send_header(
+                        "Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                from .web_ui import render_page, extract_preamble, entry_uses_input
+                try:
+                    intent_text = project.intent_path.read_text(encoding="utf-8")
+                except Exception:
+                    intent_text = ""
+                try:
+                    app_source = project.app_path.read_text(encoding="utf-8")
+                except Exception:
+                    app_source = ""
+                has_chat = (project.state_dir / "chat_history.jsonl").is_file()
+                html = render_page(
+                    project_name=project.root.name,
+                    intent_preamble=extract_preamble(intent_text),
+                    host=self.server.server_address[0],
+                    port=self.server.server_address[1],
+                    input_used=entry_uses_input(app_source),
+                    show_back_to_chat=has_chat,
+                )
+                body = html.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path in ("/", ""):
                 # Fresh project (no authored_at marker, no meaningful
                 # app.ail) → serve the authoring chat UI. Users describe

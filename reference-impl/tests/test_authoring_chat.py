@@ -504,12 +504,85 @@ def test_history_format_includes_run_results_for_agent_context(tmp_path):
     assert "ParseError" in prompt
 
 
+def test_chat_ui_renders_inline_run_widget_not_one_shot_button(tmp_path):
+    """v1.12.4 — the chat never leaves. `ready_to_run` renders an
+    inline card with input textarea + Run button the user can press
+    repeatedly, not a one-shot button that disappears after one run."""
+    from ail.agentic.authoring_ui import render_authoring_page
+    html = render_authoring_page(
+        project_name="x", host="127.0.0.1", port=8080,
+        history=[{
+            "user": "make X",
+            "reply": "ok",
+            "files": [],
+            "action": "ready_to_run",
+        }],
+    )
+    # The `addRunWidget` function exists and is wired to both actions.
+    assert "addRunWidget(false)" in html
+    assert "addRunWidget(true)" in html
+    # No more one-way-trip redirect to /authoring-complete from a
+    # button click — that endpoint is gone from the UI JS.
+    assert "authoring-complete" not in html
+
+
+def test_chat_ui_service_card_links_to_service_route(tmp_path):
+    """ready_to_serve renders the service card with a share link to
+    /service (classic UI on its own route, opened in a new tab)."""
+    from ail.agentic.authoring_ui import render_authoring_page
+    html = render_authoring_page(
+        project_name="x", host="127.0.0.1", port=8080, history=[])
+    # The share link is generated client-side; check the URL literal
+    # appears in the render widget code.
+    assert "'/service'" in html
+    # Service card has distinguishing copy so it's clearly "service
+    # mode" vs plain run.
+    assert "서비스 모드" in html
+
+
 def test_parse_recognizes_ready_to_serve_action(tmp_path):
     proj = Project.init(tmp_path / "p")
     chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
     _, _, action = chat._parse_response(
         "<reply>ok</reply><action>ready_to_serve</action>")
     assert action == "ready_to_serve"
+
+
+def test_service_route_serves_classic_ui_independently(tmp_path):
+    """v1.12.4 — /service is the shareable classic UI URL. Works
+    regardless of chat state; doesn't touch authored_at marker."""
+    proj = Project.init(tmp_path / "svcroute")
+    proj.write_app_source(
+        'entry main(input: Text) { return input }')
+    # Active chat (no marker). / serves chat, /service serves classic.
+    (proj.state_dir / "chat_history.jsonl").write_text(
+        '{"ts": 1, "user": "x", "reply": "y", "files": [], "action": null}\n',
+        encoding="utf-8",
+    )
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    # / → chat
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as r:
+        chat_body = r.read().decode("utf-8")
+    assert "ail authoring" in chat_body
+
+    # /service → classic UI
+    with urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/service", timeout=2
+    ) as r:
+        svc_body = r.read().decode("utf-8")
+    assert "ail authoring" not in svc_body  # not chat
+    assert "<textarea" in svc_body or "view.html" in svc_body.lower()
+
+    # authored_at marker not created as a side effect.
+    assert not (proj.state_dir / "authored_at").is_file()
 
 
 def test_authoring_complete_endpoint_transitions_state(tmp_path):
