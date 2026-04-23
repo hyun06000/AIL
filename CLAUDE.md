@@ -57,13 +57,13 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 - `~/.pypirc` 직접 읽지 말 것 (transcript 노출). `twine`이 참조함.
 - PyPI는 yank만 가능, 삭제 불가. 버전·태그·CHANGELOG 일치 반드시 확인.
-- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.12 (로컬). PyPI는 1.9.8.
+- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0 (로컬). PyPI는 1.9.12.
 
 ---
 
 ## NOW — 2026-04-23
 
-**버전:** v1.9.12 (main = dev = origin, PyPI는 v1.9.8 상태). 서빙 모델: `ail-coder:7b-v3`.
+**버전:** v1.10.0 (main = dev = origin, PyPI는 v1.9.12 상태). 서빙 모델: `ail-coder:7b-v3`.
 
 **두 트랙 (상세: [`docs/heaal/README.md`](docs/heaal/README.md)):**
 - **AIL 트랙** — 언어 자체. R3/C4 기준선 AIL parse 80% / answer 70% vs Python 56%. Python 돌파 후 stable.
@@ -97,7 +97,11 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 - `~/Desktop/code/personal/usd-now/` (실제 사용자 작성, exchangerate-api fetch 데모)
 - `reference-impl/examples/agentic/visit-counter/` (state effect 데모)
 
-**PyPI 미배포 변경:** v1.9.9~v1.9.12 (input-aware UI, HTML output, author model-id, schedule.every + news-ticker 예제). dev = main = origin, PyPI만 v1.9.8 상태. **L2 v2 종결 — PyPI 묶음 배포 타이밍.**
+**PyPI 미배포 변경:** v1.9.13 (view.html 파일 기반, HTML-in-entry revert), v1.10.0 (intent-return type validation + retry — HEAAL harness가 intent 경계까지 확장). PyPI는 v1.9.12.
+
+**최근 세션 핵심 변화:**
+- v1.9.10 HTML-in-entry path를 field test 피드백으로 revert (v1.9.13). AIL은 markup을 만들지 않음. `view.html` 파일 두면 서버가 serve.
+- v1.10.0 — intent 반환 타입 런타임 검증. `intent foo() -> Text`가 이제 진짜로 Text를 강제. JSON envelope, dict dump, code fence 모두 rejection → 1회 retry → 여전히 실패 시 confidence=0. HEAAL boundary 확장.
 
 ---
 

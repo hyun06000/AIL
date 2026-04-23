@@ -4,6 +4,89 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.10.0 — 2026-04-23
+
+**Closes a HEAAL harness gap.** Before v1.10, an intent declared
+`-> Text` was enforced only in syntax: whatever the model returned
+got piped through as a "Text" value — including nested records,
+code-fenced JSON envelopes, and raw fetched content the model had
+stuffed into a string. hyun06000's Korean news-dashboard hit this
+directly, getting a `{"overall_summary": ..., "news_cards": [...raw
+RSS XML...]}` blob rendered as a response body.
+
+HEAAL's claim is that AIL's grammar constrains what flows through a
+program. Leaving the intent boundary unvalidated was a hole in that
+claim. This release closes it for scalars and flat lists.
+
+### Added — intent-return validation
+
+New module `ail/runtime/intent_validation.py`:
+
+- `strip_code_fence(text)` — removes an outer ```` ```lang\n...\n``` ````
+  wrapper.
+- `validate_and_coerce(value, return_type)` — returns
+  `(coerced_value, error_or_None)` for `Text`, `Number`, `Boolean`,
+  and `[T]` (where T is one of those). Composite types (`Result[T]`,
+  records) are pass-through in this release.
+
+Validation rules:
+
+| Declared type | What gets rejected |
+|---|---|
+| `Text` | dict / list / JSON-envelope strings |
+| `Number` | non-numeric strings, booleans (via `bool is int`) |
+| `Boolean` | anything outside `true/false/yes/no/1/0` |
+| `[T]` | non-lists; element coercion recurses |
+
+### Added — retry on mismatch
+
+`_invoke_intent` now wraps the adapter call in
+`_invoke_with_validation`, which:
+
+1. Invokes the adapter as before.
+2. Runs `validate_and_coerce` on the response.
+3. On mismatch, retries **once** with the rejection reason appended
+   to the intent's constraints (so the retry is strictly stricter,
+   not looser).
+4. If the retry also fails, returns the raw value at
+   `confidence=0.0` — downstream `attempt` / confidence guards route
+   around it instead of crashing the program.
+
+### Trace events
+
+New events recorded to the ledger:
+
+- `intent_validation_retry` — first attempt failed; retrying
+- `intent_validation_failed` — retries exhausted; confidence floored
+
+### Spec + reference card
+
+`spec/08-reference-card.ai.md` and the bundled copy describe the
+harness. Authors writing intents now have an explicit contract for
+what a declared return type means at runtime.
+
+### Tests
+
+New `test_intent_validation.py` with 30 tests covering:
+
+- Code-fence stripping (language tag, no tag, non-string, nested).
+- Text / Number / Boolean / [T] coercion matrix.
+- Unknown and `None` return types pass through.
+- Executor integration: retry recovers from a first-turn misshapen
+  response.
+- Executor integration: persistent misshapen response floors
+  confidence to 0 with raw value surfaced.
+
+444 passing total (+30 from 414).
+
+### Not changed
+
+Composite types (`Result[T]`, records) are pass-through. They are
+the next design iteration — validation requires deciding how to
+prompt for structured shapes explicitly.
+
+---
+
 ## v1.9.13 — 2026-04-23
 
 **Architectural correction.** v1.9.10 made the agentic server detect

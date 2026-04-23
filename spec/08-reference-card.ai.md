@@ -85,6 +85,29 @@ intent NAME(param1: Type) -> ReturnType {
 
 Properties: delegates to a language model, returns (value, confidence), can be evolved.
 
+**Return-type harness (v1.10).** The runtime validates every intent
+response against the declared `ReturnType`:
+
+- `Text` must be a plain string. A response that parses as a JSON
+  dict or list is rejected — the author asked for text, not a data
+  payload.
+- `Number` must be numeric or a numeric string; booleans are rejected.
+- `Boolean` must be true/false or a trivial string (`"true"`, `"yes"`,
+  etc.).
+- `[T]` must be a list; every element is validated against the inner
+  type.
+- Outer markdown code fences (```` ```json\n...\n``` ````) are
+  stripped before validation — the model doesn't have to know about
+  fence conventions.
+
+On mismatch the runtime retries **once** with the rejection reason
+added to the constraints. If the retry also fails, the call returns
+at **confidence 0** so downstream `attempt` / `branch` / match
+confidence-guards can route around the bad value.
+
+Composite types (`Result[T]`, records) are pass-through in v1.10;
+tighter validation lands in a later release.
+
 ## context — SITUATIONAL ASSUMPTIONS
 
 ```ail

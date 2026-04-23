@@ -1410,6 +1410,63 @@ class Executor:
             origin=builtin_origin("calibration_of", parents_of(args)),
         )
 
+    def _invoke_with_validation(
+        self, *, intent: IntentDecl, goal_str: str,
+        constraints_str: list[str], context_dict: dict,
+        inputs: dict, examples,
+    ) -> tuple[ModelResponse, Any, Optional[str]]:
+        """Invoke the adapter and validate the response against the
+        declared return type. Retry once with a sharpened prompt on
+        mismatch. Returns (final_response, coerced_value, error).
+
+        On success the third element is None. On retries-exhausted
+        the caller is expected to lower confidence / record the
+        failure in the trace.
+        """
+        from .intent_validation import validate_and_coerce
+
+        response = self.adapter.invoke(
+            goal=goal_str,
+            constraints=constraints_str,
+            context=context_dict,
+            inputs=inputs,
+            expected_type=intent.return_type,
+            examples=examples,
+        )
+        coerced, err = validate_and_coerce(
+            response.value, intent.return_type)
+        if err is None:
+            return response, coerced, None
+
+        # First attempt didn't match the declared type. Record the
+        # mismatch, then retry once with the error fed back as a
+        # sharper constraint. The author's declared constraints are
+        # preserved so the retry is strictly stricter, not looser.
+        self.trace.record("intent_validation_retry",
+                          intent=intent.name,
+                          declared_type=intent.return_type,
+                          error=err)
+        sharpened = list(constraints_str) + [
+            f"Your previous response was rejected because it did not "
+            f"match the declared return type `{intent.return_type}`. "
+            f"Reason: {err}. Return ONLY a value of type "
+            f"`{intent.return_type}` — no JSON wrapping, no code "
+            f"fences, no explanatory prose, no nested records.",
+        ]
+        retry_response = self.adapter.invoke(
+            goal=goal_str,
+            constraints=sharpened,
+            context=context_dict,
+            inputs=inputs,
+            expected_type=intent.return_type,
+            examples=examples,
+        )
+        coerced2, err2 = validate_and_coerce(
+            retry_response.value, intent.return_type)
+        if err2 is None:
+            return retry_response, coerced2, None
+        return retry_response, coerced2, err2
+
     def _invoke_intent(
         self, intent: IntentDecl,
         args: list[ConfidentValue],
@@ -1461,12 +1518,12 @@ class Executor:
             self.trace.record("model_invoke", intent=intent.name, goal=goal_str,
                               constraints=constraints_str)
 
-            response = self.adapter.invoke(
-                goal=goal_str,
-                constraints=constraints_str,
-                context=context_dict,
+            response, coerced_value, validation_error = self._invoke_with_validation(
+                intent=intent,
+                goal_str=goal_str,
+                constraints_str=constraints_str,
+                context_dict=context_dict,
                 inputs={pname: local[pname].value for (pname, _) in intent.params if pname in local},
-                expected_type=intent.return_type,
                 examples=example_pairs or None,
             )
 
@@ -1477,6 +1534,30 @@ class Executor:
                               confidence=response.confidence,
                               prompt_tokens=raw.get("prompt_tokens") or raw.get("input_tokens") or 0,
                               completion_tokens=raw.get("completion_tokens") or raw.get("output_tokens") or 0)
+
+            # Validation outcome is recorded even on success so the
+            # trace shows the harness is live (not silently skipped).
+            if validation_error is None:
+                response = ModelResponse(
+                    value=coerced_value,
+                    confidence=response.confidence,
+                    model_id=response.model_id,
+                    raw=response.raw,
+                )
+            else:
+                self.trace.record("intent_validation_failed",
+                                  intent=intent.name,
+                                  declared_type=intent.return_type,
+                                  error=validation_error)
+                # Retries exhausted. Pass through the raw value but
+                # drop confidence to zero so downstream `attempt` /
+                # confidence guards route around this result.
+                response = ModelResponse(
+                    value=coerced_value,
+                    confidence=0.0,
+                    model_id=response.model_id,
+                    raw=response.raw,
+                )
 
             # Apply calibration: replace the model-reported confidence
             # with whatever past observations of this intent say the
