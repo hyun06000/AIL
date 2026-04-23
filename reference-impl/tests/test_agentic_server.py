@@ -11,7 +11,9 @@ import urllib.error
 import urllib.request
 
 from ail.agentic.project import Project
-from ail.agentic.server import _render_value, serve_project
+from ail.agentic.server import (
+    _diagnose_from_trace, _http_reason_hint, _render_value, serve_project,
+)
 
 
 # ---------- _render_value: dict / list formatting ----------
@@ -66,6 +68,111 @@ def test_render_value_unicode_not_escaped():
     v = {"msg": "안녕"}
     out = _render_value(v)
     assert "안녕" in out
+
+
+# ---------- _http_reason_hint ----------
+
+
+def test_http_reason_hint_auth_failures():
+    for code in (401, 403):
+        hint = _http_reason_hint(code)
+        assert "인증" in hint or "authentication" in hint
+        assert "demo" in hint  # warns about hardcoded fake keys
+
+
+def test_http_reason_hint_not_found():
+    assert "404" not in _http_reason_hint(404)  # text, not code
+    assert "not found" in _http_reason_hint(404).lower()
+
+
+def test_http_reason_hint_rate_limit():
+    assert "rate" in _http_reason_hint(429).lower()
+
+
+def test_http_reason_hint_server_error():
+    assert "server" in _http_reason_hint(503).lower()
+
+
+def test_http_reason_hint_success_is_empty():
+    assert _http_reason_hint(200) == ""
+
+
+# ---------- _diagnose_from_trace ----------
+
+
+class _FakeTrace:
+    def __init__(self, entries):
+        self.entries = entries
+
+
+class _FakeEntry:
+    def __init__(self, kind, **payload):
+        self.kind = kind
+        self.payload = payload
+
+
+def test_diagnose_from_trace_empty_returns_empty():
+    assert _diagnose_from_trace(_FakeTrace([])) == ""
+    assert _diagnose_from_trace(None) == ""
+
+
+def test_diagnose_surfaces_401_http_failure():
+    trace = _FakeTrace([
+        _FakeEntry("http_call", method="GET",
+                   url="https://newsapi.org/...?apiKey=demo",
+                   status=401.0, ok=False,
+                   body_preview='{"status":"error","code":"apiKeyInvalid"}'),
+    ])
+    out = _diagnose_from_trace(trace)
+    assert "401" in out
+    assert "newsapi.org" in out
+    # Action hint should point to ail chat
+    assert "ail chat" in out
+
+
+def test_diagnose_ignores_successful_http_calls():
+    trace = _FakeTrace([
+        _FakeEntry("http_call", method="GET",
+                   url="https://example.com/", status=200.0, ok=True),
+    ])
+    assert _diagnose_from_trace(trace) == ""
+
+
+def test_diagnose_surfaces_intent_validation_failure():
+    trace = _FakeTrace([
+        _FakeEntry("intent_validation_failed",
+                   intent="summarize", declared_type="Text",
+                   error="declared Text but response parses as a JSON dict"),
+    ])
+    out = _diagnose_from_trace(trace)
+    assert "summarize" in out
+    assert "Text" in out
+
+
+def test_diagnose_caps_to_three_hints():
+    # Create 10 failing http_calls; diagnostic should show at most 3.
+    entries = [
+        _FakeEntry("http_call", method="GET", url=f"http://e{i}/",
+                   status=500.0, ok=False, body_preview="")
+        for i in range(10)
+    ]
+    out = _diagnose_from_trace(_FakeTrace(entries))
+    # 3 url lines max
+    assert out.count("http://e") <= 3
+
+
+def test_diagnose_handles_network_error():
+    trace = _FakeTrace([
+        _FakeEntry("http_call", method="GET",
+                   url="https://offline.invalid/", status=None, ok=False,
+                   network_error="Name or service not known"),
+    ])
+    out = _diagnose_from_trace(trace)
+    assert "offline.invalid" in out
+    assert "network" in out.lower() or "네트워크" in out
+
+
+# ---------- _render_value continued ----------
 
 
 def test_render_value_non_json_serializable_falls_back_to_str():

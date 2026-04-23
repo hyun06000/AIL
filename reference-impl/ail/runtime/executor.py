@@ -706,6 +706,11 @@ class Executor:
         thread through an `attempt` block to fall back. Non-2xx is NOT
         confidence 0 by itself; an API returning 404 is a real response,
         not a broken pipe.
+
+        Every call records an `http_call` trace event with method, URL,
+        status, and ok. The agentic server uses those entries to turn
+        opaque "fetch failed" errors into actionable diagnostics
+        (status code, URL, body preview) for non-programmer users.
         """
         import urllib.request
         import urllib.error
@@ -734,6 +739,11 @@ class Executor:
                 "body": content,
                 "ok": 200 <= status < 300,
             }
+            self.trace.record(
+                "http_call", method=method, url=url,
+                status=status, ok=result["ok"],
+                body_preview=content[:200] if not result["ok"] else None,
+            )
             return ConfidentValue(result, 1.0, origin=origin)
         except urllib.error.HTTPError as e:
             # HTTPError carries a status — still a real response.
@@ -747,8 +757,19 @@ class Executor:
                 "body": content,
                 "ok": False,
             }
+            self.trace.record(
+                "http_call", method=method, url=url,
+                status=status, ok=False,
+                reason=getattr(e, "reason", ""),
+                body_preview=content[:200],
+            )
             return ConfidentValue(result, 1.0, origin=origin)
         except urllib.error.URLError as e:
+            self.trace.record(
+                "http_call", method=method, url=url,
+                status=None, ok=False,
+                network_error=str(e),
+            )
             return ConfidentValue(
                 {"_result": True, "ok": False,
                  "error": f"http {method} {url}: {e}"},

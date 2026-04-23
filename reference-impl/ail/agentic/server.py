@@ -18,6 +18,108 @@ from .agent import _looks_like_error
 from .project import Project
 
 
+def _diagnose_from_trace(trace) -> str:
+    """Turn a Trace of a failed request into a human-readable diagnostic.
+
+    Non-programmers who open `ail up` in a browser and see a 500 need
+    an actionable next step. The raw error string the program returned
+    ("Failed to fetch news") is almost never enough — the real reason
+    is usually upstream: a 401 from an API, a blown DNS, an intent
+    call the harness floored to confidence 0. This scans the trace for
+    the last few informative events and renders them as a short
+    Korean + English hint.
+
+    Returns an empty string when nothing interesting is in the trace.
+    """
+    if trace is None:
+        return ""
+    try:
+        entries = trace.entries
+    except AttributeError:
+        return ""
+
+    # Collect failing / interesting events, most recent first.
+    hints: list[str] = []
+    for entry in reversed(entries):
+        kind = entry.kind
+        p = entry.payload
+        if kind == "http_call" and not p.get("ok", True):
+            url = p.get("url", "?")
+            status = p.get("status")
+            network_error = p.get("network_error")
+            if network_error:
+                hints.append(
+                    f"HTTP 네트워크 실패 / network error: {url} — "
+                    f"{network_error}"
+                )
+            elif status is not None:
+                body_preview = p.get("body_preview") or ""
+                reason_hint = _http_reason_hint(int(status))
+                line = (
+                    f"HTTP {int(status)} on {p.get('method','GET')} "
+                    f"{url}"
+                )
+                if reason_hint:
+                    line = line + f" — {reason_hint}"
+                if body_preview:
+                    line = (
+                        line
+                        + f"\n  response body (preview): "
+                        + body_preview.replace("\n", " ")[:160]
+                    )
+                hints.append(line)
+        elif kind == "intent_validation_failed":
+            hints.append(
+                "Intent 응답이 선언된 타입과 맞지 않음 / "
+                f"intent `{p.get('intent','?')}` declared "
+                f"`{p.get('declared_type','?')}` but model returned a "
+                f"mismatching shape ({p.get('error','')[:120]}). "
+                "confidence was floored to 0."
+            )
+        # Stop once we have a couple of hints — keep the error response
+        # short enough to read on a phone.
+        if len(hints) >= 3:
+            break
+
+    if not hints:
+        return ""
+    header = "— diagnosis / 진단 ————————————"
+    action = (
+        "\n다음 액션: `ail chat <project> \"...\"` 로 문제를 설명하고 "
+        "다른 방법으로 바꿔달라고 요청하세요.\n"
+        "Next step: run `ail chat <project> \"…\"` and ask the agent "
+        "to try a different approach."
+    )
+    return header + "\n" + "\n".join(hints) + action
+
+
+def _http_reason_hint(status: int) -> str:
+    """Short human-readable hint for a non-2xx HTTP status.
+
+    Korean + English because a non-programmer shouldn't have to look
+    up what 401 means. Covers the failure modes AI-authored code
+    typically hits (bad/missing API key, endpoint moved, rate limit,
+    upstream broken).
+    """
+    if 200 <= status < 300:
+        return ""
+    if status == 401 or status == 403:
+        return (
+            "인증 실패 (API 키가 잘못되었거나 없음) / "
+            "authentication failed (the API key is invalid or missing). "
+            "프로그램이 고정된 'demo' 같은 가짜 키를 쓰고 있는지 확인."
+        )
+    if status == 404:
+        return "엔드포인트를 찾을 수 없음 / endpoint not found"
+    if status == 429:
+        return "요청 제한 초과 / rate-limited"
+    if 400 <= status < 500:
+        return f"클라이언트 에러 / client error ({status})"
+    if 500 <= status < 600:
+        return f"업스트림 서버 에러 / upstream server error ({status})"
+    return ""
+
+
 def _render_value(value):
     """Format an entry main() return value for HTTP response.
 
@@ -130,14 +232,19 @@ def _make_handler(project: Project):
                 value = result.value
                 if _looks_like_error(value):
                     rendered = _render_value(value)
+                    diagnostic = _diagnose_from_trace(_trace)
                     project.append_ledger({
                         "event": "request",
                         "path": "/",
                         "input_chars": len(body),
                         "ok": False,
                         "value_preview": str(rendered)[:200],
+                        "diagnostic": diagnostic,
                     })
-                    self._send_text(500, str(rendered) + "\n")
+                    message = str(rendered)
+                    if diagnostic:
+                        message = message + "\n\n" + diagnostic
+                    self._send_text(500, message + "\n")
                     return
                 rendered = _render_value(value)
                 response = (str(rendered) + "\n").encode("utf-8")

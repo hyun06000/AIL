@@ -4,6 +4,86 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.10.1 — 2026-04-23
+
+**Non-programmer dead-end fix.** hyun06000 field-tested the
+`ail-news` project (a Hormuz-Strait news dashboard authored by
+Sonnet via `ail ask`). Sonnet hardcoded `apiKey=demo` on newsapi.org,
+which returns 401. The program's Result-based error handling kicked
+in correctly and returned `error("No news available and fetch
+failed")` — but a non-programmer browser user hitting HTTP 500 with
+that opaque message has no path forward. HEAAL's claim is that the
+harness reaches all the way to the user; a useless error message is
+a hole in that claim.
+
+### Added — HTTP effect trace instrumentation
+
+`_http_effect` now records `http_call` events to the trace on every
+call (success, HTTP error, network error). Payload: method, url,
+status, ok, body_preview (on failure), network_error (when urllib
+raises a URLError).
+
+### Added — diagnostic-aware 500 responses
+
+`server._diagnose_from_trace(trace)` scans a request's trace for the
+most recent informative events (failing http_calls, intent
+validation failures) and renders them into a short Korean + English
+hint. When `entry main` returns an error, the server appends this
+hint to the 500 response body so the browser user sees:
+
+```
+오류: No news available and fetch failed
+
+— diagnosis / 진단 ————————————
+HTTP 401 on GET https://newsapi.org/...?apiKey=demo —
+인증 실패 (API 키가 잘못되었거나 없음) / authentication failed …
+프로그램이 고정된 'demo' 같은 가짜 키를 쓰고 있는지 확인.
+  response body (preview): {"status":"error","code":"apiKeyInvalid",...
+
+다음 액션: `ail chat <project> "..."` 로 문제를 설명하고
+다른 방법으로 바꿔달라고 요청하세요.
+```
+
+Instead of a dead end, the user sees what failed, why, and the
+exact next command to fix it.
+
+### Added — `_http_reason_hint(status)`
+
+Human-readable (Korean + English) hints for common HTTP failure
+modes: 401/403 (auth, with a specific warning about hardcoded
+`demo` placeholders), 404 (endpoint not found), 429 (rate-limit),
+4xx (client error), 5xx (upstream server error).
+
+### Authoring prompt — NO FAKE API KEYS rule
+
+The authoring prompt now explicitly bans hardcoded placeholder
+credentials:
+
+- `apiKey=demo`, `api_key=test`, `Bearer YOUR_API_KEY_HERE`, literal
+  `demo` / `sample` as auth values — all rejected.
+- Preferred no-auth sources listed: Google News RSS, Wikipedia REST,
+  httpbin, CoinGecko / OpenWeatherMap public tiers.
+- If the task genuinely needs an authenticated API the user has not
+  set up, the author must write a clear-error `pure fn` explaining
+  which env var should hold the key — not ship a placeholder.
+
+### Also surfaces intent-validation failures
+
+The same diagnostic path surfaces v1.10.0's
+`intent_validation_failed` trace events — if the reason the program
+errored is that an intent kept returning mis-typed shapes and got
+floored to confidence 0, the user sees that too instead of a silent
+null result.
+
+### Tests
+
++11 tests in `test_agentic_server.py` covering the reason-hint
+matrix (200/401/403/404/429/4xx/5xx), `_diagnose_from_trace` on
+empty / 401 / intent-validation / network-error / too-many-hints.
+455 passing total (+11 from 444).
+
+---
+
 ## v1.10.0 — 2026-04-23
 
 **Closes a HEAAL harness gap.** Before v1.10, an intent declared
