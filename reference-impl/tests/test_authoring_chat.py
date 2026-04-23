@@ -256,6 +256,33 @@ def test_chat_ui_enter_sends_shift_enter_newlines(tmp_path):
     assert "Shift+Enter" in html
 
 
+def test_prompt_prefers_live_data_over_training_knowledge(tmp_path):
+    """v1.12.6 — field-test correction. Previous v1.12.6 draft told
+    the agent to use `intent` directly for 'knowledge' questions,
+    falling back on the model's frozen training weights for lists /
+    recommendations. Wrong direction: model weights are stale. We
+    want the model's reasoning + tool-use; the facts should come from
+    live HTTP sources on every run."""
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "", "app.ail": ""},
+        history=[],
+        user_message="요즘 가장 핫한 harness engineering 프로젝트 찾아줘",
+    )
+    # Rule framing: training is stale, fetch live data.
+    assert "training" in prompt.lower() and "stale" in prompt.lower()
+    assert "reasoning + tool-use" in prompt
+    # Anti-pattern: Google scraping blocked.
+    assert "do NOT scrape Google" in prompt
+    # Concrete API endpoints the agent can actually use.
+    assert "api.github.com/search/repositories" in prompt
+    assert "hn.algolia.com" in prompt
+    assert "reddit.com" in prompt.lower()
+    # Worked example is present so the agent sees the pattern.
+    assert "top_repos" in prompt or "sort=stars" in prompt
+
+
 def test_prompt_includes_heaal_identity_and_research_guidance(tmp_path):
     """v1.12.1 regression — agent claimed ignorance of HEAAL and
     refused to web-search, even though AIL has perform http.get. The
@@ -276,9 +303,9 @@ def test_prompt_includes_heaal_identity_and_research_guidance(tmp_path):
     assert "No `while` keyword" in prompt
     assert "`Result` type required" in prompt
     assert "`pure fn` statically verified" in prompt
-    # Research guidance (the v1.12.1 fix).
+    # Research guidance: the agent is pushed toward live http.get,
+    # not toward pulling answers from its frozen training weights.
     assert "perform http.get" in prompt
-    assert "propose" in prompt.lower() or "suggest" in prompt.lower()
 
 
 def test_history_persists_across_instances(tmp_path):

@@ -4,6 +4,67 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.12.6 — 2026-04-23
+
+**Live data first.** Field test found the agent scraping
+`google.com/search` for "어디 홍보할 수 있을지 찾아줘". Google returns
+JS-only result pages; `http.get` came back with no actual results;
+the intent model correctly said "I can't find anything" — the right
+answer to the wrong program.
+
+A draft of this release tried to fix that by telling the agent to
+use `intent` directly for knowledge queries, letting the model
+answer from training. hyun06000 caught this:
+
+> "모델이 이미 학습한 데이터는 최신 자료가 아닐 수 있어. 우리는
+> 모델의 논리력과 도구활용력을 원하는거지 모델 자체의 지식을 원하지는
+> 않아. 지식은 ail 프로그래밍을 통해 최신의 최상의 지식을 얻어야해."
+
+Exactly right. HEAAL's claim is that knowledge flows *through* the
+harness, not baked into the model. Training data is months/years
+old; stars, trends, active communities, recent releases move fast.
+What we want from the model is reasoning + tool-use. The facts
+should come from live HTTP sources on every run.
+
+### Rewritten authoring prompt — "LIVE DATA FIRST"
+
+- Explicit rule: if the user's question depends on current state of
+  the world ("요즘", "가장 핫한", "최근", "latest", stars, trends,
+  downloads, who's discussing X now) the program **must** `perform
+  http.get` a live source. Do NOT list things from training memory.
+- `intent` is for reasoning over fetched data (summarize, rank,
+  filter, extract) — not for inventing the data.
+- Only use `intent` without live data for pure reasoning that
+  doesn't depend on current state (AIL/HEAAL explanations,
+  transforming user-provided input, well-known stable facts).
+- Anti-pattern still in place: no Google / Bing / DuckDuckGo
+  scraping — their result pages are JS-only.
+- Concrete API endpoints listed, all working via plain `http.get`:
+  GitHub search (repos + issues), Hacker News Algolia, Reddit JSON,
+  Wikipedia REST, Google News RSS, npm registry, PyPI JSON.
+- Worked example — "요즘 가장 핫한 harness engineering 프로젝트
+  찾아줘" — shows the canonical pattern:
+  `http.get(GitHub search API)` → `intent top_repos(json) -> Text`.
+
+### Tests
+
+- New test pins the live-data-first direction (training is stale,
+  reasoning + tool-use, concrete endpoints present).
+- Existing v1.12.1 research-guidance test adjusted to the stronger
+  phrasing.
+
+498 passing (+1 from 497).
+
+### Why this matters beyond one bug
+
+This isn't just a prompt tweak. It's the philosophical spine of
+HEAAL restored: **the harness is the grammar, the live data source
+is the source of truth, the LLM is the reasoning engine in
+between**. When you ask the agent to research, it should go fetch.
+Not guess from memory.
+
+---
+
 ## v1.12.5 — 2026-04-23
 
 **Field-test fixes.** hyun06000 ran the chat flow with a real prompt
