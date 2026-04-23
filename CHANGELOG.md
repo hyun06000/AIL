@@ -4,6 +4,72 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.15.2 — 2026-04-23
+
+**Critical: chat page lost every message past the first on reload.**
+
+Field test 2026-04-23: hyun06000 reloaded a long authoring session and
+saw only the first agent response — every turn below it was gone.
+Root cause was a Temporal Dead Zone bug in the authoring page JS:
+
+```js
+const INITIAL_HISTORY = [...];
+INITIAL_HISTORY.forEach(entry => {
+  addAgent(entry.reply, entry.files, entry.action);  // may call addRunWidget
+});
+...
+let programsForNext = [];   // <- declared AFTER the replay loop
+let inputUsedForNext = true;
+```
+
+`addRunWidget` reads `programsForNext` / `inputUsedForNext`. Function
+declarations hoist; `let` bindings do not — they're in the Temporal
+Dead Zone until their declaration line executes. Replaying a
+`ready_to_run` turn from history hit TDZ, threw uncaught, halted the
+`forEach` after the first turn, and left the top-level script
+without running the `let` declarations. A subsequent user send then
+threw the same error from `send()`.
+
+Fixed by moving the four `let` state declarations to directly above
+the history-replay block. Added `test_authoring_page_declares_let_state_before_history_replay`
+to lock in the ordering — the test fails if anyone ever moves them
+back.
+
+### Input placeholder hint (`# INPUT: ...`)
+
+hyun06000: *"입력창이 만들어지면 뭘 입력해야 할지 막막할 때가 있어."*
+The generic "input (optional)" placeholder left non-programmers
+staring at an empty textarea. Agents can now emit a leading comment
+on the `.ail`:
+
+```ail
+# INPUT: 번역할 한국어 문장을 붙여넣으세요 (예: "오늘 날씨가 좋네요")
+entry main(input: Text) { ... }
+```
+
+`extract_input_hint` scans the first 20 lines for `# INPUT:` /
+`// INPUT:` (case-insensitive), caps at 200 chars, and falls back to
+the localized default when absent. The hint flows through the
+agentic run response (`input_hint`), the authoring-page Run widget,
+and the public service UI (via `render_page`). Authoring prompt
+updated with four worked examples and explicit anti-patterns
+(tautological hints, missing hints).
+
+### Clipboard copy fallback
+
+Minor: clipboard copy now falls back to a hidden-textarea +
+`execCommand('copy')` when `navigator.clipboard` isn't available
+(non-secure contexts, older browsers). Paired with the v1.15.1
+async-capture fix.
+
+### Not a user-visible API change
+
+`extract_input_hint` is a new helper but not exported from the
+package `__init__`. Treat as internal; downstream code relying on
+the agentic runtime response shape will see a new `input_hint` key.
+
+---
+
 ## v1.15.1 — 2026-04-23
 
 **Two UX bugs from the v1.15.0 field test.**

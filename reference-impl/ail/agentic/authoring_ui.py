@@ -196,6 +196,20 @@ def render_authoring_page(
     const sendBtn = document.getElementById('send');
     const hint = document.getElementById('hint');
 
+    // Multi-program state (v1.13.1). These MUST be declared before the
+    // history replay below, because addAgent() → addRunWidget() reads
+    // them when replaying a `ready_to_run` turn — and `let` bindings
+    // are in the Temporal Dead Zone until their declaration executes.
+    // Field-test 2026-04-23: placing these after the replay threw
+    // "Cannot access 'programsForNext' before initialization", which
+    // halted the forEach after the first agent turn and left the chat
+    // looking empty after a page reload. (Function declarations are
+    // hoisted; `let` is not.)
+    let programsForNext = [];
+    let activeProgramForNext = null;
+    let inputUsedForNext = true;
+    let envRequiredForNext = [];
+
     // Replay history embedded by the server on first render.
     const INITIAL_HISTORY = {history_json};
     if (INITIAL_HISTORY.length > 0) {{
@@ -277,15 +291,9 @@ def render_authoring_page(
       }}
     }}
 
-    // Multi-program state (v1.13.1). Each turn's response carries the
-    // full list of `.ail` files in the project plus which is active;
-    // the Run widget uses this to render a selector.
-    let programsForNext = [];
-    let activeProgramForNext = null;
-    // Backward-compat shadows for single-program cases — kept in sync
-    // with the active program's metadata.
-    let inputUsedForNext = true;
-    let envRequiredForNext = [];
+    // `programsForNext` / `activeProgramForNext` / `inputUsedForNext`
+    // / `envRequiredForNext` are declared above the history replay —
+    // they must initialize before `addRunWidget` references them.
 
     // Inline widget that the user can invoke repeatedly without
     // leaving the chat. For `ready_to_run` it's a plain run box.
@@ -462,9 +470,16 @@ def render_authoring_page(
       if (inputUsed) {{
         input = document.createElement('textarea');
         input.rows = 1;
-        input.placeholder = service
-          ? '입력이 필요하면 여기 (비워두면 빈 입력) / input (optional)'
-          : '입력 (선택) / input (optional, leave blank if none)';
+        // Per-program placeholder (`# INPUT: ...` at the top of the
+        // .ail) wins when the author supplied one — field test
+        // showed the generic hint left non-programmers staring at
+        // an empty box with no idea what to type.
+        const hint = meta().input_hint;
+        input.placeholder = hint
+          ? hint
+          : (service
+              ? '입력이 필요하면 여기 (비워두면 빈 입력) / input (optional)'
+              : '입력 (선택) / input (optional, leave blank if none)');
         input.autocomplete = 'off';
         input.spellcheck = false;
         input.addEventListener('input', () => {{

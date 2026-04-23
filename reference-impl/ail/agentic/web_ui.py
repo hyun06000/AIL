@@ -129,6 +129,7 @@ def render_page(
     host: str,
     port: int,
     input_used: bool = True,
+    input_hint: str | None = None,
     show_back_to_chat: bool = False,
 ) -> str:
     """Render the single-page form as an HTML string.
@@ -162,10 +163,16 @@ def render_page(
             f'{escape(t["back_to_chat"])}</a></div>\n'
         )
     if input_used:
+        # Per-program placeholder (`# INPUT: ...` at the top of the
+        # .ail) wins over the generic "Type your input here" — field
+        # test showed the generic hint leaves non-programmers with
+        # no idea what to type. Falls back to the localized default
+        # when the author didn't supply one.
+        placeholder_text = input_hint or t["placeholder"]
         input_block = (
             f'      <label class="tip" for="input">{escape(t["edit_here_tip"])}</label>\n'
             f'      <textarea id="input"\n'
-            f'                placeholder="{escape(t["placeholder"])}"></textarea>\n'
+            f'                placeholder="{escape(placeholder_text)}"></textarea>\n'
             f'      <div class="row">\n'
             f'        <span class="status" id="status"></span>\n'
             f'        <span class="spacer"></span>\n'

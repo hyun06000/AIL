@@ -290,12 +290,14 @@ def _make_handler(project: Project):
                 except Exception:
                     app_source = ""
                 has_chat = (project.state_dir / "chat_history.jsonl").is_file()
+                from .authoring_chat import extract_input_hint
                 html = render_page(
                     project_name=project.root.name,
                     intent_preamble=extract_preamble(intent_text),
                     host=self.server.server_address[0],
                     port=self.server.server_address[1],
                     input_used=entry_uses_input(app_source),
+                    input_hint=extract_input_hint(app_source),
                     show_back_to_chat=has_chat,
                 )
                 body = html.encode("utf-8")
@@ -373,12 +375,14 @@ def _make_handler(project: Project):
                 # never went through authoring (committed examples,
                 # legacy flows) don't get a stray button.
                 has_chat = (project.state_dir / "chat_history.jsonl").is_file()
+                from .authoring_chat import extract_input_hint
                 html = render_page(
                     project_name=project.root.name,
                     intent_preamble=extract_preamble(intent_text),
                     host=self.server.server_address[0],
                     port=self.server.server_address[1],
                     input_used=entry_uses_input(app_source),
+                    input_hint=extract_input_hint(app_source),
                     show_back_to_chat=has_chat,
                 )
                 body = html.encode("utf-8")
@@ -494,9 +498,12 @@ def _make_handler(project: Project):
                 import os as _os
                 try:
                     from .web_ui import entry_uses_input
-                    from .authoring_chat import list_required_env_vars
+                    from .authoring_chat import (
+                        list_required_env_vars, extract_input_hint,
+                    )
                     program_source = program_path.read_text(encoding="utf-8")
                     outcome["input_used"] = entry_uses_input(program_source)
+                    outcome["input_hint"] = extract_input_hint(program_source)
                     outcome["env_required"] = [
                         {"name": n, "set": n in _os.environ}
                         for n in list_required_env_vars(program_source)
@@ -504,6 +511,7 @@ def _make_handler(project: Project):
                     outcome["program"] = program_path.name
                 except Exception:
                     outcome["input_used"] = True
+                    outcome["input_hint"] = None
                     outcome["env_required"] = []
                     outcome["program"] = "app.ail"
 

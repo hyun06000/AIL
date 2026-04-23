@@ -121,9 +121,11 @@ class AuthoringChat:
 
         if active_info:
             input_used = active_info["input_used"]
+            input_hint = active_info.get("input_hint")
             env_required = active_info["env_required"]
         else:
             input_used = True
+            input_hint = None
             env_required = []
 
         return {
@@ -131,6 +133,7 @@ class AuthoringChat:
             "files": applied_writes,
             "action": action,
             "input_used": input_used,
+            "input_hint": input_hint,
             "env_required": env_required,
             "programs": programs,
             "active_program": active_info["name"] if active_info else None,
@@ -232,6 +235,22 @@ entry main(input: Text) {{
 **Runtime-input programs (text summarizers, on-demand converters)** genuinely consume whatever the user types in the web form. For these, DO reference `input`. The textarea serves the user.
 
 **Self-check before you finalize the `.ail`:** would running this program twice with the SAME environment but DIFFERENT values typed in the textarea legitimately produce different outputs? If no → don't reference `input`. If yes → do. Follow that signal rigorously; don't let reflex-wiring `payload = input` accidentally turn every program into an input-hungry one.
+
+**When the entry DOES reference `input`, declare a placeholder hint on the first line of the `.ail` using this exact shape:**
+
+```
+# INPUT: <short sentence telling the user what to type, in their language, ideally with an example>
+```
+
+The hint is the textarea's `placeholder` in the run widget. Without it the user sees an empty box with no idea what to paste — a real field-test failure mode. Examples:
+
+- ✅ `# INPUT: 번역할 한국어 문장을 붙여넣으세요 (예: "오늘 날씨가 좋네요")`
+- ✅ `# INPUT: Paste the customer review you want classified.`
+- ✅ `# INPUT: 요약할 뉴스 기사 본문을 붙여넣으세요. 길어도 괜찮아요.`
+- ❌ `# INPUT: input` — tautological, no signal
+- ❌ no comment at all when `input` is referenced → UI falls back to the generic "input (optional)" and the user is stuck
+
+Keep the hint ≤ 200 characters. One line. No quoting tricks. Match the user's language (Korean if they've been speaking Korean, English if English).
 
 === FINISH THE JOB IN ONE TURN — DON'T STOP MID-WAY ===
 
@@ -816,12 +835,49 @@ def list_project_programs(project) -> list[dict]:
             "parse_error": parse_err,
             "entry_present": has_entry,
             "input_used": entry_uses_input(source) if has_entry else False,
+            "input_hint": extract_input_hint(source),
             "env_required": [
                 {"name": n, "set": n in os.environ}
                 for n in list_required_env_vars(source)
             ],
         })
     return results
+
+
+# Matches a leading `# INPUT: ...` or `// INPUT: ...` comment anywhere
+# in the first ~20 lines. Authors place this at the top of a program
+# whose `entry` consumes `input`, so the UI's textarea shows a
+# per-program placeholder like "이 프로그램은 프랑스어로 번역할 텍스트를
+#받아요" instead of the generic fallback — field test showed the
+# generic "input (optional)" leaves non-programmers guessing.
+_INPUT_HINT_RE = re.compile(
+    # `[ \t]*` (not `\s*`) on both sides of the body so we don't let
+    # `\s*` greedily consume the terminating newline and then match
+    # the *next* line's content as the hint body. That bug showed up
+    # when the comment was empty (`# INPUT: \n`) and the regex
+    # happily returned the entry declaration as the "hint".
+    r'^[ \t]*(?:#|//)[ \t]*INPUT[ \t]*:[ \t]*(.+?)[ \t]*$',
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def extract_input_hint(app_source: str) -> Optional[str]:
+    """Return the first `# INPUT: ...` / `// INPUT: ...` comment body,
+    or None if the program doesn't declare one. Scans only the first
+    20 lines so a stray INPUT: mention buried in a goal string cannot
+    hijack the placeholder."""
+    if not app_source:
+        return None
+    head = "\n".join(app_source.splitlines()[:20])
+    m = _INPUT_HINT_RE.search(head)
+    if not m:
+        return None
+    hint = m.group(1).strip()
+    # Cap to a sane length so a runaway comment doesn't blow out the
+    # placeholder. Placeholders are UI hints, not documentation.
+    if len(hint) > 200:
+        hint = hint[:197] + "..."
+    return hint or None
 
 
 def list_required_env_vars(app_source: str) -> list[str]:
