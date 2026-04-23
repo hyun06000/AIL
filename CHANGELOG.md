@@ -4,6 +4,47 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.15.1 — 2026-04-23
+
+**Two UX bugs from the v1.15.0 field test.**
+
+### Agent must describe what it built
+
+hyun06000 tested the new authoring flow and saw the agent produce Turn 1:
+*"AIL과 HEAAL 홍보봇 만들게요! 어떤 채널에 올릴까요?"* + Run button.
+The user asked Turn 2: *"너가 만든 프로그램이 뭐야? 실행 버튼을 누르면
+뭐가 나타나?"* — a non-programmer has no way to know what a Run button
+does without being told. Clicking a black box is a trust failure.
+
+The existing prompt said the `<reply>` should be a "1-2 sentence
+confirmation" — too soft. Turn 1's reply technically met that, yet
+failed the user. Tightened to an explicit two-part requirement:
+
+- `<reply>` MUST state (a) what the program does and (b) what appears
+  when the user clicks Run.
+- Added anti-pattern examples (reply that skips straight to the next
+  question, reply that only names a file, reply that's vaguely
+  "it's a bot").
+- Added correct-pattern example showing purpose + Run output + the
+  optional follow-up question in order.
+
+### Chat copy button crashed after async clipboard write
+
+`navigator.clipboard.writeText(md)` is awaited before the handler
+touches `e.currentTarget.textContent` to flash "✓ copied". By then
+the click event has finished propagating and `e.currentTarget` is
+`null` — field test surfaced "Cannot read properties of null
+(reading 'textContent')". Classic synchronous-capture-before-await
+bug.
+
+Fixed by capturing `link = e.currentTarget` and `orig = link.textContent`
+at the top of the handler, before any `await`. Also added a hidden-
+textarea + `execCommand('copy')` fallback for environments without
+the Clipboard API (non-secure contexts, older browsers), so the
+affordance works even when the async path isn't available.
+
+---
+
 ## v1.15.0 — 2026-04-23
 
 **HEAAL gap closed: JSON serialization moves into the runtime.**

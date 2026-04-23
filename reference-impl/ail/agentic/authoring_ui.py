@@ -680,11 +680,32 @@ def render_authoring_page(
     document.getElementById('copy-chat').addEventListener('click',
       async (e) => {{
         e.preventDefault();
+        // Capture the link element synchronously — after an `await`
+        // the event has finished propagating and e.currentTarget
+        // becomes null, which crashed with "Cannot read properties
+        // of null (reading 'textContent')" during field test.
+        const link = e.currentTarget;
+        const orig = link.textContent;
         try {{
           const md = await fetchChatMarkdown();
-          await navigator.clipboard.writeText(md);
-          const link = e.currentTarget;
-          const orig = link.textContent;
+          if (navigator.clipboard && navigator.clipboard.writeText) {{
+            await navigator.clipboard.writeText(md);
+          }} else {{
+            // Fallback for browsers without the Clipboard API (or for
+            // any non-secure context). Uses a hidden textarea +
+            // document.execCommand('copy') — deprecated but still the
+            // only cross-context fallback.
+            const ta = document.createElement('textarea');
+            ta.value = md;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '-1000px';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (!ok) throw new Error('execCommand copy returned false');
+          }}
           link.textContent = '✓ 복사됨 / copied';
           setTimeout(() => {{ link.textContent = orig; }}, 1500);
         }} catch (err) {{
