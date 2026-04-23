@@ -80,9 +80,6 @@ class AuthoringChat:
             ok, summary = self._write_file(path, content)
             if ok:
                 applied_writes.append({"path": path, "bytes": len(content.encode("utf-8"))})
-                # Track last-written .ail as the "active" one so the
-                # Run widget defaults to it when multiple programs
-                # exist.
                 if path.endswith(".ail"):
                     try:
                         (self.project.state_dir / "active_program").write_text(
@@ -101,16 +98,8 @@ class AuthoringChat:
             "action": action,
         })
 
-        # Multi-program support (v1.13.1): list every .ail program in
-        # the project with its own input_used + env_required. The UI's
-        # Run widget uses this to render a program selector when
-        # more than one program exists, and to show the right input
-        # box / secret inputs per-program. `active_program` is the
-        # most-recently-written program and becomes the selector's
-        # default.
         programs = list_project_programs(self.project)
         active = self._active_program()
-        # Backward-compatible top-level fields mirror the active one.
         if active:
             active_info = next(
                 (p for p in programs if p["name"] == active),

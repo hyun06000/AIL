@@ -39,8 +39,35 @@ class AnthropicAdapter:
         import anthropic
         client = anthropic.Anthropic(api_key=self._api_key)
 
-        # Authoring chat: use goal as system prompt directly — no JSON wrapper.
-        # The goal text already contains the full XML protocol spec.
+        if "_authoring_system_prompt" in context:
+            authoring_sp = context["_authoring_system_prompt"]
+            user_msg = self._build_user_prompt(inputs) if inputs else "(no input)"
+            resp = client.messages.create(
+                model=self.model,
+                max_tokens=8192,
+                system=authoring_sp,
+                messages=[
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": "<reply>"},
+                ],
+            )
+            text = "<reply>" + "".join(
+                block.text for block in resp.content if getattr(block, "type", None) == "text"
+            ).strip()
+            import re as _re
+            m = _re.search(r"<reply>(.*?)</reply>", text, _re.DOTALL)
+            value = m.group(1).strip() if m else text
+            return ModelResponse(
+                value=value,
+                confidence=0.9,
+                model_id=resp.model,
+                raw={
+                    "stop_reason": resp.stop_reason,
+                    "input_tokens": getattr(resp.usage, "input_tokens", None),
+                    "output_tokens": getattr(resp.usage, "output_tokens", None),
+                },
+            )
+
         if context.get("_intent_name") == "__authoring_chat__":
             user_msg = inputs.get("user_message", "(no input)")
             resp = client.messages.create(
@@ -49,7 +76,7 @@ class AnthropicAdapter:
                 system=goal,
                 messages=[
                     {"role": "user", "content": user_msg},
-                    {"role": "assistant", "content": "<reply>"},  # prefill forces XML output
+                    {"role": "assistant", "content": "<reply>"},
                 ],
             )
             text = "<reply>" + "".join(
@@ -93,7 +120,7 @@ class AnthropicAdapter:
             },
         )
 
-    # --- prompt assembly ---
+
 
     def _build_system_prompt(self, goal, constraints, context,
                              expected_type, examples) -> str:

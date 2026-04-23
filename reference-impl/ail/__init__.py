@@ -1,15 +1,4 @@
-"""AIL MVP — a working subset of AIL.
-
-Public API:
-    from ail import run, compile_source, MockAdapter, AnthropicAdapter
-
-    # Run an AIL file:
-    result, trace = run("path/to/program.ail", input="hello")
-
-    # Or with an explicit adapter (for tests):
-    adapter = MockAdapter(responses={"greet": "안녕"})
-    result, trace = run("path/to/program.ail", input="hello", adapter=adapter)
-"""
+"""AIL — AI-Intent Language interpreter."""
 from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
@@ -111,8 +100,6 @@ def run(
        AIL_CALIBRATION_PATH for persistence.
     """
     text: str
-    # Only treat as a path if it looks like one (short, no newlines) to avoid
-    # OSError on long source strings.
     looks_like_path = (
         len(source_or_path) < 4096
         and "\n" not in source_or_path

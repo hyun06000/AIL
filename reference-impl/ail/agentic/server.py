@@ -19,8 +19,6 @@ from .agent import _looks_like_error
 from .authoring_chat import build_base_authoring_prompt
 from .project import Project
 
-# Per-project live log buffer. Key = project root str.
-# Each entry: {"lines": [...], "lock": threading.Lock(), "run_id": int}
 _run_log: dict[str, dict] = {}
 _run_log_lock = threading.Lock()
 
@@ -59,9 +57,7 @@ def _resolve_program_path(project, requested: str):
     sensible default can be found.
     """
     root = project.root
-    # 1. Explicit request, safety-check it.
     if requested:
-        # Only a filename, no path traversal, must end .ail.
         if "/" in requested or "\\" in requested or ".." in requested:
             return None
         if not requested.endswith(".ail"):
@@ -74,7 +70,6 @@ def _resolve_program_path(project, requested: str):
         if not target.is_file():
             return None
         return target
-    # 2. active_program marker.
     marker = project.state_dir / "active_program"
     if marker.is_file():
         try:
@@ -85,10 +80,8 @@ def _resolve_program_path(project, requested: str):
             candidate = root / name
             if candidate.is_file():
                 return candidate
-    # 3. app.ail default.
     if project.app_path.is_file():
         return project.app_path
-    # 4. Any .ail file.
     try:
         for p in root.iterdir():
             if p.is_file() and p.suffix == ".ail":
@@ -118,7 +111,6 @@ def _diagnose_from_trace(trace) -> str:
     except AttributeError:
         return ""
 
-    # Collect failing / interesting events, most recent first.
     hints: list[str] = []
     for entry in reversed(entries):
         kind = entry.kind
@@ -542,7 +534,6 @@ def _make_handler(project: Project):
                                  "or open / in a browser.\n")
 
         def do_POST(self):  # noqa: N802 — stdlib name
-            # Authoring chat turn: user message → agent reply + file writes.
             if self.path == "/authoring-chat":
                 length = int(self.headers.get("Content-Length", "0") or "0")
                 user_msg = self.rfile.read(length).decode("utf-8") if length else ""
@@ -569,16 +560,7 @@ def _make_handler(project: Project):
                 self.wfile.write(payload)
                 return
 
-            # Run the authored app.ail once and return the outcome as
-            # JSON so the chat UI can render it inline as a "run result"
-            # bubble. No state transition — the user stays in the chat
-            # and can ask for fixes. Replaces the v1.12.0–2 behavior
-            # where clicking "Run" killed the chat and switched to the
-            # service UI.
             if self.path.startswith("/authoring-run"):
-                # `?program=FILENAME` query selects which .ail to run
-                # when a project has multiple programs. Defaults to
-                # the active_program marker, falling back to app.ail.
                 from urllib.parse import urlparse, parse_qs
                 qs = parse_qs(urlparse(self.path).query)
                 requested = (qs.get("program", [""])[0] or "").strip()
@@ -593,7 +575,6 @@ def _make_handler(project: Project):
                 # without requiring a server restart.
                 from .authoring_chat import load_project_secrets
                 load_project_secrets(project)
-                # Reset the live log buffer for this run.
                 log_state = _get_log_state(str(project.root))
                 with log_state["lock"]:
                     log_state["lines"] = []
@@ -647,13 +628,6 @@ def _make_handler(project: Project):
                             "diagnostic": traceback.format_exc()[:1000],
                         }
 
-                # Tell the UI whether the entry uses its input
-                # parameter so the Run widget can hide the input
-                # textarea for input-free programs (v1.12.5 fix).
-                # Also list env vars the program references so the
-                # widget can surface a masked secret input when any
-                # are unset (v1.13.0). Uses the ACTUAL program that
-                # ran, not hardcoded app.ail (v1.13.1 multi-program).
                 import os as _os
                 try:
                     from .web_ui import entry_uses_input
@@ -674,9 +648,6 @@ def _make_handler(project: Project):
                     outcome["env_required"] = []
                     outcome["program"] = "app.ail"
 
-                # Record the run result into the chat history so the
-                # agent has context on the next turn — "fix the error
-                # you just saw".
                 try:
                     from .authoring_chat import AuthoringChat
                     chat = AuthoringChat(project, adapter=None)
