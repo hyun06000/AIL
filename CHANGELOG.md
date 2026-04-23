@@ -4,6 +4,93 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.17.0 — 2026-04-24
+
+**`perform http.graphql(query, variables?)` — HEAAL harness for GraphQL.**
+
+hyun06000's 2026-04-24 promo-bot session spent three turns in a loop
+on GitHub's GraphQL API. The response shape
+`{"errors": [{type: "NOT_FOUND", message: "Could not resolve..."}]}`
+with no `data` field looked like success to the hand-rolled check
+`errs = get(data, "errors"); if errs != ""`. The agent kept
+returning `"GraphQL errors: None"` — a useless message, because the
+real failure was `data` MISSING, not `errors` populated. No amount
+of prompt tuning could fix this reliably: the failure tree for
+GraphQL has four distinct branches (HTTP status / parse failure /
+errors array / data absent-or-null) and every manual check misses
+at least one.
+
+Verdict (same pattern as v1.15.0 `http.post_json` and v1.16.0
+`human.approve`): runtime owns the decision tree, author never
+sees the envelope.
+
+### New effect
+
+```
+perform http.graphql(
+    url: Text,
+    query: Text,
+    variables?: pair-list | Record,
+    headers?: [[Text, Text]] | Record
+) -> Result[Any]
+```
+
+- `ok(data)` — returns the unwrapped `.data` payload. Authors reach
+  into mutation results via plain `get()` — never through a
+  `data` wrapper, never peeking at `errors`.
+- `error("http.graphql: HTTP 401: ...")` — 4xx/5xx, body preview.
+- `error("http.graphql: response was not JSON: ...")` — HTML 502
+  from gateways, etc.
+- `error("http.graphql: <msg> [TYPE] at <path>")` — any non-empty
+  `errors` entry in a GraphQL response, formatted with path and
+  type for audit.
+- `error("http.graphql: response has no `data` field: ...")` — the
+  exact case that stumped the field test.
+- `error("http.graphql: response.data is null (operation failed
+  without an errors entry): ...")` — partial-success trap.
+
+### Authoring prompt
+
+- New primitive listed under side-effects, plus explicit rule
+  "Never hand-roll GraphQL error handling with `http.post_json` +
+  `parse_json` — the field test showed that pattern mis-diagnosing
+  every failure mode."
+- The GitHub canonical example in the "post to X" templates is
+  fully rewritten to use `http.graphql`. The old wrapper unwraps
+  six levels deep (`data.data.createDiscussion.discussion.url`
+  with manual errors check); the new version is a flat
+  `get(get(get(unwrap(r), "createDiscussion"), "discussion"),
+  "url")` after the Result check.
+- "Key contrasts" bullet list updated: GraphQL contrast is now
+  "the exact failure tree the field test used to mis-diagnose
+  (`GraphQL errors: None` in a loop) is now a single Result the
+  author cannot mis-classify."
+
+### Tests
+
+- `tests/test_http_graphql.py` (9): success returns `data`; errors
+  array becomes error Result (verbatim GitHub NOT_FOUND case);
+  `data` missing / `data: null` / HTTP 4xx / non-JSON response
+  each become error Results with concrete messages; Authorization
+  header forwarded; empty `errors: []` treated as success; empty
+  query rejected.
+- `test_authoring_prompt_structure.py::test_http_graphql_rule_present`
+  — locks in the new rule AND asserts the GitHub canonical
+  example uses `perform http.graphql` without the old
+  `get(data, "errors")` hand-rolled check.
+
+521 → 531 tests passing.
+
+### Not a grammar change
+
+Runtime effect only. v1.8 grammar freeze stands.
+
+### Restart required
+
+`ail up` holds the old module; Ctrl+C and restart.
+
+---
+
 ## v1.16.0 — 2026-04-23
 
 **`perform human.approve(plan)` — HEAAL plan-validate-execute gate.**

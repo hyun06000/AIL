@@ -535,10 +535,23 @@ Built-in effects:
     structured body. Refuses a pre-formatted string body; the
     runtime serializes via `encode_json` and sets
     `Content-Type: application/json` (caller can override). The
-    safe default for every JSON API. Closes a HEAAL gap where
+    safe default for every JSON REST API. Closes a HEAAL gap where
     agents hand-rolled JSON strings and shipped injection bugs —
     with this effect the author writes the *value*, not the
     encoding, and the runtime makes malformed JSON impossible.
+  - `http.graphql(url: Text, query: Text,
+    variables?: pair-list | Record,
+    headers?: [[Text, Text]] | Record) -> Result[Any]` — POST a
+    GraphQL query and get back the `data` payload (or a clean
+    error). The runtime collapses the full failure tree — HTTP
+    4xx/5xx, unparseable JSON, non-empty `errors` array,
+    `data` absent, `data: null` — into a single `Result`. On
+    success returns `ok(data_record)` so the author can reach
+    into mutation results with `get(get(..., "createDiscussion"),
+    "discussion")` without ever touching the envelope. Exists
+    because GraphQL's 200-with-errors convention made every
+    hand-rolled error check a silent-failure vector in field
+    test.
   - `schedule.every(seconds: Number) -> Result[Boolean]` — register
     a recurring re-invocation of `entry main` inside an agentic
     project. Call from inside the entry; the agentic runtime starts

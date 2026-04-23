@@ -414,7 +414,8 @@ When the user asks you to **take an action** — "post this", "send that", "noti
 
 **Side-effect primitives available to any AIL program:**
 
-- `perform http.post_json(url, body, headers: [[K, V]...])` — **use this for any JSON API** (Discord, Slack, Mastodon, Bluesky, GitHub REST + GraphQL, Notion, Resend, your own REST server — anything that accepts JSON). `body` MUST be a structured AIL value: a list of `[key, value]` pairs, not a pre-formatted string. The runtime serializes the body and sets `Content-Type: application/json` for you.
+- `perform http.post_json(url, body, headers: [[K, V]...])` — **use this for any JSON REST API** (Discord, Slack, Mastodon, Bluesky, GitHub REST, Notion, Resend, your own REST server — anything that accepts JSON and signals success with HTTP status). `body` MUST be a structured AIL value: a list of `[key, value]` pairs, not a pre-formatted string. The runtime serializes the body and sets `Content-Type: application/json` for you. **For GraphQL APIs use `http.graphql` instead** — GraphQL's 200-with-errors semantics need the specialized harness.
+- `perform http.graphql(url, query, variables?, headers?) -> Result[Any]` — **use this for every GraphQL API** (GitHub GraphQL v4, Shopify, GitLab, etc.). The runtime builds the `{{query, variables}}` body, posts it, and collapses GraphQL's entire decision tree (HTTP status, JSON parse, `errors` array presence, `data` presence-and-not-null) into one `Result`. `ok(data)` means everything succeeded and gives you the unwrapped `data` payload; any failure becomes an `error(msg)` with a concrete reason. Never hand-roll GraphQL error handling with `http.post_json` + `parse_json` + manual `get(data, "errors")` checks — the field test that motivated this effect showed agents mis-diagnosing every failure mode with that pattern.
 - `perform http.post(url, body, headers: [[K, V]...])` — raw POST for non-JSON payloads (form-encoded, plain text, binary-ish). **Do not use for JSON APIs — use `http.post_json`.**
 - `perform http.get(url, headers?)` — GET with optional headers.
 - `perform file.write(path, content)` — write a local file.
@@ -587,7 +588,7 @@ entry main(input: Text) {{
     return join(["posted: ", get(data, "url")], "")
 }}
 
-# GitHub GraphQL (createDiscussion) — plan, approve, post, verify
+# GitHub GraphQL (createDiscussion) — plan, approve, call http.graphql
 intent build_discussion_body() -> Text {{ goal: ... }}
 intent build_discussion_title() -> Text {{ goal: ... }}
 
@@ -613,38 +614,36 @@ entry main(input: Text) {{
     approval = perform human.approve(plan)
     if is_error(approval) {{ return unwrap_error(approval) }}
 
-    resp = perform http.post_json("https://api.github.com/graphql",
+    # http.graphql handles: HTTP status, JSON parse, `errors` array,
+    # `data` presence-and-not-null. Returns ok(data) on full success
+    # or error(message) with a concrete reason on any failure —
+    # authors never touch the 200-with-errors trap again.
+    r = perform http.graphql(
+        "https://api.github.com/graphql",
+        "mutation($repo: ID!, $cat: ID!, $t: String!, $b: String!) {{ createDiscussion(input: {{repositoryId: $repo, categoryId: $cat, title: $t, body: $b}}) {{ discussion {{ url }} }} }}",
         [
-            ["query", "mutation($repo: ID!, $cat: ID!, $t: String!, $b: String!) {{ createDiscussion(input: {{repositoryId: $repo, categoryId: $cat, title: $t, body: $b}}) {{ discussion {{ url }} }} }}"],
-            ["variables", [
-                ["repo", REPO_NODE_ID],
-                ["cat", CATEGORY_NODE_ID],
-                ["t", title],
-                ["b", body]
-            ]]
+            ["repo", REPO_NODE_ID],
+            ["cat", CATEGORY_NODE_ID],
+            ["t", title],
+            ["b", body]
         ],
         headers: [
             ["Authorization", join(["Bearer ", unwrap(token_r)], "")],
             ["Accept", "application/vnd.github+json"]
         ])
-    if not resp.ok {{ return join(["http ", to_text(resp.status), ": ", resp.body], "") }}
-    parsed = parse_json(resp.body)
-    if is_error(parsed) {{ return join(["unparseable: ", resp.body], "") }}
-    data = unwrap(parsed)
-    # GraphQL returns 200 even on logic failure — check the `errors` field.
-    errs = get(data, "errors")
-    if errs != "" {{ return join(["GraphQL errors: ", to_text(errs)], "") }}
+    if is_error(r) {{ return unwrap_error(r) }}
+    data = unwrap(r)
     return join(["posted: ",
-        get(get(get(get(data, "data"), "createDiscussion"), "discussion"), "url")], "")
+        get(get(get(data, "createDiscussion"), "discussion"), "url")], "")
 }}
 ```
 
 Key contrasts with the "bad old way":
 - `perform human.approve(plan)` runs BEFORE any irreversible side effect → the user sees exactly what's about to happen and can Decline; nothing silent, nothing regrettable.
 - `body` is a pair-list, not a concatenated string → **escaping is impossible to get wrong** because you never write any.
-- `parse_json(resp.body)` before claiming success → the return string quotes the real URL/id from the server, not a hardcoded `"posted"`.
-- `resp.body` is included in every error return → when the user says "it failed", you can actually see why.
-- GraphQL's `errors` field is checked separately — HTTP 200 with `{{"errors": [...]}}` is still a failure; GitHub will NOT give you a `data` field in that case.
+- For GraphQL, `perform http.graphql(...)` returns `ok(data)` only when `data` is actually present and no `errors` array is populated — the exact failure tree the field test used to mis-diagnose (`"GraphQL errors: None"` in a loop) is now a single `Result` the author cannot mis-classify.
+- For REST, `parse_json(resp.body)` before claiming success → the return string quotes the real URL/id from the server, not a hardcoded `"posted"`.
+- `resp.body` / the `Result` error message is included in every failure return → when the user says "it failed", you can actually see why.
 
 **When a channel the user named has no posting API — HANDLE THIS CAREFULLY.** Default LLM behavior is to say "no API, I'll write a draft, you copy-paste it into the form." **This is the behavior this project exists to kill.** The user came here so they don't have to do manual work. A "here's a draft, you submit it" response is the agent giving up — it pushes the work back onto the non-programmer.
 

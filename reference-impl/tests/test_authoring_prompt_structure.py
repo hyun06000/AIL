@@ -78,6 +78,33 @@ def test_http_post_json_rule_present():
     assert "Never hand-roll JSON" in p
 
 
+def test_http_graphql_rule_present():
+    """v1.17.0 gap-closer: for GraphQL APIs, agents must use the
+    specialized http.graphql effect rather than hand-rolling the
+    error-detection tree over http.post_json + parse_json. Field test
+    2026-04-24 saw three turns of misdiagnosed GitHub GraphQL
+    failures with the hand-rolled pattern."""
+    p = _get_prompt()
+    assert "http.graphql" in p
+    assert "Never hand-roll GraphQL error handling" in p
+    # The GitHub canonical example must use http.graphql.
+    first_idx = p.find("GitHub GraphQL")
+    end_idx = p.find("```", first_idx)
+    # Find the next ``` (closing fence after the opening fence)
+    opening_fence = p.rfind("```ail", 0, first_idx)
+    # The GitHub example starts at the `# GitHub GraphQL` comment;
+    # it must contain `perform http.graphql` inside that block.
+    closing_fence = p.find("```", p.find("# GitHub GraphQL"))
+    assert closing_fence != -1
+    github_block = p[p.find("# GitHub GraphQL"):closing_fence]
+    assert "perform http.graphql" in github_block, (
+        "GitHub canonical example must call `perform http.graphql` "
+        "— not hand-rolled http.post_json + parse_json.")
+    # And it must NOT retain the hand-rolled errors check in that
+    # example (guards against a future edit partially rewriting it).
+    assert 'get(data, "errors")' not in github_block
+
+
 def test_input_hint_rule_present():
     """v1.15.2 UX: agents must declare a # INPUT: hint when entry uses input."""
     p = _get_prompt()

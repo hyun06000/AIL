@@ -443,6 +443,8 @@ class Executor:
             return self._http_effect("POST", args, kwargs, origin)
         if name == "http.post_json":
             return self._http_post_json(args, kwargs, origin)
+        if name == "http.graphql":
+            return self._http_graphql(args, kwargs, origin)
         if name == "file.read":
             return self._file_read(args, kwargs, origin)
         if name == "file.write":
@@ -466,9 +468,9 @@ class Executor:
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
-            f"http.post_json, file.read, file.write, clock.now, "
-            f"state.read, state.write, state.has, state.delete, "
-            f"schedule.every, env.read, human.approve, "
+            f"http.post_json, http.graphql, file.read, file.write, "
+            f"clock.now, state.read, state.write, state.has, "
+            f"state.delete, schedule.every, env.read, human.approve, "
             f"or a declared effect)"
         )
 
@@ -1088,6 +1090,215 @@ class Executor:
                  "error": f"http.post_json {url}: {e}"},
                 0.0, origin=origin,
             )
+
+    def _http_graphql(self, args: list[ConfidentValue],
+                      kwargs: dict[str, ConfidentValue],
+                      origin: Origin) -> ConfidentValue:
+        """HTTP POST a GraphQL query and return the `data` payload.
+
+        HEAAL gap closer (2026-04-24 promo-bot field test): agents
+        trying GitHub GraphQL kept mis-diagnosing failure because
+        `200 OK` + `{"errors": [...]}` + no `data` all look like
+        "it worked" from the HTTP layer. After three turns of
+        "GraphQL errors: None" the agent had no idea whether the
+        mutation had fired. This effect collapses the full decision
+        tree — HTTP status, JSON parse, `errors` array, `data`
+        present-and-not-null — into one `Result[Any]` so the author
+        cannot mis-classify.
+
+        Shape:
+            perform http.graphql(url, query, variables?, headers?)
+                -> Result[Any]
+
+          - ok(data)  = response.data (the unwrapped payload;
+                        inner fields accessed via `get()`)
+          - error(msg)= any of: HTTP 4xx/5xx, unparseable JSON,
+                        `errors` array non-empty (messages joined),
+                        `data` absent or null
+
+        Returning `ok(data)` (not `ok(response)`) intentionally hides
+        the raw JSON shape — authors do `get(get(unwrap(r), "createDiscussion"),
+        "discussion")` to reach into the mutation result, never
+        `get(resp_body, "data")` which in the old pattern was the
+        source of the silent-failure bug.
+        """
+        import urllib.request
+        import urllib.error
+        import json as _json
+
+        url = str(args[0].value) if args else str(
+            kwargs.get("url", ConfidentValue("", 1.0)).value)
+        if len(args) < 2 and "query" not in kwargs:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": "http.graphql: needs a query argument"},
+                1.0, origin=origin)
+        query = args[1].value if len(args) >= 2 else kwargs["query"].value
+        if not isinstance(query, str) or not query.strip():
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": "http.graphql: query must be a non-empty string"},
+                1.0, origin=origin)
+
+        # Variables optional. Accepts the same pair-list / record
+        # shapes as encode_json does, so `[["a", 1], ["b", "x"]]`
+        # works directly as a `variables` argument.
+        variables = None
+        if len(args) >= 3:
+            variables = args[2].value
+        elif "variables" in kwargs:
+            variables = kwargs["variables"].value
+
+        try:
+            body_dict = {"query": query}
+            if variables is not None:
+                body_dict["variables"] = _json_normalize(variables)
+            body_text = _json.dumps(body_dict, ensure_ascii=False)
+        except Exception as e:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": ("http.graphql: could not encode body: "
+                           f"{type(e).__name__}: {e}")},
+                1.0, origin=origin)
+
+        custom_headers: dict[str, str] = {}
+        if "headers" in kwargs:
+            raw_headers = kwargs["headers"].value
+            if isinstance(raw_headers, dict):
+                for hk, hv in raw_headers.items():
+                    if hv is None:
+                        continue
+                    custom_headers[str(hk)] = str(hv)
+            elif isinstance(raw_headers, list):
+                for pair in raw_headers:
+                    if isinstance(pair, (list, tuple)) and len(pair) == 2:
+                        if pair[1] is None:
+                            continue
+                        custom_headers[str(pair[0])] = str(pair[1])
+
+        merged_headers = {
+            "User-Agent": "ail-http-effect/1.0",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        merged_headers.update(custom_headers)
+
+        try:
+            req = urllib.request.Request(
+                url, method="POST",
+                data=body_text.encode("utf-8"),
+                headers=merged_headers,
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                content = resp.read().decode("utf-8", errors="replace")
+                status = int(resp.status)
+            self.trace.record(
+                "http_call", method="GRAPHQL", url=url,
+                status=float(status), ok=(200 <= status < 300),
+                body_preview=content[:200] if not (200 <= status < 300) else None,
+            )
+        except urllib.error.HTTPError as e:
+            status = int(e.code)
+            try:
+                content = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                content = ""
+            self.trace.record(
+                "http_call", method="GRAPHQL", url=url,
+                status=float(status), ok=False,
+                reason=getattr(e, "reason", ""),
+                body_preview=content[:200],
+            )
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": (f"http.graphql: HTTP {status}: "
+                           f"{content[:500]}")},
+                1.0, origin=origin)
+        except urllib.error.URLError as e:
+            self.trace.record(
+                "http_call", method="GRAPHQL", url=url,
+                status=None, ok=False,
+                network_error=str(e),
+            )
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": f"http.graphql {url}: {e}"},
+                0.0, origin=origin)
+
+        if not (200 <= status < 300):
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": (f"http.graphql: HTTP {status}: "
+                           f"{content[:500]}")},
+                1.0, origin=origin)
+
+        # Parse body as JSON.
+        try:
+            parsed = _json.loads(content)
+        except ValueError as e:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": ("http.graphql: response was not JSON: "
+                           f"{content[:300]}")},
+                1.0, origin=origin)
+
+        if not isinstance(parsed, dict):
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": (f"http.graphql: expected JSON object, "
+                           f"got {type(parsed).__name__}: "
+                           f"{content[:300]}")},
+                1.0, origin=origin)
+
+        # GraphQL spec: `errors` is an array of {message, path?, ...}.
+        # Any non-empty `errors` is a hard failure — even if `data`
+        # is partially populated. Authors who need partial-success
+        # semantics can fall back to http.post_json and hand-parse;
+        # this effect is opinionated on "did it fully succeed?".
+        errors = parsed.get("errors")
+        if isinstance(errors, list) and errors:
+            messages = []
+            for i, err in enumerate(errors):
+                if isinstance(err, dict):
+                    msg = err.get("message", "")
+                    path = err.get("path")
+                    type_ = err.get("type")
+                    parts = [msg]
+                    if type_:
+                        parts.append(f"[{type_}]")
+                    if path:
+                        parts.append(f"at {path}")
+                    messages.append(" ".join(str(p) for p in parts if p))
+                else:
+                    messages.append(str(err))
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": ("http.graphql: "
+                           + "; ".join(messages))},
+                1.0, origin=origin)
+
+        # `data` must be present and not null. GraphQL semantics:
+        # `data: null` means the top-level operation failed, and
+        # any response without a `data` key means the server
+        # couldn't even start evaluating.
+        if "data" not in parsed:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": ("http.graphql: response has no `data` "
+                           f"field: {content[:300]}")},
+                1.0, origin=origin)
+        data = parsed["data"]
+        if data is None:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": ("http.graphql: response.data is null "
+                           "(operation failed without an errors "
+                           f"entry): {content[:300]}")},
+                1.0, origin=origin)
+
+        return ConfidentValue(
+            {"_result": True, "ok": True, "value": data},
+            1.0, origin=origin)
 
     def _file_read(self, args: list[ConfidentValue],
                    kwargs: dict[str, ConfidentValue],
