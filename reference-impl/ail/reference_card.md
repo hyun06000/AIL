@@ -510,6 +510,18 @@ Built-in effects:
     `.ail/state/keyval/`). Outside an agentic project the state
     effects return an explanatory error — set `AIL_STATE_DIR` to
     enable manual use from `ail run`.
+  - `env.read(name: Text) -> Result[Text]` — read an OS environment
+    variable. ok(value) when set (including empty string), error
+    when unset or when name is empty. The only supported path for
+    credentials (API keys, webhook URLs, auth tokens); hardcoding
+    placeholders in source is forbidden by the authoring prompt.
+  - `http.post(url: Text, body: Text, headers?: [[Text, Text]] |
+    Record) -> Record` — optional headers kwarg for Bearer-auth
+    APIs, content types, etc. Accepts either a list of
+    [key, value] pairs (source-level, since AIL has no dict
+    literal syntax) or a record (from intent / state). Example:
+    `perform http.post(url, body, headers: [["Authorization", t],
+    ["Content-Type", "application/json"]])`.
   - `schedule.every(seconds: Number) -> Result[Boolean]` — register
     a recurring re-invocation of `entry main` inside an agentic
     project. Call from inside the entry; the agentic runtime starts

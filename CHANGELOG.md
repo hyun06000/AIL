@@ -4,6 +4,83 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.11.0 — 2026-04-23
+
+**Self-promotion agent.** AIL written in AIL promoting AIL. The
+ail-herald example drafts a promotional post via `intent`, waits
+for human approval in the browser, and — once approved — actually
+posts it to Discord via a webhook. Human approval is the trust
+boundary; past it, the agent acts autonomously.
+
+This is the meta-demo the project has been missing: the language's
+own case study is a program written in the language, doing real
+work, running on the language's own harness.
+
+### Added — `perform env.read(name: Text) -> Result[Text]`
+
+Read an OS environment variable as `Result[Text]`. `ok(value)` when
+set (empty string is a valid value, not an error), `error("... not
+set")` when absent. The only sanctioned path for credentials (API
+tokens, webhook URLs, auth headers); hardcoding placeholders like
+`apiKey=demo` in source is forbidden by the authoring prompt (see
+v1.10.1). Launch-time env var is the trust boundary.
+
+### Added — `perform http.post` optional `headers` kwarg
+
+Accepts two shapes:
+
+- A record (runtime dict, typically from intent or state).
+- A list of 2-element `[key, value]` lists — the source-level form,
+  since AIL has no dict literal syntax:
+  ```ail
+  perform http.post(url, body, headers: [
+      ["Authorization", t],
+      ["Content-Type", "application/json"]
+  ])
+  ```
+
+Default `User-Agent: ail-http-effect/1.0` still applied; the caller
+can override it.
+
+### Added — `examples/agentic/ail-herald/`
+
+The meta agent. Three AIL-native primitives composing:
+
+- `intent write_promo_post() -> Text` — v1.10.0 harness validates
+  the return is plain Text, not a JSON envelope.
+- `perform env.read("AIL_HERALD_DISCORD_WEBHOOK")` — pick up the
+  webhook URL at launch, never in source.
+- `perform http.post(url, body, headers: ...)` — actually publish.
+
+`view.html` renders the human-approval UI: "New draft" generates
+via intent; "Approve & post to Discord" fires the real HTTP.
+
+### Tests
+
+- `test_env_effect.py` — 4 tests (ok, empty-string-is-valid, error
+  when unset, reject empty name).
+- `test_http_headers.py` — 3 tests (Authorization Bearer delivered,
+  Content-Type merged with default User-Agent, backward
+  compatibility without headers kwarg).
+- 462 passing total (+7 from 455).
+
+### Why this release matters for HEAAL
+
+Credential handling and outbound HTTP were the last common sources
+of "just trust the author" gaps. Now:
+
+- Credentials in env vars only; the authoring prompt rule against
+  placeholder keys is backed by a real mechanism.
+- Outbound HTTP has structured headers support for real APIs
+  (Bearer auth, JSON content type).
+- Human approval is the explicit trust boundary between agent
+  drafting and agent acting.
+
+No new grammar. No new AST nodes. Just two effects slotting into
+the existing harness.
+
+---
+
 ## v1.10.1 — 2026-04-23
 
 **Non-programmer dead-end fix.** hyun06000 field-tested the

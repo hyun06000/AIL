@@ -13,6 +13,7 @@ declared in `## Deployment`.
 | [`visit-counter/`](visit-counter/) | None | Cross-request state — `perform state.read` / `state.write`. Each request increments a counter; the value survives process restart. L2 v2 primitive demo. |
 | [`sentiment/`](sentiment/) | Author + intent (Anthropic / OpenAI / Ollama) | The fn/intent split in one program — pure word count + LLM sentiment label. One model call per request. |
 | [`news-ticker/`](news-ticker/) | None | Recurring work via `perform schedule.every(10)` + persistent `state.write` + HTML output mode. Three L2 v2 primitives composing in one dashboard. |
+| [`ail-herald/`](ail-herald/) | Discord webhook | The meta one — AIL written in AIL promoting AIL. Drafts a post via `intent`, waits for human approval in the browser UI, posts to Discord via `perform http.post` with a webhook URL read from `perform env.read`. Demonstrates `env.read` + http headers + human-in-the-loop agent flow. |
 
 ## Running
 

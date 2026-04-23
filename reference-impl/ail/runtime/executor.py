@@ -457,12 +457,14 @@ class Executor:
             return self._state_delete(args, kwargs, origin)
         if name == "schedule.every":
             return self._schedule_every(args, kwargs, origin)
+        if name == "env.read":
+            return self._env_read(args, kwargs, origin)
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
             f"file.read, file.write, clock.now, "
             f"state.read, state.write, state.has, state.delete, "
-            f"schedule.every, or a declared effect)"
+            f"schedule.every, env.read, or a declared effect)"
         )
 
     # --- clock effect (L2 case study 2026-04-23 — fills the "hardcoded
@@ -635,6 +637,37 @@ class Executor:
                 f"{type(e).__name__}: {e}", origin)
         return self._result_ok(True, origin)
 
+    # --- env effect — read OS environment variables as Result[Text].
+    # Gives AIL programs a way to pick up credentials (Mastodon token,
+    # webhook URL, API key) without hardcoding them in source. The
+    # authoring prompt already forbids placeholder keys; env.read is
+    # the safe alternative.
+    def _env_read(self, args, kwargs, origin):
+        """env.read(name: Text) -> Result[Text]
+
+        Returns ok(<value>) when the named env var is set (even to the
+        empty string — that's a valid value, not a missing key),
+        error(...) when it's unset or when the argument is not a
+        non-empty string.
+
+        No allow-listing of names in this release: the trust boundary
+        is whoever launched `ail up` / `ail run`. A future `effect env`
+        declaration can add per-project restrictions.
+        """
+        import os
+        if not args:
+            return self._result_err(
+                "env.read needs a name argument", origin)
+        name = args[0].value
+        if not isinstance(name, str) or not name:
+            return self._result_err(
+                f"env.read: name must be a non-empty string "
+                f"(got {name!r})", origin)
+        if name not in os.environ:
+            return self._result_err(
+                f"env var {name!r} is not set", origin)
+        return self._result_ok(os.environ[name], origin)
+
     # --- schedule effect (L2 v2 case study Gap #3 — recurring work).
     # The effect only *registers* the cadence; the actual re-invocation
     # loop lives in `agentic/server.py`, which polls the schedule file
@@ -721,11 +754,36 @@ class Executor:
                 body = args[1].value
             elif "body" in kwargs:
                 body = kwargs["body"].value
+
+        # Optional headers: pass as kwarg only. Two accepted shapes:
+        #   - a record (dict at runtime, typically from intent/state)
+        #   - a list of 2-element [key, value] lists — since AIL has
+        #     no dict literal syntax, this is how source code builds
+        #     headers inline: `headers: [["Content-Type", "application/
+        #     json"], ["Authorization", token]]`.
+        # A User-Agent is always set unless the caller overrides it.
+        custom_headers: dict[str, str] = {}
+        if "headers" in kwargs:
+            raw_headers = kwargs["headers"].value
+            if isinstance(raw_headers, dict):
+                for hk, hv in raw_headers.items():
+                    if hv is None:
+                        continue
+                    custom_headers[str(hk)] = str(hv)
+            elif isinstance(raw_headers, list):
+                for pair in raw_headers:
+                    if isinstance(pair, (list, tuple)) and len(pair) == 2:
+                        if pair[1] is None:
+                            continue
+                        custom_headers[str(pair[0])] = str(pair[1])
+
+        merged_headers = {"User-Agent": "ail-http-effect/1.0"}
+        merged_headers.update(custom_headers)
         try:
             req = urllib.request.Request(
                 url, method=method,
                 data=(str(body).encode("utf-8") if body is not None else None),
-                headers={"User-Agent": "ail-http-effect/1.0"},
+                headers=merged_headers,
             )
             with urllib.request.urlopen(req, timeout=30) as resp:
                 content = resp.read().decode("utf-8", errors="replace")

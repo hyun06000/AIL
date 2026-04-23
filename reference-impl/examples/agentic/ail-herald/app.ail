@@ -1,0 +1,80 @@
+// AIL이 AIL을 홍보하는 에이전트. Discord webhook 한 개, 초안 1슬롯.
+//
+// 세 경로:
+//   POST body="draft"   → intent로 초안 생성, state에 저장, 텍스트 반환
+//   POST body="publish" → 저장된 초안을 Discord에 POST, 결과 반환
+//   POST body=""(기본) → 저장된 초안 조회
+//
+// 승인 경계: 사람이 "publish"를 명시적으로 보낼 때만 실제 게시가 일어남.
+// 그 전까지는 draft만 반복 생성/조회 가능.
+
+intent write_promo_post() -> Text {
+    goal: a short promotional post about the AIL programming language and the HEAAL paradigm
+    constraints {
+        mention_that_the_safety_harness_is_part_of_the_language_grammar
+        reference_the_pypi_package_ail_interpreter
+        under_400_characters
+        language_english
+        no_hashtag_spam
+        no_emoji_spam
+    }
+}
+
+pure fn escape_json_text(s: Text) -> Text {
+    // Minimal JSON-string escape so content survives as a single field.
+    a = replace(s, "\\", "\\\\")
+    b = replace(a, "\"", "\\\"")
+    c = replace(b, "\n", "\\n")
+    return c
+}
+
+pure fn build_discord_body(content: Text) -> Text {
+    return join(["{\"content\": \"", escape_json_text(content), "\"}"], "")
+}
+
+fn current_draft() -> Text {
+    r = perform state.read("current_draft")
+    if is_ok(r) { return unwrap(r) }
+    return ""
+}
+
+fn save_draft(content: Text) -> Text {
+    perform state.write("current_draft", content)
+    now = perform clock.now("iso")
+    perform state.write("drafted_at", now)
+    return content
+}
+
+fn post_to_discord(content: Text) -> Text {
+    webhook_r = perform env.read("AIL_HERALD_DISCORD_WEBHOOK")
+    if is_error(webhook_r) {
+        return unwrap_error(webhook_r)
+    }
+    url = unwrap(webhook_r)
+    body = build_discord_body(content)
+    resp = perform http.post(url, body, headers: [["Content-Type", "application/json"]])
+    if resp.ok {
+        now = perform clock.now("iso")
+        perform state.write("last_published_at", now)
+        perform state.write("last_published_content", content)
+        return "posted"
+    }
+    return join(["http error ", to_text(resp.status), ": ", resp.body], "")
+}
+
+entry main(input: Text) {
+    if input == "draft" {
+        content = write_promo_post()
+        save_draft(content)
+        return content
+    }
+    if input == "publish" {
+        draft = current_draft()
+        if length(draft) == 0 {
+            return error("no draft to publish — POST 'draft' first")
+        }
+        result = post_to_discord(draft)
+        return result
+    }
+    return current_draft()
+}
