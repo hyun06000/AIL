@@ -55,15 +55,17 @@ def render_authoring_page(
       -webkit-font-smoothing: antialiased; }}
     .page {{ max-width: 720px; margin: 0 auto; padding: 24px;
       display: flex; flex-direction: column;
-      min-height: 100vh; }}
-    header {{ margin-bottom: 12px; }}
+      height: 100vh; overflow: hidden; }}
+    header {{ margin-bottom: 12px; flex-shrink: 0; }}
     h1 {{ margin: 0; font-size: 18px; letter-spacing: -0.01em; }}
     .sub {{ color: var(--muted); font-size: 13px; margin-top: 2px; }}
     .sub a {{ color: var(--muted); text-decoration: underline;
       text-decoration-color: #d1d5db; cursor: pointer; }}
     .sub a:hover {{ color: #111; text-decoration-color: #111; }}
     .thread {{ flex: 1; overflow-y: auto; padding: 12px 0;
-      display: flex; flex-direction: column; gap: 10px; }}
+      display: flex; flex-direction: column; gap: 10px;
+      scrollbar-width: none; }}
+    .thread::-webkit-scrollbar {{ display: none; }}
     .turn {{ display: flex; }}
     .turn.user {{ justify-content: flex-end; }}
     .bubble {{ max-width: 80%; padding: 10px 14px;
