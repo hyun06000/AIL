@@ -4,6 +4,40 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.20.0 — 2026-04-24
+
+**`perform ail.run` — meta-programming / autonomous agent primitive.**
+
+An AIL program can now write and execute another AIL program at runtime.
+This closes the loop for self-writing autonomous agents:
+`intent write_program(goal) -> Text` + `perform ail.run(program, input)`.
+
+### What changed
+
+- **`perform ail.run(code: Text, input?: Text) -> Result[Text]`** added.
+  Compiles and executes an AIL source string in a sub-executor. The
+  sub-program runs with the same adapter, ask_human, human.approve gate,
+  and purity constraints — the HEAAL harness is never bypassed.
+- **Recursion depth safety** (hyun06000 design decision 2026-04-24):
+  - depth ≥ 3 (`_AIL_RUN_DEPTH_WARN`) → trace warning, continues
+  - depth ≥ 8 (`_AIL_RUN_DEPTH_LIMIT`) → `Result-error` hard stop
+  Both thresholds are named module-level constants for easy tuning.
+- **12 new tests** in `tests/test_ail_run.py` covering happy path,
+  parse errors, runtime errors, depth warning/hard-stop, trace events.
+- **Reference card** updated with `ail.run` signature and autonomous
+  agent usage pattern.
+
+### Why this is a turning point
+
+Level 1 (schedule.every + intent loop) was already possible.
+`ail.run` enables Level 2: an AIL program generates AIL code via
+`intent` and executes it, enabling goal-directed meta-programming.
+Safety is grammatical — generated programs cannot escape the executor's
+harness, so arbitrary-code risk is bounded by the same constraints that
+bound human-authored programs.
+
+---
+
 ## v1.19.0 — 2026-04-24
 
 **`perform search.web` — three-backend web search effect.**

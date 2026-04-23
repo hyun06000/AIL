@@ -62,10 +62,17 @@ class ConstraintViolation(Exception):
         super().__init__(f"constraint violated: {constraint}")
 
 
+# Depth limits for perform ail.run recursive execution.
+# Warning is logged to trace; hard stop returns a Result-error.
+_AIL_RUN_DEPTH_WARN = 3
+_AIL_RUN_DEPTH_LIMIT = 8
+
+
 class Executor:
     def __init__(self, program: Program, adapter: ModelAdapter,
                  ask_human=None, metric_fn=None, approve_review=None,
-                 calibrator: Optional[Calibrator] = None):
+                 calibrator: Optional[Calibrator] = None,
+                 _ail_run_depth: int = 0):
         """
         Parameters:
           program       — compiled AIL program
@@ -92,6 +99,7 @@ class Executor:
         self.metric_fn = metric_fn   # may be None; evolution then idles
         self.approve_review = approve_review or (lambda _info: False)
         self.calibrator = calibrator if calibrator is not None else default_calibrator()
+        self._ail_run_depth = _ail_run_depth
 
         # index declarations
         self.intents: dict[str, IntentDecl] = {}
@@ -467,13 +475,15 @@ class Executor:
             return self._human_approve(args, kwargs, origin)
         if name == "search.web":
             return self._search_web(args, kwargs, origin)
+        if name == "ail.run":
+            return self._ail_run(args, kwargs, origin)
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
             f"http.post_json, http.graphql, file.read, file.write, "
             f"clock.now, state.read, state.write, state.has, "
             f"state.delete, schedule.every, env.read, human.approve, "
-            f"search.web, or a declared effect)"
+            f"search.web, ail.run, or a declared effect)"
         )
 
     # --- clock effect (L2 case study 2026-04-23 — fills the "hardcoded
@@ -1301,6 +1311,90 @@ class Executor:
         return ConfidentValue(
             {"_result": True, "ok": True, "value": data},
             1.0, origin=origin)
+
+    def _ail_run(self, args: list[ConfidentValue],
+                 kwargs: dict[str, ConfidentValue],
+                 origin: Origin) -> ConfidentValue:
+        """Run a block of AIL source code and return its result.
+
+        Shape:
+            perform ail.run(code: Text, input?: Text) -> Result[Text]
+
+        This is the meta-programming primitive: an AIL program can write
+        another AIL program (via intent) and execute it. The returned
+        value is the sub-program's entry return value as Text.
+
+        Safety: sub-programs run in the same executor type with the same
+        harness constraints (pure fn purity, Result wrapping, human.approve
+        gate on irreversible effects). They inherit this executor's adapter
+        and ask_human so the same model and approval UI are used.
+
+        Recursion limits:
+          depth >= {warn}  → trace warning, execution continues
+          depth >= {limit} → Result-error, execution stops
+        """.format(warn=_AIL_RUN_DEPTH_WARN, limit=_AIL_RUN_DEPTH_LIMIT)
+
+        next_depth = self._ail_run_depth + 1
+
+        if next_depth >= _AIL_RUN_DEPTH_LIMIT:
+            self.trace.record(
+                "ail_run_depth_exceeded",
+                depth=next_depth, limit=_AIL_RUN_DEPTH_LIMIT)
+            return self._result_err(
+                f"ail.run: recursion depth {next_depth} exceeds limit "
+                f"({_AIL_RUN_DEPTH_LIMIT}). Autonomous agent loop too deep — "
+                f"add a base case or reduce nesting.", origin)
+
+        if next_depth >= _AIL_RUN_DEPTH_WARN:
+            self.trace.record(
+                "ail_run_depth_warning",
+                depth=next_depth, warn=_AIL_RUN_DEPTH_WARN,
+                limit=_AIL_RUN_DEPTH_LIMIT)
+
+        if not args and "code" not in kwargs:
+            return self._result_err(
+                "ail.run needs a code argument", origin)
+        code = str(args[0].value if args else kwargs["code"].value)
+        if not code.strip():
+            return self._result_err(
+                "ail.run: code must be a non-empty string", origin)
+
+        run_input = ""
+        if len(args) >= 2:
+            run_input = str(args[1].value)
+        elif "input" in kwargs:
+            run_input = str(kwargs["input"].value)
+
+        try:
+            from .. import compile_source
+            program = compile_source(code)
+        except Exception as e:
+            return self._result_err(
+                f"ail.run: parse error in generated program: "
+                f"{type(e).__name__}: {e}", origin)
+
+        try:
+            sub = Executor(
+                program,
+                adapter=self.adapter,
+                ask_human=self.ask_human,
+                metric_fn=self.metric_fn,
+                approve_review=self.approve_review,
+                calibrator=self.calibrator,
+                _ail_run_depth=next_depth,
+            )
+            result = sub.run_entry({"input": run_input})
+            self.trace.record(
+                "ail_run", depth=next_depth,
+                code_len=len(code), ok=True)
+            return self._result_ok(str(result.value), origin)
+        except Exception as e:
+            self.trace.record(
+                "ail_run", depth=next_depth,
+                code_len=len(code), ok=False,
+                error=str(e)[:200])
+            return self._result_err(
+                f"ail.run: runtime error: {type(e).__name__}: {e}", origin)
 
     def _search_web(self, args: list[ConfidentValue],
                     kwargs: dict[str, ConfidentValue],

@@ -582,6 +582,15 @@ Built-in effects:
     discussions, etc.). The authoring prompt enforces use for the
     irreversible-effect class; the effect itself is the grammatical
     hook that makes the gate non-bypassable.
+  - `ail.run(code: Text, input?: Text) -> Result[Text]` — **meta-programming
+    gate**. Compiles and executes an AIL source string and returns the
+    entry's result as Text. The sub-program runs in the same executor
+    (same adapter, same `human.approve` gate, same purity constraints)
+    so the HEAAL harness is never bypassed. Recursion depth ≥ 3 logs a
+    warning; ≥ 8 returns a hard `Result-error`. Use with `intent` to
+    create self-writing autonomous agents:
+    `intent write_program(goal) -> Text` then
+    `perform ail.run(program, input)`.
   - `search.web(query: Text, count?: Number) -> Result[List[Record]]` —
     web search with automatic backend fallback. Each result Record has
     `title`, `url`, `snippet` fields. Backend priority:
