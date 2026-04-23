@@ -1955,6 +1955,8 @@ class Executor:
             if raw and isinstance(raw[0], list):
                 return ConfidentValue(list(reversed(raw[0])), conf)
         if name == "range":
+            if len(raw) == 1:
+                return ConfidentValue(list(range(int(raw[0]))), conf)
             if len(raw) >= 2:
                 return ConfidentValue(list(range(int(raw[0]), int(raw[1]))), conf)
         if name == "map" and len(raw) >= 2 and isinstance(raw[0], list):
