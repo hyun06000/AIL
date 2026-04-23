@@ -4,6 +4,86 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.14.0 — 2026-04-23
+
+**Architectural pivot: chat_history is the agent's memory, not
+INTENT.md.**
+
+hyun06000 asked the question that flipped the design: *"챗 기반으로
+가면 INTENT.md가 꼭 필요하니? 이거 사람이 프로젝트 하나하나 만드는
+용도로 설계한 인터페이스잖아? 그러면 챗으로 AI가 프로젝트를 꾸려간다면,
+더 AI친화적인 방식이 있을 것 같아서. 여기에 매몰되지 말자."*
+
+Correct. INTENT.md is legacy scaffolding from before chat-driven
+authoring. Chat history is naturally cumulative, per-turn, auditable,
+and already loaded into the agent's context every turn. Maintaining
+INTENT.md as a parallel memory source was generating a class of
+"overwrite" / "drift" / "sync" bugs the v1.13.x releases had been
+fighting one by one. Cutting the source-of-truth duplication kills
+all of them at the root.
+
+### What changed
+
+- **`_read_project_state`** no longer includes INTENT.md in the
+  PROJECT STATE block. The agent sees only `.ail` programs with
+  parse annotations and `view.html` when present. Chat history
+  (always loaded) is now the sole memory source.
+- **Prompt** — two big sections removed:
+  - "INTENT.md IS CUMULATIVE MEMORY — NEVER OVERWRITE WHOLESALE"
+  - "EVERY PROGRAM CARRIES THE PROJECT'S PURPOSE" (the version
+    tied to INTENT.md)
+  Replaced with a single "YOUR MEMORY IS THE CHAT HISTORY" section
+  that does the same job more directly: chat log is memory, first
+  user message is the purpose anchor, bake the anchor into every
+  new program's intent goals.
+- **History formatting** — `_format_history` now prepends a
+  `[PROJECT PURPOSE ANCHOR]` block with the first user message,
+  so turn N's agent cannot miss the opening statement buried 20
+  turns up.
+- **INTENT.md role** — optional legacy/README file. Still
+  scaffolded by `ail init` (template), but the agent:
+  - Is told not to use it as working memory.
+  - Is told not to re-emit it every turn.
+  - May still write it if the user explicitly asks for a README.
+
+### What stays
+
+- `Project.init` still writes an INTENT.md template on the
+  filesystem. Removing it would break `ail init`'s historical
+  contract; it's now just a dormant scaffold.
+- All `.ail` multi-program handling, env/secret handling, Run
+  widget, export, "do the work" prompting — unchanged.
+- Chat export still renders INTENT.md if present, just with
+  less emphasis.
+
+### Tests
+
+- Replaced `test_prompt_teaches_project_purpose_carries_forward`
+  and `test_prompt_teaches_intent_md_is_cumulative` (both now
+  obsolete) with:
+  - `test_prompt_teaches_chat_history_is_memory` — new framing.
+  - `test_project_state_omits_intent_md_in_v1_14` — confirms the
+    cut.
+  - `test_history_format_highlights_first_user_message_as_purpose`
+  - `test_history_format_no_anchor_on_first_turn`
+
+528 passing (+2 from 526).
+
+### Why this matters beyond one release
+
+v1.13.x was a flurry of "don't overwrite INTENT.md", "carry
+purpose forward", "bake subject into goals", "finish the job",
+"don't rewrite wholesale". Each rule was a patch on a hybrid
+design where two things (chat history + INTENT.md) were both
+trying to be memory. Remove one, the patches stop being needed.
+
+The agent's memory should BE the conversation, because that's
+what the user actually remembers too. That's AI-native. The
+hand-edited INTENT.md was always for humans to declare intent
+before programming. This isn't that world anymore.
+
+---
+
 ## v1.13.4 — 2026-04-23
 
 **Don't reference `input` unless the entry actually uses it.**

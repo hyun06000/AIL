@@ -182,70 +182,24 @@ full new contents of app.ail
 </file>
 <action>ready_to_run</action>
 
-=== EVERY PROGRAM CARRIES THE PROJECT'S PURPOSE ===
+=== YOUR MEMORY IS THE CHAT HISTORY ===
 
-A project is a single coherent theme. When the user opened this chat they gave it a subject (e.g. "AIL/HEAAL 홍보", "내 가계부 분석", "호르무즈 뉴스 요약"). Every `.ail` file you add to this project is a tool IN SERVICE OF that subject — not a standalone generic utility.
+chat_history.jsonl (visible as CONVERSATION HISTORY below) is the single source of truth for this project. Every user message, every file you have written, every run result is there. On every turn you get the full log. That IS your memory.
 
-**Concrete failure mode this closes:** user starts project "AIL/HEAAL 홍보". Four turns later asks "추천 채널 봇도 만들어줘". The agent reflexively writes a generic `channel_recommender.ail` that recommends channels for *any* project, forgetting the meta-context. The user then has to say "it's for AIL/HEAAL you forgot". Don't make them remind you.
+**The first user message usually states the project purpose.** Anchor to it. A turn 5 request for a channel recommender in a project whose turn 1 was AIL 홍보 means: a recommender FOR AIL promotion. Not a generic utility. Dont let the user remind you of the project subject — it is in the history, read it.
 
-**Rule:** Before writing any program, re-read INTENT.md (it's in PROJECT STATE). Whatever the top-level purpose is, **bake it into every `intent` goal and every relevant string literal** in the program you're writing. A "channel recommender" in a project about AIL should have `goal: "recommend the best developer communities to promote the AIL programming language and its HEAAL paradigm ..."` — not a generic one.
+**Bake the history-established purpose into every new program.** When you write a new intent, its goal string should reference the project concrete subject (recommend channels for promoting AIL and its HEAAL paradigm...) — not a generic one. String literals, constraints, default values — all should reflect the project concrete domain.
 
-**In every `<reply>`, confirm the project's subject when you name the new program**: "AIL/HEAAL 홍보용 채널 추천봇 만들었어요" — so the user sees the continuity.
+**<reply> names the new program with the subject visible** — AIL 홍보용 채널 추천봇 만들었어요 — so continuity is obvious to the user.
 
-If the user's prompt genuinely implies a new pivot ("이제 게시는 그만두고 아예 새 프로젝트로 바꾸자"), that's a different thing — ask a single yes/no before rewriting INTENT.md's top-level purpose. But default is: keep the project's purpose, thread it through everything new.
+**Pivot exception:** if the user explicitly says 이제 다른 프로젝트로 바꾸자 / start over / this is unrelated, confirm with one yes/no before abandoning the prior purpose. Default: history-established purpose wins.
 
-=== INTENT.md IS CUMULATIVE MEMORY — NEVER OVERWRITE WHOLESALE ===
+**New independent programs = new files.** The chat history is proof you wrote word_counter.ail three turns ago; dont overwrite it with a sorter now. Pick a descriptive filename for the new one.
 
-INTENT.md is the project's accumulating memory across chat turns. Every clarification and constraint the user has ever given lives here. You read it on every turn via the PROJECT STATE block. If you overwrite it, the user's context disappears and the project's purpose seems to mutate turn-by-turn.
-
-**Rules for INTENT.md:**
-
-- **Don't rewrite it from scratch every turn.** If an agent reflex says "regenerate INTENT.md to describe the new thing the user asked for", suppress that reflex. Amend, don't replace.
-- **First turn on an empty project:** write a minimal skeleton — title, one-line purpose, empty `## Programs` section, `## Deployment` with a port.
-- **New program added:** APPEND a `### filename.ail — short purpose` subsection under `## Programs`. Keep all existing subsections untouched.
-- **Program refined:** update ONLY that program's `### filename.ail` subsection.
-- **Project-wide constraint** (port, deployment target, shared storage, credential names): add it once under a suitable top-level heading and leave it there.
-
-**Carry-forward discipline.** When your `<file path="INTENT.md">` tag appears, its contents must include **every line from the previous INTENT.md** except the specific lines you're changing. Re-read the PROJECT STATE section above; copy existing content forward; apply the targeted change; write the result. Never drop an earlier program's description because the user's current request is about a different program.
-
-**When to SKIP writing INTENT.md:** if the current turn only touches `.ail` code and INTENT.md wouldn't change, simply omit the `<file path="INTENT.md">` tag. Don't re-emit unchanged content.
-
-**Example evolution:**
-
-Turn 1 (user: "단어 수 세주는 프로그램 만들어줘"):
-```markdown
-# my-app
-
-Text utilities service.
-
-## Programs
-
-### app.ail — word counter
-Counts words. Empty input is an error.
-
-## Deployment
-- Port 8080
-```
-
-Turn 2 (user: "이제 정렬도 해줘"):
-```markdown
-# my-app
-
-Text utilities service.
-
-## Programs
-
-### app.ail — word counter
-Counts words. Empty input is an error.
-
-### sorter.ail — list sorter
-Sorts a comma-separated list alphabetically.
-
-## Deployment
-- Port 8080
-```
-
-The word-counter description survived the sorter addition. That's the goal.
+**INTENT.md is NOT your memory.** It is a legacy human-facing scaffold from before chat-driven authoring. You MAY write INTENT.md if the user explicitly asks for a README — but:
+- Do NOT maintain INTENT.md as a working memory parallel to chat history. That is what created all the INTENT.md overwrite bugs this project just closed.
+- Do NOT re-emit INTENT.md every turn to keep it in sync with chat. It drifts. Chat history is the source.
+- If you never write INTENT.md, that is fine. Chat history captures everything the project needs to know.
 
 === REFERENCE `input` ONLY WHEN THE ENTRY ACTUALLY USES USER INPUT ===
 
@@ -542,8 +496,35 @@ Now respond using the XML format above."""
 
     def _format_history(self, history: list[dict]) -> str:
         if not history:
-            return "(no prior turns)"
-        parts = []
+            return (
+                "(no prior turns — this is the first turn. The user's "
+                "message below states the project's initial purpose.)"
+            )
+
+        # Highlight the opening user message as the project purpose
+        # anchor. v1.14.0: chat history is memory, and the first
+        # statement sets the theme the agent must preserve across
+        # every subsequent program it writes.
+        first_user_msg = None
+        for entry in history:
+            if entry.get("kind") != "run_result" and entry.get("user"):
+                first_user_msg = entry.get("user")
+                break
+
+        parts: list[str] = []
+        if first_user_msg:
+            parts.append(
+                "[PROJECT PURPOSE ANCHOR — opening user statement]"
+            )
+            parts.append(f"  {first_user_msg}")
+            parts.append(
+                "[Every subsequent program must align with this purpose "
+                "unless the user explicitly pivots.]"
+            )
+            parts.append("")
+            parts.append("[Full conversation log — most recent last]")
+            parts.append("")
+
         for entry in history:
             kind = entry.get("kind")
             if kind == "run_result":
@@ -617,24 +598,22 @@ Now respond using the XML format above."""
     def _read_project_state(self) -> dict[str, str]:
         """Assemble the PROJECT STATE block the agent sees each turn.
 
-        Lists every `.ail` program in the project (not just app.ail)
-        so the agent knows which files already exist and writes NEW
-        ones with new names when the user asks for a new independent
-        program, instead of overwriting.
+        v1.14.0 pivot: chat_history is the agent's memory, NOT
+        INTENT.md. The state block shows only the `.ail` programs
+        currently on disk (so the agent knows what to edit vs.
+        create) plus view.html. Project purpose, user constraints,
+        decisions made — all live in the chat history, which the
+        agent reads separately each turn.
+
+        This kills a whole class of "INTENT.md was overwritten",
+        "purpose drifted", "cumulative memory" bugs at the root —
+        chat_history is naturally cumulative, there's no second
+        source of truth to desync.
         """
         state: dict[str, str] = {}
 
-        # INTENT.md
-        intent_path = self.project.intent_path
-        if intent_path.is_file():
-            try:
-                state["INTENT.md"] = intent_path.read_text(encoding="utf-8")
-            except OSError:
-                state["INTENT.md"] = "(read error)"
-        else:
-            state["INTENT.md"] = ""
-
-        # view.html
+        # view.html (when present) — it's a genuine project asset
+        # the agent may need to read/edit.
         if (self.project.root / "view.html").exists():
             try:
                 state["view.html"] = (
@@ -663,7 +642,7 @@ Now respond using the XML format above."""
         # If no .ail file exists at all, put an explicit placeholder
         # so the state view shows the agent there are no programs yet.
         if not programs:
-            state["app.ail"] = ""
+            state["(no .ail programs yet)"] = ""
 
         return state
 

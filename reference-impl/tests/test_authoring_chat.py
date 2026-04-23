@@ -1088,26 +1088,57 @@ def test_prompt_rejects_draft_only_as_first_choice(tmp_path):
     assert "Only if the user insists" in prompt
 
 
-def test_prompt_teaches_project_purpose_carries_forward(tmp_path):
-    """v1.13.2 — field test: user project was 'AIL/HEAAL 홍보', agent
-    later wrote a generic channel_recommender forgetting the subject.
-    Prompt must teach the agent to thread the project's purpose
-    through every new program's intent goals."""
+def test_history_format_highlights_first_user_message_as_purpose(tmp_path):
+    """v1.14.0 — the opening user statement is the project's purpose
+    anchor. _format_history must surface it prominently at the top
+    of the conversation log so the agent can't miss it on turn N."""
+    proj = Project.init(tmp_path / "anchor")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    history = [
+        {"user": "AIL과 HEAAL을 홍보하는 봇 만들어줘",
+         "reply": "네", "files": [], "action": None},
+        {"user": "이번엔 정렬기도",
+         "reply": "ok", "files": [], "action": None},
+    ]
+    formatted = chat._format_history(history)
+    assert "PROJECT PURPOSE ANCHOR" in formatted
+    # The FIRST user message appears under the anchor.
+    assert "AIL과 HEAAL을 홍보하는 봇 만들어줘" in formatted
+    # Placement: anchor comes BEFORE the full log.
+    anchor_idx = formatted.index("PROJECT PURPOSE ANCHOR")
+    log_idx = formatted.index("Full conversation log")
+    assert anchor_idx < log_idx
+
+
+def test_history_format_no_anchor_on_first_turn(tmp_path):
+    proj = Project.init(tmp_path / "first")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    formatted = chat._format_history([])
+    assert "no prior turns" in formatted
+    assert "initial purpose" in formatted
+
+
+def test_prompt_teaches_chat_history_is_memory(tmp_path):
+    """v1.14.0 pivot — chat history is the agent's memory, not
+    INTENT.md. The prompt anchors the agent to the history for
+    project purpose, rather than re-synthesising INTENT.md every
+    turn."""
     proj = Project.init(tmp_path / "purp")
     chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
     prompt = chat._build_goal_prompt(
-        state={
-            "INTENT.md": "# promo\n\nAIL/HEAAL 홍보 프로젝트\n",
-            "app.ail": "",
-        },
+        state={"app.ail": ""},
         history=[],
         user_message="추천 봇도 만들어줘",
     )
-    assert "CARRIES THE PROJECT'S PURPOSE" in prompt
-    # The cautionary example about channel recommender is present.
-    assert "channel_recommender" in prompt or "channel recommender" in prompt
-    # Thread-through instruction: bake into intent goals.
-    assert "bake it into every `intent` goal" in prompt
+    # New framing.
+    assert "YOUR MEMORY IS THE CHAT HISTORY" in prompt
+    # The first-user-message-is-purpose rule.
+    assert "first user message" in prompt
+    # Bake-purpose-into-every-new-program rule preserved.
+    assert "Bake the history-established purpose" in prompt
+    # INTENT.md demoted to legacy.
+    assert "INTENT.md is NOT your memory" in prompt
+    assert "legacy" in prompt.lower()
 
 
 def test_export_history_as_markdown_empty(tmp_path):
@@ -1209,28 +1240,23 @@ def test_chat_ui_has_export_and_copy_links(tmp_path):
     assert "navigator.clipboard.writeText" in html
 
 
-def test_prompt_teaches_intent_md_is_cumulative(tmp_path):
-    """v1.13.1 — user complaint: 'INTENT.md도 계속 덮어쓰는 것 같은데,
-    이러면 목적성이 계속 바뀌어서 곤란해. 하나의 챗 세션은 정보를
-    누적할 수 있어야 해.' The prompt must teach append-not-replace
-    discipline for INTENT.md across turns."""
-    proj = Project.init(tmp_path / "cum")
+def test_project_state_omits_intent_md_in_v1_14(tmp_path):
+    """v1.14.0 — chat_history is the agent's memory. _read_project_state
+    MUST NOT include INTENT.md in the PROJECT STATE block sent to the
+    model. The file can still exist on disk (legacy scaffold) but the
+    agent no longer reads it to avoid the dual-source-of-truth class
+    of bugs."""
+    proj = Project.init(tmp_path / "nointent")
+    # INTENT.md exists on disk (default from init).
+    assert proj.intent_path.is_file()
+    proj.write_app_source(
+        'entry main(input: Text) { return input }')
     chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
-    prompt = chat._build_goal_prompt(
-        state={"INTENT.md": "# existing\n\nprior work", "app.ail": ""},
-        history=[],
-        user_message="add another program",
-    )
-    # Framing: INTENT.md is cumulative memory.
-    assert "INTENT.md IS CUMULATIVE" in prompt
-    assert "NEVER OVERWRITE" in prompt or "Don't rewrite" in prompt
-    # Explicit carry-forward rule.
-    assert "every line from the previous INTENT.md" in prompt
-    # Skip-writing rule.
-    assert "omit the" in prompt.lower() or "SKIP writing" in prompt
-    # Example walkthrough is present.
-    assert "word counter" in prompt.lower()
-    assert "sorter" in prompt.lower()
+    state = chat._read_project_state()
+    # Agent context does NOT carry INTENT.md.
+    assert "INTENT.md" not in state
+    # But app.ail (and other .ail files) still surface.
+    assert "app.ail" in state
 
 
 def test_prompt_minimizes_human_interrogation(tmp_path):
