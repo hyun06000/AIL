@@ -206,6 +206,7 @@ def render_authoring_page(
       <div class="sub">ail authoring · {escape(host)}:{port} · 채팅으로 프로젝트를 만드세요
         · <a href="#" id="export-chat">대화 내보내기 / Export</a>
         · <a href="#" id="copy-chat">복사 / Copy</a>
+        · <a href="#" id="save-image">이미지로 저장 / Save image</a>
       </div>
     </header>
 
@@ -998,6 +999,140 @@ def render_authoring_page(
         }} catch (err) {{
           addError('복사 실패 / copy failed: ' + err.message);
         }}
+    }});
+
+    // Image export — renders the chat thread to a PNG canvas.
+    function exportChatImage() {{
+      const W = 640, P = 24, BW = W - P*2, LH = 22, BP = 12, BR = 10, GAP = 10;
+      const FONT = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const MONO = '12px "SF Mono", "Fira Mono", "Consolas", monospace';
+
+      // Collect turns from the DOM
+      const items = [];
+      for (const child of thread.children) {{
+        if (child.classList.contains('hint')) continue;
+        if (child.classList.contains('turn')) {{
+          const isUser = child.classList.contains('user');
+          const bubble = child.querySelector('.bubble');
+          if (!bubble) continue;
+          const mdEl = bubble.querySelector('.md-body');
+          const text = (mdEl || bubble).textContent.trim();
+          if (text) items.push({{ kind: isUser ? 'user' : 'agent', text }});
+        }} else if (child.classList.contains('run-result')) {{
+          const pre = child.querySelector('pre');
+          const mdEl = child.querySelector('.md-body');
+          const ok = !child.classList.contains('err');
+          const raw = pre ? pre.textContent.trim() : (mdEl ? mdEl.textContent.trim() : '');
+          if (raw) items.push({{ kind: 'run', text: raw, ok }});
+        }}
+      }}
+      if (!items.length) {{ alert('대화 내용이 없어요.'); return; }}
+
+      // Off-screen canvas for text measurement
+      const c = document.createElement('canvas');
+      c.width = W; c.height = 1;
+      const ctx = c.getContext('2d');
+
+      function wrap(text, maxW, font) {{
+        ctx.font = font;
+        const out = [];
+        for (const para of text.split('\\n')) {{
+          if (!para.trim()) {{ out.push(''); continue; }}
+          let line = '';
+          for (const w of para.split(' ')) {{
+            const t = line ? line + ' ' + w : w;
+            if (ctx.measureText(t).width > maxW && line) {{ out.push(line); line = w; }}
+            else line = t;
+          }}
+          if (line) out.push(line);
+        }}
+        return out;
+      }}
+
+      const HDR = 64, FTR = 36;
+      let H = HDR + P;
+      const rows = items.map(it => {{
+        if (it.kind === 'run') {{
+          const lines = wrap(it.text, BW - BP*2, MONO).slice(0, 12);
+          const h = lines.length * LH + BP*2 + 20;
+          H += h + GAP; return {{ ...it, lines, h }};
+        }}
+        const lines = wrap(it.text, BW - BP*2, FONT);
+        const h = lines.length * LH + BP*2;
+        H += h + GAP; return {{ ...it, lines, h }};
+      }});
+      H += FTR + P;
+
+      // Draw
+      c.height = H;
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, W, H);
+
+      // Header
+      const proj = document.querySelector('h1')?.textContent || 'AIL';
+      ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillText(proj, P, P + 20);
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(new Date().toLocaleDateString('ko-KR', {{ year: 'numeric', month: 'long', day: 'numeric' }}), P, P + 42);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(P, HDR); ctx.lineTo(W - P, HDR); ctx.stroke();
+
+      // Rounded rect helper (no ctx.roundRect dependency)
+      function rr(rx, ry, rw, rh, r, fill) {{
+        ctx.fillStyle = fill;
+        ctx.beginPath();
+        ctx.moveTo(rx + r, ry);
+        ctx.lineTo(rx + rw - r, ry); ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
+        ctx.lineTo(rx + rw, ry + rh - r); ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
+        ctx.lineTo(rx + r, ry + rh); ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
+        ctx.lineTo(rx, ry + r); ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+        ctx.closePath(); ctx.fill();
+      }}
+
+      let y = HDR + P;
+      for (const row of rows) {{
+        if (row.kind === 'user') {{
+          rr(P, y, BW, row.h, BR, '#312e81');
+          ctx.font = FONT; ctx.fillStyle = '#c7d2fe';
+          let ty = y + BP + LH - 5;
+          for (const line of row.lines) {{ ctx.fillText(line, P + BP, ty); ty += LH; }}
+        }} else if (row.kind === 'agent') {{
+          rr(P, y, BW, row.h, BR, '#1e293b');
+          ctx.font = FONT; ctx.fillStyle = '#e2e8f0';
+          let ty = y + BP + LH - 5;
+          for (const line of row.lines) {{ ctx.fillText(line, P + BP, ty); ty += LH; }}
+        }} else {{
+          rr(P, y, BW, row.h, BR, '#0c1a2e');
+          ctx.font = '11px -apple-system, sans-serif';
+          ctx.fillStyle = '#475569';
+          ctx.fillText(row.ok ? '▶ 실행 결과 / Result' : '✕ 실행 실패 / Error', P + BP, y + BP + 13);
+          ctx.font = MONO; ctx.fillStyle = row.ok ? '#7dd3fc' : '#f87171';
+          let ty = y + BP + 14 + LH;
+          for (const line of row.lines) {{ ctx.fillText(line, P + BP, ty); ty += LH; }}
+        }}
+        y += row.h + GAP;
+      }}
+
+      // Footer
+      ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillStyle = '#334155'; ctx.textAlign = 'center';
+      ctx.fillText('Built with AIL · ail-interpreter', W/2, H - 12);
+
+      c.toBlob(blob => {{
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = proj.replace(/\\s+/g, '-').toLowerCase() + '-chat.png';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }}, 'image/png');
+    }}
+
+    document.getElementById('save-image').addEventListener('click', (e) => {{
+      e.preventDefault();
+      exportChatImage();
     }});
 
     msgEl.focus();

@@ -4,6 +4,18 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.27.0 — 2026-04-24
+
+**UI: 채팅을 이미지로 저장 기능 추가 (공유/홍보용).**
+
+헤더에 "이미지로 저장 / Save image" 링크 추가. 클릭하면 `{project}-chat.png`
+다운로드. Canvas API로 직접 렌더링 — 외부 라이브러리 없음.
+다크 테마(#0f172a 배경), 사용자/에이전트 버블 구분, 실행 결과 코드블록,
+프로젝트명·날짜 헤더, "Built with AIL" 푸터 포함. 최대 12줄 넘는 실행
+결과는 자동 생략.
+
+---
+
 ## v1.26.0 — 2026-04-24
 
 **Authoring prompt: 모르는 API는 직접 조사, 절대 사용자에게 묻지 않기.**
