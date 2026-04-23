@@ -4,6 +4,51 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.10 — 2026-04-23
+
+Fifth of the six L2 v2 primitives: **HTML output mode**. An `entry`
+that returns a string starting with `<!doctype`, `<html`, or a bare
+tag like `<div>` is now served with `Content-Type: text/html` and
+rendered by the browser UI via `innerHTML` instead of escaped as
+plain text. This unlocks dashboard-style projects where the AI
+writes the page markup directly.
+
+### Added
+
+- `_looks_like_html(value)` in `server.py` — precise detection (opens
+  with `<!doctype`, `<html`, or `<word`; rules out `<3`, JSON, numbers,
+  non-strings).
+- Server POST path: HTML responses go out byte-exact (no trailing
+  newline) with `Content-Type: text/html`; plain text keeps the
+  terminal-friendly `\n`.
+- Browser UI: result area switches to `innerHTML` when the response
+  is HTML, with a `.result.html` CSS rule that strips the monospace
+  / pre-wrap styling.
+- Ledger records `output_mode: "html" | "text"` on every request.
+
+### Not added (deliberately)
+
+- No auto-invoke on GET /. The user still presses Run/Send once to
+  trigger the render. Avoids running LLM-heavy programs on every
+  page load.
+- No sanitization on the HTML output. Same trust boundary as `ail run`
+  — the author is an LLM the user chose to host locally.
+
+### Tests
+
+- +11 tests in new `test_agentic_server.py` (HTML detection edge
+  cases, POST returning HTML vs text with correct content types) +1
+  in `test_agentic_web_ui.py` (CSS + JS glue). 399 passing total
+  (+11 from 388).
+
+### Remaining L2 v2
+
+1 primitive open: **scheduler effect** (`perform schedule.every(...)`)
+— the biggest of the three. Closes the news-dashboard "refresh every
+30s" requirement.
+
+---
+
 ## v1.9.9 — 2026-04-23
 
 Fourth of the six L2 v2 primitives surfaced by the 2026-04-23

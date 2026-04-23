@@ -35,6 +35,28 @@ def _render_value(value):
     return value
 
 
+def _looks_like_html(value) -> bool:
+    """True if the rendered value opens with an HTML document or fragment.
+
+    Used to decide between `text/plain` and `text/html` on the response.
+    Keep the check cheap and precise: the first non-whitespace characters
+    must be `<!doctype` (case-insensitive), `<html`, or a tag-like token
+    `<word`. Anything else — JSON, numbers, prose that happens to contain
+    `<3` — stays plain text.
+    """
+    if not isinstance(value, str):
+        return False
+    s = value.lstrip()
+    if not s.startswith("<"):
+        return False
+    head = s[:16].lower()
+    if head.startswith("<!doctype") or head.startswith("<html"):
+        return True
+    # Bare fragment like "<div>..." or "<ul>..." — first char after `<`
+    # must start a tag name (letter). Rules out `<3`, `< 5`, `<-- ...`.
+    return len(s) >= 2 and s[1].isalpha()
+
+
 def _make_handler(project: Project):
     """Build a request handler closed over a specific Project. Done as
     a factory so each project can have its own handler without globals."""
@@ -106,16 +128,26 @@ def _make_handler(project: Project):
                     self._send_text(500, str(rendered) + "\n")
                     return
                 rendered = _render_value(value)
-                response = (str(rendered) + "\n").encode("utf-8")
+                is_html = _looks_like_html(rendered)
+                # HTML responses go out byte-exact (no trailing newline)
+                # so the browser doesn't see stray whitespace before
+                # <!doctype>. Plain text keeps the terminal-friendly \n.
+                if is_html:
+                    response = str(rendered).encode("utf-8")
+                    content_type = "text/html; charset=utf-8"
+                else:
+                    response = (str(rendered) + "\n").encode("utf-8")
+                    content_type = "text/plain; charset=utf-8"
                 project.append_ledger({
                     "event": "request",
                     "path": "/",
                     "input_chars": len(body),
                     "ok": True,
+                    "output_mode": "html" if is_html else "text",
                     "value_preview": str(value)[:200],
                 })
                 self.send_response(200)
-                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(response)))
                 self.end_headers()
                 self.wfile.write(response)

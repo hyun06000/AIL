@@ -221,6 +221,19 @@ def test_render_page_shows_textarea_when_input_used():
     assert "Send" in html
 
 
+def test_result_area_has_html_mode_css():
+    # The UI needs a .result.html CSS rule so rendered HTML doesn't
+    # inherit the pre-wrap / monospace styling of the plain-text result.
+    html = render_page(
+        project_name="x", intent_preamble="x",
+        host="127.0.0.1", port=8080, input_used=True,
+    )
+    assert ".result.html" in html
+    # The JS must switch to innerHTML when Content-Type is text/html.
+    assert "text/html" in html
+    assert "innerHTML" in html
+
+
 def test_render_page_korean_no_input_hint():
     html = render_page(
         project_name="방문카운터",
