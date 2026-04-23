@@ -4,6 +4,100 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.18.0 — 2026-04-24
+
+**Three user-surfaced issues from field test: prompt contamination,
+permission to write helpers, HTML response stripper.**
+
+### 1. Prompt contamination fix (most critical)
+
+hyun06000 opened a fresh project with *"ai들만을 위한 커뮤니티가
+있다는 소문 들어봤어?"* The agent's very next turn asked *"AIL이나
+HEAAL 관련 프로젝트를 홍보하고 싶으신 건가요?"* — a classic
+prompt-contamination failure where the AIL/HEAAL-heavy authoring
+prompt saturates the model's prior and fills ambiguity with
+"probably about AIL." Dangerous for any non-AIL user.
+
+Root cause: every example in the prompt's "history anchor" section
+used AIL promotion as the subject matter (`"AIL 홍보"`,
+`"AIL/HEAAL 채널 추천봇"`). When the user's first message was open-
+ended, the model defaulted to those examples.
+
+Fixed by:
+- New first section `=== THE PROJECT'S SUBJECT IS WHATEVER THE USER SAYS IT IS ===`
+  with explicit bias warning, the verbatim `ai들만을 위한 커뮤니티`
+  failure case, and a list of non-AIL subject examples (recipe,
+  weather, garden, calendar, stock, newsletter, poetry).
+- Renamed `=== PROJECT IDENTITY ===` to `=== THE LANGUAGE YOU
+  AUTHOR IN (AIL / HEAAL — this is your TOOL, not the topic) ===`
+  so the model can't conflate language-under-use with project
+  subject.
+- Rewrote the history-anchor examples from `"AIL 홍보 → 채널
+  추천봇"` to `"매일 아침 서울 날씨 → 경고 기능 추가"`.
+- Added a rule for exploratory turn-1 messages: ask a short open
+  question to surface what they want to BUILD, explicitly
+  forbidding `"Is this for AIL promotion?"`.
+
+### 2. Permission to write helpers freely
+
+hyun06000: *"ail코드를 복잡하고 길게 짜도 된다고 알려주고 스스로
+기능을 만들게 하던지."* New section `=== IF A HELPER YOU WANT ISN'T
+A BUILT-IN, WRITE IT ===` — the reference card has every primitive;
+for anything else, write a `pure fn`. Programs are allowed to be
+long; clarity > cleverness.
+
+### 3. `strip_html(source) -> Text` pure built-in
+
+hyun06000: *"http 리스폰스가 굉장히 긴 편이어서 파싱하는 파서도
+필요할 것 같아."* True — HTML responses can be kilobytes of markup
+and inline JS before any visible text. Without a stripper the
+agent either (a) sent the whole thing to an `intent` (wasted
+tokens, lower accuracy) or (b) hand-rolled a regex tag-stripper
+(failure-prone).
+
+Added `strip_html(source: Text) -> Text` — stdlib `html.parser`
+based, drops `<script>` / `<style>` bodies, decodes common
+entities, collapses whitespace. Pure (registered in
+`_PURE_BUILTINS`), so it composes inside `pure fn` bodies. Typical
+use: `text = strip_html(resp.body)` before passing to an intent
+for semantic extraction.
+
+Reference card gets a new `### HTML` section between the JSON and
+Conversion blocks.
+
+### Also: `encode_json` added to pure-builtin registry
+
+Slipped in alongside — a pure function, previously not whitelisted,
+so a `pure fn` that wrapped a structured-body builder would get
+rejected at parse time. Now matches `parse_json`.
+
+### Tests
+
+- `test_strip_html.py` (11): tag removal, entity decoding, script/
+  style body removal, whitespace collapse, paragraph preservation,
+  malformed HTML safety, usable-from-pure-fn.
+- `test_authoring_prompt_structure.py::test_prompt_warns_against_assuming_ail_promo_subject`
+  — locks in the contamination warning, requires the verbatim
+  failure string, requires ≥3 non-AIL subject examples.
+- `test_authoring_prompt_structure.py::test_write_helpers_freely_guidance_present`
+  — locks in the "write helpers freely" section.
+- `test_http_graphql.py::test_graphql_non_json_response_is_error`
+  flake fix: added `Content-Length` to the inner test server so
+  test ordering against the shared fixture doesn't race on
+  server shutdown.
+
+531 → 544 tests passing.
+
+### Not a grammar change
+
+New pure built-in only. v1.8 grammar freeze stands.
+
+### Restart required
+
+`ail up` holds old module; Ctrl+C and restart.
+
+---
+
 ## v1.17.0 — 2026-04-24
 
 **`perform http.graphql(query, variables?)` — HEAAL harness for GraphQL.**

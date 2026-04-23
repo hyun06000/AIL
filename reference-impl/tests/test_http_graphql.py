@@ -177,10 +177,15 @@ def test_graphql_non_json_response_is_error(graphql_server):
     # Simulate an auth gateway returning HTML. Real-world hazard.
     class _HtmlHandler(BaseHTTPRequestHandler):
         def do_POST(self):
+            payload = b"<html>rate limited</html>"
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
+            # Content-Length required — without it, some test orderings
+            # race the server shutdown against the response flush and
+            # the client sees ECONNRESET instead of the HTML body.
+            self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
-            self.wfile.write(b"<html>rate limited</html>")
+            self.wfile.write(payload)
 
         def log_message(self, fmt, *a): pass
 

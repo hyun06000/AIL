@@ -1771,6 +1771,20 @@ class Executor:
                         {"_result": True, "ok": False,
                          "error": f"{type(e).__name__}: {e}"}, conf)
 
+        if name == "strip_html":
+            # strip_html(source: Text) -> Text
+            # Pure. Returns the visible text content of an HTML
+            # document — tags removed, <script>/<style> bodies
+            # discarded, common entities decoded, whitespace
+            # collapsed. Closes the HEAAL gap where agents scraping
+            # web pages had no tooling between `perform http.get`
+            # (which returns a huge HTML string) and an `intent`
+            # that then wastes context on markup tokens. Pair:
+            # `text = strip_html(resp.body)` then pass `text` to
+            # an intent for semantic extraction.
+            if len(raw) >= 1 and isinstance(raw[0], str):
+                return ConfidentValue(_strip_html(raw[0]), conf)
+
         if name == "encode_json":
             # encode_json(value: Any) -> Result[Text]
             # Pure. Companion to parse_json. Closes the HEAAL gap where
@@ -2276,6 +2290,58 @@ def _json_normalize(value):
         return {str(k): _json_normalize(v) for k, v in value.items()}
     # Primitives — let json.dumps decide.
     return value
+
+
+def _strip_html(source: str) -> str:
+    """Extract visible text content from an HTML document.
+
+    Uses stdlib html.parser. Drops everything inside <script> and
+    <style> tags (so a minified page doesn't flood the result with
+    JS source). Decodes common named entities (&amp; &lt; &gt;
+    &quot; &#39; &nbsp;) so downstream intents read clean text.
+    Normalises run-together whitespace so what reaches the next
+    stage is comparable to what a human would see in the browser.
+
+    Not a sanitizer — callers should not trust the output to be
+    safe for re-embedding in HTML; this is a "reduce noise for
+    LLM consumption" helper, not a security tool.
+    """
+    from html.parser import HTMLParser
+    import re as _re
+
+    class _Collector(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.parts: list[str] = []
+            self.skip = 0  # depth of open <script>/<style> tags
+
+        def handle_starttag(self, tag, attrs):
+            if tag.lower() in ("script", "style"):
+                self.skip += 1
+
+        def handle_endtag(self, tag):
+            if tag.lower() in ("script", "style") and self.skip > 0:
+                self.skip -= 1
+
+        def handle_data(self, data):
+            if self.skip == 0:
+                self.parts.append(data)
+
+    c = _Collector()
+    try:
+        c.feed(source)
+        c.close()
+    except Exception:
+        # Malformed HTML shouldn't take the program down. Return
+        # whatever we collected so far; worst case, empty string.
+        pass
+    joined = "".join(c.parts)
+    # Collapse runs of whitespace to a single space, but keep line
+    # breaks so paragraph structure is still readable.
+    joined = _re.sub(r"[ \t\f\v]+", " ", joined)
+    joined = _re.sub(r"\n[ \t]+", "\n", joined)
+    joined = _re.sub(r"\n{3,}", "\n\n", joined)
+    return joined.strip()
 
 
 def _default_context() -> ContextDecl:

@@ -71,6 +71,45 @@ def test_response_format_does_not_hardcode_app_ail():
         "response-format section.")
 
 
+def test_prompt_warns_against_assuming_ail_promo_subject():
+    """v1.18.0 contamination fix. Field test 2026-04-24: user opened
+    a fresh project with `ai들만을 위한 커뮤니티가 있다는 소문 들어봤어?`
+    and the agent immediately asked 'Is this for AIL/HEAAL promotion?'
+    — a contamination from the prompt's own AIL/HEAAL-heavy examples.
+    The prompt must explicitly warn the model NOT to make that leap,
+    and must contain at least one neutral (non-AIL) subject example."""
+    p = _get_prompt()
+    # Dedicated warning section must exist.
+    assert "THE PROJECT'S SUBJECT IS WHATEVER THE USER SAYS IT IS" in p
+    # Must name the failure explicitly so the model sees itself.
+    assert "ai들만을 위한 커뮤니티" in p or "AI promotion" in p or \
+        "prompt contamination" in p
+    # Must supply non-AIL example subjects so the default isn't
+    # "assume AIL" when filling ambiguity.
+    non_ail_subjects = ["recipe", "weather", "garden", "calendar",
+                        "stock", "newsletter", "poetry", "날씨"]
+    matches = [s for s in non_ail_subjects if s.lower() in p.lower()]
+    assert len(matches) >= 3, (
+        "expected the prompt to mention at least 3 non-AIL subject "
+        "examples to neutralize the implicit AIL bias; found: "
+        f"{matches}")
+    # The AIL description must be framed as tooling, not as the
+    # project topic.
+    assert "THE LANGUAGE YOU AUTHOR IN" in p
+    assert "your TOOL, not the topic" in p
+
+
+def test_write_helpers_freely_guidance_present():
+    """v1.18.0: if a helper the agent wants isn't a built-in, the
+    prompt must tell it to just write one. AIL programs are allowed
+    to be long; clarity over cleverness."""
+    p = _get_prompt()
+    assert "IF A HELPER YOU WANT ISN'T A BUILT-IN, WRITE IT" in p or \
+        "if a helper you want isn't a built-in" in p.lower()
+    assert "allowed to be long" in p.lower() or \
+        "programs are allowed to be long" in p.lower()
+
+
 def test_http_post_json_rule_present():
     """v1.15.0 gap-closer: agents must use structured JSON effect."""
     p = _get_prompt()

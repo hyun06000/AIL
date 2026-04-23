@@ -282,6 +282,18 @@ which runs the inner program and is therefore impure. Use `ail_parse_check`
 when you need to validate syntactic correctness of generated AIL without
 firing any intents or effects it declares.
 
+### HTML (reduce markup noise before sending to an intent)
+```
+strip_html(source: Text) -> Text            // visible text, tags gone
+```
+Pure. Returns only the visible text content of an HTML document — tags removed,
+`<script>` and `<style>` bodies discarded, common entities decoded
+(`&amp;` / `&lt;` / `&quot;` / `&#39;` / `&nbsp;`), whitespace collapsed.
+Typical pattern: `text = strip_html(resp.body)` on an `http.get` response
+before passing `text` to an intent for semantic extraction. Not a
+sanitizer — output must not be re-embedded in HTML as-is; the purpose is
+noise reduction for downstream LLM consumption.
+
 ### JSON (parse and emit structured data)
 ```
 parse_json(source: Text) -> Result[Any]         // ok(value) on success, error(msg) on JSONDecodeError
