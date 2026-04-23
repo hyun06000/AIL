@@ -27,6 +27,64 @@ from typing import Optional
 from .ui import detect_language
 
 
+def entry_uses_input(source: str) -> bool:
+    """True if the program's `entry` body references its input parameter.
+
+    Used by the browser UI to decide whether to render an input textarea:
+    an agentic project whose entry ignores its input (e.g. a visit-counter
+    that only reads from state) should not confuse the user with a typing
+    box that does nothing.
+
+    Defaults to True on any parse failure or missing entry — showing the
+    input box on an unknown program is safer than hiding it from a program
+    that does use input.
+    """
+    try:
+        from ..parser import parse
+        from ..parser.ast import EntryDecl
+    except Exception:
+        return True
+
+    try:
+        program = parse(source or "")
+    except Exception:
+        return True
+
+    entry = None
+    for decl in getattr(program, "declarations", []) or []:
+        if isinstance(decl, EntryDecl):
+            entry = decl
+            break
+    if entry is None:
+        return True
+    if not entry.params:
+        return False
+
+    param_name = entry.params[0][0]
+    return _body_references(entry.body, param_name)
+
+
+def _body_references(body, name: str) -> bool:
+    """Walk any AST fragment (list, dataclass, etc.) looking for an
+    Identifier whose `name` matches. Generic so future AST node types
+    don't silently escape the check."""
+    from ..parser.ast import Identifier
+    from dataclasses import fields, is_dataclass
+
+    def walk(node) -> bool:
+        if isinstance(node, Identifier):
+            return node.name == name
+        if isinstance(node, (list, tuple)):
+            return any(walk(x) for x in node)
+        if isinstance(node, dict):
+            return any(walk(v) for v in node.values())
+        if is_dataclass(node):
+            return any(walk(getattr(node, f.name)) for f in fields(node))
+        return False
+
+    return walk(body)
+
+
 _STRINGS = {
     "en": {
         "placeholder": "Type your input here",
@@ -41,6 +99,8 @@ _STRINGS = {
         ),
         "edit_here_tip": "Tell it what you want, in plain language:",
         "about_label": "About this service",
+        "run_button": "Run",
+        "no_input_hint": "This service takes no input. Press Run to invoke it.",
     },
     "ko": {
         "placeholder": "여기에 입력을 적어 보세요",
@@ -54,6 +114,8 @@ _STRINGS = {
         ),
         "edit_here_tip": "평범한 말로 무엇을 원하는지 입력하세요:",
         "about_label": "이 서비스에 관하여",
+        "run_button": "실행",
+        "no_input_hint": "이 서비스는 입력이 필요 없습니다. 실행 버튼을 누르세요.",
     },
 }
 
@@ -64,8 +126,14 @@ def render_page(
     intent_preamble: str,
     host: str,
     port: int,
+    input_used: bool = True,
 ) -> str:
-    """Render the single-page form as an HTML string."""
+    """Render the single-page form as an HTML string.
+
+    When `input_used` is False, the textarea is replaced with a short
+    note and a bare Run button — a service whose `entry` ignores its
+    input shouldn't show a typing box that does nothing.
+    """
     lang = detect_language(intent_preamble)
     t = _STRINGS.get(lang, _STRINGS["en"])
 
@@ -76,6 +144,28 @@ def render_page(
     # JS string literals for the two runtime-interpolated labels.
     err_json = _json_string(t["error_prefix"])
     empty_json = _json_string(t["empty_result"])
+
+    button_label = t["send"] if input_used else t["run_button"]
+    if input_used:
+        input_block = (
+            f'      <label class="tip" for="input">{escape(t["edit_here_tip"])}</label>\n'
+            f'      <textarea id="input"\n'
+            f'                placeholder="{escape(t["placeholder"])}"></textarea>\n'
+            f'      <div class="row">\n'
+            f'        <span class="status" id="status"></span>\n'
+            f'        <span class="spacer"></span>\n'
+            f'        <button id="send">{escape(button_label)}</button>\n'
+            f'      </div>'
+        )
+    else:
+        input_block = (
+            f'      <div class="tip">{escape(t["no_input_hint"])}</div>\n'
+            f'      <div class="row">\n'
+            f'        <span class="status" id="status"></span>\n'
+            f'        <span class="spacer"></span>\n'
+            f'        <button id="send">{escape(button_label)}</button>\n'
+            f'      </div>'
+        )
 
     # All CSS + JS inline — one HTTP response, no asset pipeline.
     return f"""<!doctype html>
@@ -186,14 +276,7 @@ def render_page(
     </div>
 
     <div class="card">
-      <label class="tip" for="input">{escape(t["edit_here_tip"])}</label>
-      <textarea id="input"
-                placeholder="{escape(t["placeholder"])}"></textarea>
-      <div class="row">
-        <span class="status" id="status"></span>
-        <span class="spacer"></span>
-        <button id="send">{escape(t["send"])}</button>
-      </div>
+{input_block}
     </div>
 
     <div class="card">
@@ -224,7 +307,7 @@ def render_page(
         const r = await fetch("/", {{
           method: "POST",
           headers: {{ "Content-Type": "text/plain; charset=utf-8" }},
-          body: inputEl.value,
+          body: inputEl ? inputEl.value : "",
         }});
         const text = await r.text();
         if (r.ok) {{
@@ -248,9 +331,11 @@ def render_page(
     }}
 
     btn.addEventListener("click", send);
-    inputEl.addEventListener("keydown", (e) => {{
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send();
-    }});
+    if (inputEl) {{
+      inputEl.addEventListener("keydown", (e) => {{
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send();
+      }});
+    }}
   </script>
 </body>
 </html>

@@ -56,16 +56,21 @@ def _make_handler(project: Project):
             if self.path in ("/", ""):
                 # Render the browser UI so a non-developer can type
                 # into a textarea instead of running curl.
-                from .web_ui import render_page, extract_preamble
+                from .web_ui import render_page, extract_preamble, entry_uses_input
                 try:
                     intent_text = project.intent_path.read_text(encoding="utf-8")
                 except Exception:
                     intent_text = ""
+                try:
+                    app_source = project.app_path.read_text(encoding="utf-8")
+                except Exception:
+                    app_source = ""
                 html = render_page(
                     project_name=project.root.name,
                     intent_preamble=extract_preamble(intent_text),
                     host=self.server.server_address[0],
                     port=self.server.server_address[1],
+                    input_used=entry_uses_input(app_source),
                 )
                 body = html.encode("utf-8")
                 self.send_response(200)

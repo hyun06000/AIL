@@ -4,7 +4,7 @@ import urllib.request
 from pathlib import Path
 
 from ail.agentic.project import Project
-from ail.agentic.web_ui import render_page, extract_preamble
+from ail.agentic.web_ui import render_page, extract_preamble, entry_uses_input
 
 
 SIMPLE_AIL = """\
@@ -131,3 +131,104 @@ def test_server_get_slash_returns_html(tmp_path):
         # clean cross-thread stop. Since it's a daemon thread, process
         # exit will reap it.
         pass
+
+
+# ---------- input-aware UI ----------
+
+INPUT_USED_AIL = """\
+entry main(input: Text) {
+    return input
+}
+"""
+
+INPUT_IGNORED_AIL = """\
+entry main(input: Text) {
+    prior = perform state.read("visits")
+    n = 0
+    if is_ok(prior) { n = unwrap(prior) }
+    return ok(to_text(n + 1))
+}
+"""
+
+NO_ENTRY_AIL = """\
+pure fn twice(n: Number) -> Number { return n + n }
+"""
+
+ENTRY_NO_PARAMS_AIL = """\
+entry main() {
+    return "hello"
+}
+"""
+
+RENAMED_PARAM_AIL = """\
+entry main(payload: Text) {
+    return payload
+}
+"""
+
+
+def test_entry_uses_input_when_body_references_input():
+    assert entry_uses_input(INPUT_USED_AIL) is True
+
+
+def test_entry_uses_input_false_when_body_ignores_input():
+    assert entry_uses_input(INPUT_IGNORED_AIL) is False
+
+
+def test_entry_uses_input_true_on_parse_error():
+    # Garbage shouldn't hide the textarea — safer to show it.
+    assert entry_uses_input("this is not ail code !!!") is True
+
+
+def test_entry_uses_input_empty_source_defaults_true():
+    # Fresh `ail init` before first author run — be permissive.
+    assert entry_uses_input("") is True
+
+
+def test_entry_uses_input_respects_renamed_parameter():
+    # The check uses the actual parameter name, not a hardcoded "input".
+    assert entry_uses_input(RENAMED_PARAM_AIL) is True
+
+
+def test_entry_uses_input_false_when_entry_takes_no_params():
+    assert entry_uses_input(ENTRY_NO_PARAMS_AIL) is False
+
+
+def test_render_page_hides_textarea_when_input_unused():
+    html = render_page(
+        project_name="visit-counter",
+        intent_preamble="Counts visits across requests.",
+        host="127.0.0.1",
+        port=8080,
+        input_used=False,
+    )
+    assert "<textarea" not in html
+    assert "<button" in html
+    # English Run button + no-input hint
+    assert "Run" in html
+    assert "takes no input" in html
+
+
+def test_render_page_shows_textarea_when_input_used():
+    html = render_page(
+        project_name="word-counter",
+        intent_preamble="Counts words.",
+        host="127.0.0.1",
+        port=8080,
+        input_used=True,
+    )
+    assert "<textarea" in html
+    assert "Send" in html
+
+
+def test_render_page_korean_no_input_hint():
+    html = render_page(
+        project_name="방문카운터",
+        intent_preamble="요청이 올 때마다 카운트를 늘립니다.",
+        host="127.0.0.1",
+        port=8080,
+        input_used=False,
+    )
+    assert "<textarea" not in html
+    assert "실행" in html
+    assert "입력이 필요 없습니다" in html

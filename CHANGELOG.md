@@ -4,6 +4,69 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.9.9 — 2026-04-23
+
+Fourth of the six L2 v2 primitives surfaced by the 2026-04-23
+news-dashboard case study: **input-aware UI**. Closes Gap #6 —
+a user opening a service whose `entry` ignores its input was still
+shown a textarea, typed "안녕", and got back an unrelated pre-computed
+summary. The page now reflects what the program actually does.
+
+### Added — `entry_uses_input()` + input-aware `render_page`
+
+`ail.agentic.web_ui.entry_uses_input(source)` parses `app.ail`, locates
+its `entry` declaration, and walks the body looking for any reference
+to the first parameter's name. Hits every dataclass field in the AST,
+so future node types don't silently escape the check.
+
+`render_page(..., input_used=...)` now renders either:
+
+- a textarea + **Send** button (input_used=True, default), or
+- a short "this service takes no input" note + **Run** button
+  (input_used=False).
+
+The server resolves `input_used` from `app.ail` on every GET /, so
+hot-swapping `INTENT.md` between "input-driven" and "input-free"
+programs takes effect on the next page load — no restart.
+
+Korean UI strings added: `실행` (Run), `이 서비스는 입력이 필요 없습니다.
+실행 버튼을 누르세요.` (no-input hint).
+
+### Behavior
+
+- Detection defaults to `True` on parse failure or empty source —
+  safer to show a harmless textarea than to hide input from a program
+  that needs it.
+- Renamed parameters honored (`entry main(payload: Text)` works).
+- `entry main()` with no params renders as input_used=False.
+- POST / with any body still works for input-free services; the
+  runtime just doesn't reference the param.
+
+### Verified
+
+| Example | `entry_uses_input` | UI |
+|---|---|---|
+| `visit-counter` | False | Run button, no textarea |
+| `word-counter` | True | Textarea + Send |
+| `csv-stats` | True | Textarea + Send |
+| `sentiment` | True | Textarea + Send |
+
+### Tests
+
+- +9 tests in `test_agentic_web_ui.py`: detection across 5 AST shapes
+  (input used, ignored, parse error, empty, renamed param, no params)
+  plus 3 `render_page` rendering assertions (textarea hidden, textarea
+  shown, Korean no-input hint).
+- Suite: 388 passing (+9 from 379).
+
+### Remaining L2 v2
+
+5/6 primitives still open: HTML output mode, scheduler effect.
+Tracked in [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md)
+and [`docs/case-studies/2026-04-23_news-dashboard.md`](docs/case-studies/2026-04-23_news-dashboard.md).
+
+---
+
 ## v1.9.8 — 2026-04-23
 
 Third of the six L2 v2 primitives surfaced by the 2026-04-23
