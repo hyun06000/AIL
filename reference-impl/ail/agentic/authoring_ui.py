@@ -379,7 +379,7 @@ def render_authoring_page(
       turn.className = 'turn agent';
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      bubble.textContent = reply;
+      bubble.innerHTML = linkifyText(reply);
       turn.appendChild(bubble);
       thread.appendChild(turn);
 
@@ -872,10 +872,21 @@ def render_authoring_page(
       s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
       // Italic
       s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
-      // Links
+      // Markdown links [text](url) — must come before bare URL pass
       s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
         (_, t, u) => `<a href="${{esc(u)}}" target="_blank">${{esc(t)}}</a>`);
+      // Bare URLs (http/https not already inside an href)
+      s = s.replace(/(?<!href=["'])https?:\/\/[^\s<>"')]+/g,
+        u => `<a href="${{esc(u)}}" target="_blank">${{esc(u)}}</a>`);
       return s;
+    }}
+
+    function linkifyText(text) {{
+      // For plain-text content: escape HTML, then linkify URLs.
+      const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const escaped = esc(text);
+      return escaped.replace(/https?:\/\/[^\s<>"']+/g,
+        u => `<a href="${{u}}" target="_blank">${{u}}</a>`);
     }}
 
     function looksLikeMarkdown(text) {{

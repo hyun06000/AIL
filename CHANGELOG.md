@@ -4,6 +4,17 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.31.0 — 2026-04-24
+
+**에이전트 버블 + 실행결과 내 URL 자동 링크 처리.**
+
+에이전트 채팅 말풍선에 bare URL(http/https)이 등장하면 클릭 가능한
+`<a target="_blank">` 링크로 자동 변환. `linkifyText` 헬퍼 추가,
+`addAgent` 버블을 `textContent` → `innerHTML` 전환. 기존 `inlineRender`에도
+bare URL 패턴 추가 (마크다운 렌더링 결과 내 URL도 동일 처리).
+
+---
+
 ## v1.30.0 — 2026-04-24
 
 **search.web 실패 시 사용자 친화적 에러 메시지.**
