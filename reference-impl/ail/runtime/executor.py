@@ -1179,8 +1179,9 @@ class Executor:
                 1.0, origin=origin)
 
         custom_headers: dict[str, str] = {}
-        if "headers" in kwargs:
-            raw_headers = kwargs["headers"].value
+        _raw_headers_cv = args[3] if len(args) >= 4 else kwargs.get("headers")
+        if _raw_headers_cv is not None:
+            raw_headers = _raw_headers_cv.value
             if isinstance(raw_headers, dict):
                 for hk, hv in raw_headers.items():
                     if hv is None:
