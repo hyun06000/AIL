@@ -4,6 +4,18 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.26.0 — 2026-04-24
+
+**Authoring prompt: 모르는 API는 직접 조사, 절대 사용자에게 묻지 않기.**
+
+Moltbook 통합 field test에서 에이전트가 Turn 2에서 "API 엔드포인트 아세요?"를
+물어보며 7턴을 낭비한 문제 대응. `=== UNKNOWN API / SERVICE ===` 섹션 추가:
+검색→fetch→문서 읽기→코드 작성 4단계 자율 연구 시퀀스 명시. 기술적 API 정보를
+사용자에게 묻는 행동 명시적 금지. 사람이 해야 하는 것(브라우저 인증 클릭)과
+에이전트가 해야 하는 것(HTTP 호출 전부)의 경계도 명시.
+
+---
+
 ## v1.25.0 — 2026-04-24
 
 **검색 결과 출처를 클릭 가능한 마크다운 링크로 출력.**
