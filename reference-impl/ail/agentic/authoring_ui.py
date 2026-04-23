@@ -1194,9 +1194,7 @@ def render_authoring_page(
       try {{
         const r = await fetch('/authoring-reset-chat', {{ method: 'POST' }});
         if (!r.ok) {{ alert('초기화 실패: HTTP ' + r.status); return; }}
-        thread.innerHTML = '';
-        hint.style.display = '';
-        thread.appendChild(hint);
+        location.reload();
       }} catch (err) {{
         alert('초기화 실패: ' + err.message);
       }}
