@@ -801,19 +801,22 @@ auth_header = join(["Bearer ", api_key], "")
 perform http.post_json(url, payload, [["Authorization", auth_header]])
 ```
 
-✅ **CORRECT — bounded agent loop with evolve safety (validated pattern):**
+✅ **CORRECT — autonomous agent with `perform ail.run` (preferred pattern):**
 
-`intent` at TOP LEVEL. `for range(N)` = hard bound. `evolve rollback_on` = semantic safety. `starts_with` = signal detection. `to_text` = defensive coercion.
+**Design principle:** Give the intent model the **goal + context**, not a pre-defined sequence.
+The intent model writes AIL programs as tools — it decides WHAT to do and HOW at each step.
+The outer loop just dispatches: execute what the model writes, feed the result back.
+
+This pattern handles services the authoring model has never seen before. The intent model reads the guide at runtime and writes the right tool for each step.
 
 ```ail
 // INPUT: 비워두세요. 에이전트가 스스로 판단합니다.
 
-// ── TOP LEVEL: intent + evolve ──
-intent decide_next_action(guide: Text, state: Text) -> Text {{
-    goal: "State machine:\\n- state 'new_agent' → return REGISTER: <json>\\n- state 'registered' → return POST: <json>\\n- state 'posted' → return DONE: <summary>\\nNEVER repeat a completed action. Follow the state exactly."
+intent next_action(guide: Text, history: Text) -> Text {{
+    goal: "You are an AIL authoring agent. Read the service guide and history, then either:\\n  1. Write a complete AIL program (entry main(input: Text) {{ ... }}) that performs the next needed action.\\n  2. Return DONE: <result_url_or_summary> when finished.\\nYou may use any AIL effect: http.get, http.post_json, state.read, state.write, parse_json, etc.\\nThe program you write will be executed immediately and its return value fed back to you.\\nGuide:\\n{{guide}}\\nHistory so far:\\n{{history}}"
 }}
 
-evolve decide_next_action {{
+evolve next_action {{
     metric: confidence(sampled: 1.0)
     when confidence < 0.5 {{
         retune confidence_threshold: within [0.3, 0.8]
@@ -825,66 +828,26 @@ evolve decide_next_action {{
 entry main(input: Text) {{
     guide_r = perform http.get("https://service.com/skill.md")
     if is_error(guide_r) {{ return "❌ guide load failed" }}
-
-    state_r = perform state.read("agent_state")
-    state = unwrap_or(state_r, "new_agent")
-    api_key_r = perform state.read("api_key")   // NEVER: unwrap_or(perform ..., x) — perform is a statement, not an expression
-    api_key = unwrap_or(api_key_r, "")
-    log = ""
+    history = ""
+    log = "=== Agent Log ===\\n✓ guide loaded\\n"
 
     for step in range(10) {{
-        decision = decide_next_action(guide_r.body, state)
-        decision_str = to_text(decision)   // defensive: prevents NoneType crash on slice
-        log = log + "step " + to_text(step) + ": " + slice(decision_str, 0, 60) + "\\n"
+        action = to_text(next_action(guide_r.body, history))
 
-        if starts_with(decision_str, "DONE") {{
-            perform state.write("agent_state", "done")
-            return log + "\\n✅ " + slice(decision_str, 5, length(decision_str))
+        if starts_with(action, "DONE") {{
+            return log + "\\n✅ " + slice(action, 5, length(action))
         }}
 
-        if starts_with(decision_str, "REGISTER") {{
-            if state != "new_agent" {{
-                log = log + "  ⚠ already registered, skipping\\n"
-            }}
-            if state == "new_agent" {{
-                payload_json = slice(decision_str, 9, length(decision_str))
-                parsed_r = parse_json(payload_json)
-                if is_ok(parsed_r) {{
-                    result_r = perform http.post_json(
-                        "https://service.com/api/agents",
-                        unwrap(parsed_r)
-                    )
-                    if is_error(result_r) {{ return log + "\\n❌ network error" }}
-                    if result_r.ok == false {{
-                        return log + "\\n❌ HTTP " + to_text(result_r.status)
-                    }}
-                    body_r = parse_json(result_r.body)
-                    if is_ok(body_r) {{
-                        api_key = to_text(unwrap(body_r).api_key)
-                        perform state.write("api_key", api_key)
-                    }}
-                    perform state.write("agent_state", "registered")
-                    state = "registered"
-                    log = log + "  ✓ registered\\n"
-                }}
-            }}
+        result_r = perform ail.run(action)
+        if is_error(result_r) {{
+            step_result = "ERROR: " + unwrap_error(result_r)
+        }}
+        if is_ok(result_r) {{
+            step_result = unwrap(result_r)
         }}
 
-        if starts_with(decision_str, "POST") {{
-            payload_json = slice(decision_str, 5, length(decision_str))
-            parsed_r = parse_json(payload_json)
-            if is_ok(parsed_r) {{
-                auth_header = join(["Bearer ", api_key], "")
-                perform http.post_json(
-                    "https://service.com/api/posts",
-                    unwrap(parsed_r),
-                    [["Authorization", auth_header]]
-                )
-                perform state.write("agent_state", "posted")
-                state = "posted"
-                log = log + "  ✓ posted\\n"
-            }}
-        }}
+        log = log + "step " + to_text(step) + ": " + slice(step_result, 0, 80) + "\\n"
+        history = history + "=== step " + to_text(step) + " ===\\n" + action + "\\nresult: " + step_result + "\\n\\n"
     }}
 
     perform schedule.every(3600)
@@ -892,14 +855,23 @@ entry main(input: Text) {{
 }}
 ```
 
-**The three rules that make this work:**
+**Why this beats the state machine:**
+- State machine: authoring model hardcodes "REGISTER → POST" — wrong if the API endpoint is `/api/v1/agents/register` not `/api/agents`
+- `ail.run` dispatch: intent model reads `skill.md` at runtime and writes the correct endpoint itself
+
+**The three rules that still apply:**
 1. `intent` + `evolve` at TOP LEVEL — never inside `entry` or `for`
-2. `to_text(decision)` before any `slice`/`starts_with` — prevents NoneType crash
-3. `is_ok(parsed_r)` / `result_r.ok == false` guards — `is_error` only catches network errors, not HTTP 4xx/5xx
+2. `to_text(action)` before `starts_with` — prevents NoneType crash
+3. Always check `is_error(result_r)` after `perform ail.run` — parse errors in generated code surface as Result-error
+
+**When to use simpler state machine instead:**
+- The API is trivially well-known (e.g., a fixed webhook URL the user provides)
+- Only 2 steps and no discovery needed
+- The authoring model is certain about the exact endpoint/payload shape
 
 **RECURRING AUTONOMOUS AGENTS — `perform schedule.every`:**
 
-When the user wants an agent that acts on its own on a schedule ("매일 한 번 포스트", "every hour", "자동으로 돌아가게", "자율적으로 활동"), add `perform schedule.every(N)` at the end of the loop (before return). The pattern above already shows this.
+When the user wants an agent that acts on its own on a schedule ("매일 한 번 포스트", "every hour", "자동으로 돌아가게", "자율적으로 활동"), add `perform schedule.every(N)` at the end (before return). The pattern above already shows this.
 
 **Critical rules for autonomous agents:**
 - `entry main(input: Text)` — ALWAYS declare `input`. Run button always appears; input lets user pass config on first run.
@@ -908,27 +880,6 @@ When the user wants an agent that acts on its own on a schedule ("매일 한 번
 - **First run = user clicks Run button.** `schedule.every` handles all subsequent runs automatically.
 - ❌ WRONG: telling the user "input을 참조 안 해서 런 버튼이 안 보여요" — the Run button ALWAYS appears.
 - ❌ WRONG: Asking the user to choose between "manual trigger vs fully autonomous".
-
-**AUTONOMOUS AGENTS — `perform ail.run`:**
-
-When the user wants a program that writes and runs sub-programs on its own (goal-directed, self-improving, or multi-step autonomous loops), use `perform ail.run(code, input?)`.
-
-Canonical pattern — "meta-agent that writes its own tool":
-```ail
-entry main(input: Text) {{
-    goal = input
-    intent write_program(goal) -> Text  # generates .ail source
-    result = unwrap(perform ail.run(program, goal))
-    intent evaluate_result(goal, result) -> Text
-    return evaluation
-}}
-```
-
-Rules:
-- The sub-program runs with the **same harness** — `human.approve` gate, purity constraints, and `Result` wrapping all apply. Generated code cannot escape the executor.
-- Recursion depth ≥ 3 triggers a trace warning. Depth ≥ 8 returns `error("recursion depth exceeded")` — design a base case before that.
-- Use `schedule.every` + `state.*` for the outer loop of a recurring autonomous agent; use `ail.run` for the inner "decide and act" step that may itself generate sub-programs.
-- Always check `is_error(result)` after `perform ail.run` — parse errors in the generated code surface as `Result-error`.
 
 **WEB SEARCH — `perform search.web`:**
 
