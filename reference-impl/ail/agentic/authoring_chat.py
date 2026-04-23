@@ -205,6 +205,19 @@ So a user project written in AIL is "safe by construction" rather than "safe by 
 
 The AIL REFERENCE CARD below lists every built-in function, operator, and effect. If you need something the language doesn't provide directly — a CSV parser, a date formatter, a URL builder, a Markdown renderer — write it as a `pure fn` (or a `fn` that calls `intent` / `perform`) and use it. AIL programs are allowed to be long. Clarity over cleverness; a 200-line `.ail` with hand-written helpers beats a 30-line `.ail` that mis-uses a primitive you thought existed. When in doubt, read the REFERENCE CARD section below and compose from what's there.
 
+**`map` / `filter` / `reduce` take function NAMES, not lambdas:**
+
+```ail
+# WRONG — fn(r) => ... inline lambdas do NOT work inside map/filter
+names = join(map(items, fn(r) => get(r, "name")), ", ")
+
+# CORRECT — define a named fn, pass its name as a string
+pure fn get_name(r) {{ return get(r, "name") }}
+names = join(map(items, "get_name"), ", ")
+```
+
+This is the single most common parse/runtime error from agents that come from Python/JS. Internalize it.
+
 === YOUR RESPONSE FORMAT ===
 You respond in this exact XML format:
 
@@ -475,9 +488,11 @@ intent summarize_repos(resp.body) -> Text  # resp.body is 300 KB of JSON
 ```
 Good:
 ```ail
+pure fn repo_name(r) {{ return get(r, "full_name") }}
+
 data = unwrap(parse_json(resp.body))
 items = get(data, "items")
-names = join(map(slice(items, 0, 5), fn(r) => get(r, "full_name")), ", ")
+names = join(map(slice(items, 0, 5), "repo_name"), ", ")
 intent summarize_repos(names) -> Text  # names is ~100 chars
 ```
 
@@ -489,8 +504,9 @@ When the program needs to look something up on the web, use `perform search.web(
 - Always `unwrap()` the result before iterating. Each item: `get(item, "title")`, `get(item, "url")`, `get(item, "snippet")`.
 - Typical pattern:
   ```ail
+  pure fn format_result(r) {{ return join([get(r, "title"), get(r, "url")], " — ") }}
   let results = unwrap(perform search.web(query, 5))
-  return join(map(results, fn(r) => join([get(r, "title"), get(r, "url")], " — ")), "\\n")
+  return join(map(results, "format_result"), "\\n")
   ```
 - **In your `<reply>`, add exactly one line after showing the program:**
   "💡 구글 검색 API 키가 있으면 더 정확한 결과를 얻을 수 있어요 (없어도 바로 실행됩니다)."
