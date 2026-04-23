@@ -16,7 +16,6 @@ from typing import Optional
 
 from .. import run as ail_run
 from .agent import _looks_like_error
-from .authoring_chat import build_base_authoring_prompt
 from .project import Project
 
 _run_log: dict[str, dict] = {}
@@ -614,8 +613,7 @@ def _make_handler(project: Project):
                 try:
                     result, trace = ail_run(
                         str(program_path), input=run_input,
-                        log_callback=_log_cb,
-                        authoring_system_prompt=build_base_authoring_prompt())
+                        log_callback=_log_cb)
                     value = result.value
                     is_err = _looks_like_error(value)
                     rendered = _render_value(value)

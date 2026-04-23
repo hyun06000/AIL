@@ -139,18 +139,6 @@ class AuthoringChat:
 
     # ---------- prompt construction ----------
 
-    @staticmethod
-    def build_base_system_prompt() -> str:
-        fake = object.__new__(AuthoringChat)
-        fake.project = type("P", (), {
-            "root": type("R", (), {"name": "(sub-executor)"})()
-        })()
-        return fake._build_goal_prompt(
-            state={},
-            history=[],
-            user_message="(sub-executor: write correct AIL per the rules above)",
-        )
-
     def _build_goal_prompt(
         self, state: dict[str, str], history: list[dict], user_message: str
     ) -> str:
@@ -1452,10 +1440,6 @@ If the answer to any checkbox is NO and the task required it — go back and add
         }
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-
-def build_base_authoring_prompt() -> str:
-    return AuthoringChat.build_base_system_prompt()
 
 
 def list_project_programs(project) -> list[dict]:

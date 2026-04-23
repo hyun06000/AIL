@@ -39,39 +39,6 @@ class AnthropicAdapter:
         import anthropic
         client = anthropic.Anthropic(api_key=self._api_key)
 
-        if "_authoring_system_prompt" in context:
-            authoring_sp = context["_authoring_system_prompt"]
-            user_msg = self._build_user_prompt(inputs) if inputs else "(no input)"
-            resp = client.messages.create(
-                model=self.model,
-                max_tokens=8192,
-                system=authoring_sp,
-                messages=[
-                    {"role": "user", "content": user_msg},
-                    {"role": "assistant", "content": "<reply>"},
-                ],
-            )
-            import re as _re
-            raw_text = "<reply>" + "".join(
-                block.text for block in resp.content if getattr(block, "type", None) == "text"
-            ).strip()
-            fm = _re.search(r"<file[^>]*>(.*?)</file>", raw_text, _re.DOTALL)
-            if fm:
-                value = fm.group(1).strip()
-            else:
-                rm = _re.search(r"<reply>(.*?)</reply>", raw_text, _re.DOTALL)
-                value = rm.group(1).strip() if rm else raw_text
-            return ModelResponse(
-                value=value,
-                confidence=0.9,
-                model_id=resp.model,
-                raw={
-                    "stop_reason": resp.stop_reason,
-                    "input_tokens": getattr(resp.usage, "input_tokens", None),
-                    "output_tokens": getattr(resp.usage, "output_tokens", None),
-                },
-            )
-
         if context.get("_intent_name") == "__authoring_chat__":
             user_msg = inputs.get("user_message", "(no input)")
             resp = client.messages.create(

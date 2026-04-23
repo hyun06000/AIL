@@ -73,8 +73,7 @@ class Executor:
                  ask_human=None, metric_fn=None, approve_review=None,
                  calibrator: Optional[Calibrator] = None,
                  _ail_run_depth: int = 0,
-                 log_callback=None,
-                 authoring_system_prompt: Optional[str] = None):
+                 log_callback=None):
         """
         Parameters:
           program       — compiled AIL program
@@ -103,7 +102,6 @@ class Executor:
         self.calibrator = calibrator if calibrator is not None else default_calibrator()
         self._ail_run_depth = _ail_run_depth
         self.log_callback = log_callback
-        self.authoring_system_prompt = authoring_system_prompt
 
         self.intents: dict[str, IntentDecl] = {}
         self.contexts: dict[str, ContextDecl] = {}
@@ -1390,7 +1388,6 @@ class Executor:
                 calibrator=self.calibrator,
                 _ail_run_depth=next_depth,
                 log_callback=self.log_callback,
-                authoring_system_prompt=self.authoring_system_prompt,
             )
             result = sub.run_entry({"input": run_input})
             self.trace.record(
@@ -2415,12 +2412,6 @@ class Executor:
 
             self.trace.record("model_invoke", intent=intent.name, goal=goal_str,
                               constraints=constraints_str)
-
-            # When running inside ail.run with an authoring_system_prompt,
-            # inject it so the sub-executor's intents start from the same
-            # baseline as the top-level authoring model.
-            if self.authoring_system_prompt is not None:
-                context_dict["_authoring_system_prompt"] = self.authoring_system_prompt
 
             try:
                 response, coerced_value, validation_error = self._invoke_with_validation(
