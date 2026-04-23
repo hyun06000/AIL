@@ -1,0 +1,61 @@
+// 에이전트 루프 3단계 — 외부 HTTP 호출 포함
+//
+// httpbin.org/post 에 실제 POST를 보내고 응답을 확인한다.
+// http.post_json 성공/실패를 상태 머신으로 처리한다.
+//
+// ail run examples/agent_loop_3_http.ail
+
+intent decide(state: Text, last_response: Text) -> Text {
+    goal: "You are an agent that sends one HTTP POST to httpbin.org and verifies the response. State machine:\n- state 'start': return POST_DATA: {\"hello\": \"AIL\"}\n- state 'sent': check last_response. If it contains 'hello', return DONE: success. Otherwise return DONE: unexpected response.\nCurrent state: {{state}}\nLast response: {{last_response}}"
+}
+
+evolve decide {
+    metric: confidence(sampled: 1.0)
+    when confidence < 0.5 {
+        retune confidence_threshold: within [0.3, 0.8]
+    }
+    rollback_on: confidence < 0.15
+    history: keep_last 5
+}
+
+entry main(input: Text) {
+    state = "start"
+    last_response = ""
+    log = ""
+
+    for step in range(5) {
+        decision = decide(state, last_response)
+        decision_str = to_text(decision)
+        log = log + "step " + to_text(step) + ": " + slice(decision_str, 0, 60) + "\n"
+
+        if starts_with(decision_str, "DONE") {
+            return log + "\n✅ " + slice(decision_str, 5, length(decision_str))
+        }
+
+        if starts_with(decision_str, "POST_DATA") {
+            payload_json = slice(decision_str, 10, length(decision_str))
+            parsed_r = parse_json(payload_json)
+            if is_error(parsed_r) {
+                log = log + "  ❌ JSON 파싱 실패\n"
+            }
+            if is_ok(parsed_r) {
+                payload = unwrap(parsed_r)
+                result_r = perform http.post_json(
+                    "https://httpbin.org/post",
+                    payload
+                )
+                if is_error(result_r) {
+                    log = log + "  ❌ 네트워크 오류\n"
+                    last_response = "network error"
+                }
+                if is_ok(result_r) {
+                    last_response = slice(to_text(result_r.body), 0, 200)
+                    log = log + "  ✓ 응답: " + last_response + "\n"
+                    state = "sent"
+                }
+            }
+        }
+    }
+
+    return log + "\n⚠ 최대 스텝 도달"
+}

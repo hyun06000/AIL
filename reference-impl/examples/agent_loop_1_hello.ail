@@ -1,0 +1,25 @@
+// 에이전트 루프 1단계 — 가장 기초
+//
+// range(3)으로 3번 도는 루프 + DONE 신호로 탈출.
+// evolve 없이 순수 for+starts_with 패턴만 확인한다.
+//
+// ail run examples/agent_loop_1_hello.ail
+
+intent decide(state: Text) -> Text {
+    goal: "Return exactly one of:\n  DONE: <message>\n  CONTINUE: <next_state>\nCurrent state: {{state}}\nAfter 2 CONTINUE steps, return DONE with a greeting."
+}
+
+entry main(input: Text) {
+    state = "start"
+    log = ""
+    for step in range(3) {
+        decision = decide(state)
+        decision_str = to_text(decision)
+        log = log + "step " + to_text(step) + ": " + decision_str + "\n"
+        if starts_with(decision_str, "DONE") {
+            return log + "\n✅ " + slice(decision_str, 5, length(decision_str))
+        }
+        state = decision_str
+    }
+    return log + "\n⚠ 최대 스텝 도달"
+}
