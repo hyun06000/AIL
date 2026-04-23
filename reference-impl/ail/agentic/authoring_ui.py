@@ -152,6 +152,30 @@ def render_authoring_page(
       word-break: break-word; font-family: ui-monospace,
       SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px;
       line-height: 1.5; color: #111; }}
+    .run-result .md-body {{ font-size: 14px; line-height: 1.65;
+      color: #111; word-break: break-word; }}
+    .run-result .md-body h1 {{ font-size: 1.25em; font-weight: 700;
+      margin: 0.6em 0 0.3em; }}
+    .run-result .md-body h2 {{ font-size: 1.1em; font-weight: 700;
+      margin: 0.6em 0 0.2em; }}
+    .run-result .md-body h3 {{ font-size: 1em; font-weight: 600;
+      margin: 0.5em 0 0.2em; }}
+    .run-result .md-body p {{ margin: 0.4em 0; }}
+    .run-result .md-body ul, .run-result .md-body ol {{
+      margin: 0.3em 0; padding-left: 1.4em; }}
+    .run-result .md-body li {{ margin: 0.15em 0; }}
+    .run-result .md-body code {{ font-family: ui-monospace, Menlo,
+      monospace; font-size: 0.88em; background: rgba(0,0,0,0.07);
+      padding: 1px 4px; border-radius: 3px; }}
+    .run-result .md-body pre {{ background: rgba(0,0,0,0.06);
+      padding: 8px 10px; border-radius: 6px; overflow-x: auto;
+      font-size: 12px; margin: 0.4em 0; white-space: pre; }}
+    .run-result .md-body pre code {{ background: none; padding: 0; }}
+    .run-result .md-body a {{ color: #0e7490; text-decoration: underline; }}
+    .run-result .md-body hr {{ border: none; border-top: 1px solid #d1d5db;
+      margin: 0.6em 0; }}
+    .run-result .md-body strong {{ font-weight: 700; }}
+    .run-result .md-body em {{ font-style: italic; }}
     .run-result .diag {{ margin-top: 8px; padding-top: 8px;
       border-top: 1px solid #fecaca; font-size: 12px;
       color: #6b7280; white-space: pre-wrap; }}
@@ -712,6 +736,80 @@ def render_authoring_page(
       thread.appendChild(card);
     }}
 
+    function renderMarkdown(text) {{
+      // Minimal markdown renderer — no external deps.
+      // Handles: fenced code, headers, bold/italic, inline code,
+      // links, ul/ol lists, hr, paragraphs.
+      if (!text) return '';
+      const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+      // 1. Fenced code blocks (``` ... ```) — extract before inline pass
+      const fenced = [];
+      text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {{
+        const idx = fenced.length;
+        fenced.push(`<pre><code>${{esc(code.replace(/\n$/,''))}}</code></pre>`);
+        return `\x00FENCED${{idx}}\x00`;
+      }});
+
+      // 2. Split into blocks by blank lines
+      const blocks = text.split(/\n{{2,}}/);
+      const rendered = blocks.map(block => {{
+        // Restore fenced placeholders
+        if (/^\x00FENCED\d+\x00$/.test(block.trim())) {{
+          return fenced[parseInt(block.match(/\d+/)[0])];
+        }}
+        // hr
+        if (/^---+$/.test(block.trim())) return '<hr>';
+
+        const lines = block.split('\n');
+
+        // Heading (# at start of block's first line)
+        const hm = lines[0].match(/^(#{1,3})\s+(.+)/);
+        if (hm) {{
+          const lvl = hm[1].length;
+          return `<h${{lvl}}>${{inlineRender(hm[2])}}</h${{lvl}}>`;
+        }}
+
+        // Unordered list
+        if (lines.every(l => /^\s*[-*]\s/.test(l) || l.trim() === '')) {{
+          const items = lines.filter(l => /^\s*[-*]\s/.test(l))
+            .map(l => `<li>${{inlineRender(l.replace(/^\s*[-*]\s+/, ''))}}</li>`);
+          return `<ul>${{items.join('')}}</ul>`;
+        }}
+
+        // Ordered list
+        if (lines.every(l => /^\s*\d+\.\s/.test(l) || l.trim() === '')) {{
+          const items = lines.filter(l => /^\s*\d+\.\s/.test(l))
+            .map(l => `<li>${{inlineRender(l.replace(/^\s*\d+\.\s+/, ''))}}</li>`);
+          return `<ol>${{items.join('')}}</ol>`;
+        }}
+
+        // Paragraph (join lines, render inline)
+        return `<p>${{inlineRender(lines.join(' '))}}</p>`;
+      }});
+
+      return rendered.join('');
+    }}
+
+    function inlineRender(s) {{
+      const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      // Inline code
+      s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${{esc(c)}}</code>`);
+      // Bold
+      s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      // Italic
+      s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      // Links
+      s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
+        (_, t, u) => `<a href="${{esc(u)}}" target="_blank">${{esc(t)}}</a>`);
+      return s;
+    }}
+
+    function looksLikeMarkdown(text) {{
+      // Heuristic: contains at least one markdown marker
+      return /^#{1,3}\s|^\s*[-*]\s|\*\*|\[.+\]\(|^---/m.test(text);
+    }}
+
     function addRunResult(r) {{
       const box = document.createElement('div');
       box.className = 'run-result' + (r.ok ? '' : ' err');
@@ -719,11 +817,19 @@ def render_authoring_page(
       label.className = 'label';
       label.textContent = r.ok ? '실행 결과 / Result' : '실행 실패 / Error';
       box.appendChild(label);
-      const pre = document.createElement('pre');
-      pre.textContent = r.ok
+      const raw = r.ok
         ? (r.value || '(empty)')
         : (r.error || r.value || '(no message)');
-      box.appendChild(pre);
+      if (r.ok && looksLikeMarkdown(raw)) {{
+        const md = document.createElement('div');
+        md.className = 'md-body';
+        md.innerHTML = renderMarkdown(raw);
+        box.appendChild(md);
+      }} else {{
+        const pre = document.createElement('pre');
+        pre.textContent = raw;
+        box.appendChild(pre);
+      }}
       if (r.diagnostic) {{
         const d = document.createElement('div');
         d.className = 'diag';
