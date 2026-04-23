@@ -833,11 +833,12 @@ evolve next_action {{
 entry main(input: Text) {{
     guide_r = perform http.get("https://service.com/skill.md")
     if is_error(guide_r) {{ return "❌ guide load failed" }}
+    guide = slice(guide_r.body, 0, 6000)   // cap guide size — raw body can be 30K+ tokens
     history = ""
     log = "=== Agent Log ===\\n✓ guide loaded\\n"
 
     for step in range(10) {{
-        action = to_text(next_action(guide_r.body, history))
+        action = to_text(next_action(guide, history))
 
         if starts_with(action, "DONE") {{
             return log + "\\n✅ " + slice(action, 5, length(action))
