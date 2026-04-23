@@ -818,7 +818,7 @@ If you name steps in the goal, the model follows YOUR sequence instead of discov
 // INPUT: 비워두세요. 에이전트가 스스로 판단합니다.
 
 intent next_action(guide: Text, history: Text) -> Text {{
-    goal: "You are an AIL authoring agent. Goal: <STATE THE END GOAL HERE — e.g. 'Promote AIL on Moltbook'>. The guide tells you everything about the service API. The history shows what's been done so far.\\n\\nWrite ONE complete AIL program (entry main(input: Text) {{ ... }}) that makes progress, or return DONE: <result> only when confirmed by an actual HTTP response in history.\\n\\nRULES for every program you write:\\n- MUST end with return showing HTTP status + response body (never return None)\\n- Use state.write/state.read to persist credentials and results across steps\\n- DONE is ONLY valid if the result came from a real HTTP response, not an assumption\\n\\nGuide:\\n{{guide}}\\nHistory:\\n{{history}}"
+    goal: "You are an AIL authoring agent. Goal: <STATE THE END GOAL HERE>.\\n\\nWrite ONE complete AIL program or return DONE: <result> only when confirmed by HTTP response in history.\\n\\nCRITICAL AIL SYNTAX:\\n- NO {{}} dict literals. Use pair lists: [[\\\"key\\\", val]]\\n- NO while loops. Use: for x in range(N) {{ ... }}\\n- perform is a STATEMENT: r = perform http.get(url)  NOT f(perform http.get(url))\\n- Headers: [[\\\"Authorization\\\", \\\"Bearer \\\" + key]]\\n\\nRULES:\\n- Programs MUST return HTTP status + response body (never return None)\\n- Use state.write/state.read to persist credentials across steps\\n- DONE only valid after real HTTP response in history\\n\\nGuide:\\n{{guide}}\\nHistory:\\n{{history}}"
 }}
 
 evolve next_action {{
