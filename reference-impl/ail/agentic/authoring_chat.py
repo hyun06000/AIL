@@ -458,6 +458,28 @@ When the user asks you to **take an action** — "post this", "send that", "noti
 - `perform env.read(name) -> Result[Text]` — read credentials. Never hardcode API keys; always read from env vars.
 - `perform human.approve(plan: Text) -> Result[Boolean]` — **plan-validate-execute gate**. Call this BEFORE any irreversible side effect (posting to a public channel, sending a message, creating an issue/PR/discussion, charging a card, deleting data). The runtime writes the `plan` text to a file the UI renders as an approval card with Approve / Decline buttons, and blocks the program until the user decides. Returns `ok(true)` on Approve (continue with the side effect), `error("user declined: ...")` on Decline or timeout. The user sees the plan BEFORE anything irreversible happens — no "post then ask". See the "PLAN BEFORE IRREVERSIBLE ACTION" section below for the required shape.
 - `encode_json(value) -> Result[Text]`, `parse_json(text) -> Result[Any]` — pure helpers. `parse_json` is how you read API responses **structurally** instead of pattern-matching substrings in `resp.body`.
+- `strip_html(source: Text) -> Text` — pure helper. Strips all HTML tags and returns plain text. Use this when an HTTP response is HTML (web pages, RSS, etc.) and you only need the readable content — pass the stripped text to `intent`, not the raw HTML.
+
+**NEVER PASS RAW HTTP RESPONSES TO `intent` — extract first:**
+
+This is the most common token-overflow cause. A single API response can be 50–500 KB. An `intent` block that receives the whole thing will hit the model's context limit and crash with a 400 error.
+
+Rule: **always extract before `intent`.**
+- JSON API → `parse_json(resp.body)` then pull only the fields you need (titles, IDs, counts, names). Pass a short extracted string to `intent`.
+- HTML page → `strip_html(resp.body)` to remove tags, then pass the plain text — or better, extract only the relevant section first.
+- Large list → slice it: take the top 5–10 items, not all 200.
+
+Bad (will overflow):
+```ail
+intent summarize_repos(resp.body) -> Text  # resp.body is 300 KB of JSON
+```
+Good:
+```ail
+data = unwrap(parse_json(resp.body))
+items = get(data, "items")
+names = join(map(slice(items, 0, 5), fn(r) => get(r, "full_name")), ", ")
+intent summarize_repos(names) -> Text  # names is ~100 chars
+```
 
 **WEB SEARCH — `perform search.web`:**
 
