@@ -269,6 +269,18 @@ def _make_handler(project: Project):
             return
 
         def do_GET(self):  # noqa: N802 — stdlib name
+            if self.path == "/authoring-env-list":
+                import json as _json
+                from .authoring_chat import list_project_secret_keys
+                keys = list_project_secret_keys(project)
+                body = _json.dumps(keys, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             if self.path in ("/healthz", "/health"):
                 body = b"ok\n"
                 self.send_response(200)
@@ -742,6 +754,29 @@ def _make_handler(project: Project):
                     "name": name,
                     # NB: no `value` — never log secrets.
                 })
+                self._send_text(200, "ok\n")
+                return
+
+            if self.path == "/authoring-delete-env":
+                import json as _json
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                try:
+                    raw = self.rfile.read(length).decode("utf-8") if length else ""
+                    payload = _json.loads(raw)
+                    name = str(payload.get("name", "")).strip()
+                except (ValueError, UnicodeDecodeError):
+                    self._send_text(400, "invalid json body\n")
+                    return
+                if not name:
+                    self._send_text(400, "name required\n")
+                    return
+                from .authoring_chat import delete_project_secret
+                try:
+                    delete_project_secret(project, name)
+                except OSError as e:
+                    self._send_text(500, f"could not delete secret: {e}\n")
+                    return
+                project.append_ledger({"event": "env_delete", "name": name})
                 self._send_text(200, "ok\n")
                 return
 

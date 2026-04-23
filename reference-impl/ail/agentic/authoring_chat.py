@@ -464,6 +464,19 @@ Rules:
 - Two action values are recognized. BOTH keep the user in the chat — nothing ever navigates away. The difference is framing and affordances, not UI mode:
   - `<action>ready_to_run</action>` — the DEFAULT for most tasks (one-shot answers, scripts, calculations, previews). Renders an inline "Run" card in the chat with an optional input textarea and a Run button. The user can click Run repeatedly with different inputs; each result appears as a bubble. They stay in the chat and can also say "이거 수정해줘" to have you iterate on the code.
   - `<action>ready_to_serve</action>` — use when the user has said they want a long-running service / dashboard / webhook / something other people or apps will call. Renders the same run widget wrapped as a "service card" (green, labeled 서비스 모드) with a link to `/service` — a shareable URL that serves the classic textarea page (or view.html) on a separate route for external consumers. The user STILL stays in the chat; `/service` opens in a new tab only when they click the link.
+
+**NEVER spawn a web server from inside an AIL program.** `ail up` IS the web server — the user is already talking to it through the browser. Writing a program that starts Flask, `http.server`, or any other HTTP server inside an AIL entry is always wrong:
+- ❌ It would try to bind port 8080 (already taken by `ail up`) → crash or silent conflict
+- ❌ There is no Ctrl+C, no stop button — the user has no way to kill it
+- ❌ The link "http://localhost:8080" it prints is the ail server itself, not a new page
+
+**For monitoring / dashboard / auto-refresh use cases — the correct pattern:**
+1. Use `perform schedule.every(N)` to run the fetch+store logic periodically
+2. Use `perform state.write("key", value)` to persist the latest result
+3. Write a `view.html` that reads from the `/run` endpoint (or `/service`) to display live data
+4. Use `<action>ready_to_serve</action>` — the existing `/service` route IS the shareable web page
+
+The user asking "모니터링 웹페이지 만들어줘" wants `schedule.every` + `state.write` + `view.html`, not a new HTTP server.
 - When the conversation history contains a `[Run result — ERROR]` entry, that means the user just ran the program and got an error. Treat this as your top priority: explain briefly what went wrong, update app.ail to fix it, and re-emit `ready_to_run` so they can try again.
 - When the conversation history contains a `[Run result — OK]` entry, the user saw the output. If they don't object, offer either more refinement questions OR `ready_to_serve` if they want a service. Don't re-offer `ready_to_run` with unchanged code.
 - When the PROJECT STATE for `app.ail` includes `[PARSE ERROR]`, the code you previously wrote does NOT parse. Do NOT emit `ready_to_run` or `ready_to_serve`. Instead: write a corrected `<file path="app.ail">` and briefly explain the fix in `<reply>`. Common LLM mistakes to avoid: don't use `#` for comments (AIL uses `//`); `intent` constraints must be short identifier-style phrases like `output_is_valid_json` or `language_is_korean`, NOT free-prose sentences with articles like "their" or "a"; don't put JSON shape descriptions in constraints — that's free prose; only write syntax that appears in the reference card.
@@ -1272,6 +1285,44 @@ def list_required_env_vars(app_source: str) -> list[str]:
         if name not in seen:
             seen.append(name)
     return seen
+
+
+def list_project_secret_keys(project) -> list[str]:
+    """Return the list of stored secret key names (never values)."""
+    path = project.state_dir / "secrets.json"
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return [k for k in data if isinstance(k, str)]
+    except (OSError, json.JSONDecodeError, ValueError):
+        pass
+    return []
+
+
+def delete_project_secret(project, name: str) -> None:
+    """Remove a secret from `.ail/secrets.json` and os.environ."""
+    import os
+    path = project.state_dir / "secrets.json"
+    data: dict = {}
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = {k: v for k, v in loaded.items()
+                        if isinstance(k, str) and isinstance(v, str)}
+        except (OSError, json.JSONDecodeError, ValueError):
+            pass
+    data.pop(name, None)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    os.replace(tmp, path)
+    os.environ.pop(name, None)
 
 
 def load_project_secrets(project) -> None:

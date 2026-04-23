@@ -4,6 +4,25 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.28.0 — 2026-04-24
+
+**⚙ 설정 패널 + 웹 서버 스폰 금지 규칙.**
+
+설정 패널 (⚙ Settings):
+- 헤더 "⚙ 설정 / Settings" 링크 → 오른쪽 슬라이드 패널
+- 저장된 키 목록 (이름만, 값은 ••••••)
+- 각 키마다 수정(인라인 입력) / 삭제(confirm) 버튼
+- 하단 새 키 추가 폼 — 실시간 저장
+- 서버: GET /authoring-env-list, POST /authoring-delete-env 추가
+- authoring_chat.py: list_project_secret_keys, delete_project_secret 추가
+
+날씨 모니터링 버그 fix (프롬프트):
+- AIL 프로그램에서 Flask/http.server 스폰 금지 규칙 추가
+- 이유: ail up이 이미 8080을 점유, Ctrl+C 방법 없음
+- 올바른 패턴: schedule.every + state.write + view.html 명시
+
+---
+
 ## v1.27.0 — 2026-04-24
 
 **UI: 채팅을 이미지로 저장 기능 추가 (공유/홍보용).**

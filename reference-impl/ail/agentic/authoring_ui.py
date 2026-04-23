@@ -197,6 +197,59 @@ def render_authoring_page(
     .err {{ color: #b91c1c; background: #fef2f2;
       border: 1px solid #fecaca; padding: 10px 14px; border-radius: 8px;
       font-size: 14px; margin: 8px 0; }}
+    /* Settings panel */
+    .settings-overlay {{ display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.35); z-index: 900; }}
+    .settings-overlay.open {{ display: block; }}
+    .settings-panel {{ position: fixed; top: 0; right: -420px; width: 400px;
+      height: 100vh; background: #fff; border-left: 1px solid var(--border);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.10); z-index: 901;
+      transition: right 0.22s ease; display: flex; flex-direction: column;
+      overflow: hidden; }}
+    .settings-panel.open {{ right: 0; }}
+    .settings-hdr {{ padding: 18px 20px 14px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; }}
+    .settings-hdr h2 {{ margin: 0; font-size: 15px; font-weight: 600; }}
+    .settings-close {{ background: none; border: none; font-size: 18px;
+      cursor: pointer; color: var(--muted); padding: 2px 6px;
+      border-radius: 4px; }}
+    .settings-close:hover {{ background: #f3f4f6; color: #111; }}
+    .settings-body {{ flex: 1; overflow-y: auto; padding: 16px 20px; }}
+    .settings-section-title {{ font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); margin: 0 0 10px; }}
+    .senv-row {{ display: flex; align-items: center; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid #f3f4f6; }}
+    .senv-name {{ font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px; color: #111; flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .senv-mask {{ font-size: 12px; color: var(--muted);
+      letter-spacing: 2px; flex-shrink: 0; }}
+    .senv-btn {{ font-family: inherit; font-size: 11px; padding: 4px 8px;
+      border-radius: 4px; border: 1px solid var(--border);
+      background: #fff; cursor: pointer; color: #374151; white-space: nowrap; }}
+    .senv-btn:hover {{ background: #f3f4f6; }}
+    .senv-btn.del {{ border-color: #fecaca; color: #b91c1c; }}
+    .senv-btn.del:hover {{ background: #fef2f2; }}
+    .senv-edit-row {{ padding: 8px 0 10px; border-bottom: 1px solid #f3f4f6; }}
+    .senv-edit-row .senv-name {{ margin-bottom: 6px; }}
+    .senv-edit-row input {{ width: 100%; font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px; padding: 6px 8px; border: 1px solid var(--border);
+      border-radius: 4px; background: #fff; margin-bottom: 6px; }}
+    .senv-edit-row input:focus {{ outline: 2px solid #111; outline-offset: -1px; }}
+    .senv-edit-actions {{ display: flex; gap: 6px; }}
+    .settings-add {{ padding: 16px 20px; border-top: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 6px; }}
+    .settings-add input {{ font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px; padding: 7px 10px; border: 1px solid var(--border);
+      border-radius: 4px; background: #fff; }}
+    .settings-add input:focus {{ outline: 2px solid #111; outline-offset: -1px; }}
+    .settings-add-btn {{ font-family: inherit; font-size: 13px; font-weight: 500;
+      padding: 8px 14px; border-radius: 6px; border: 0;
+      background: #111; color: #fff; cursor: pointer; align-self: flex-start; }}
+    .settings-add-btn:hover {{ opacity: 0.85; }}
+    .settings-empty {{ color: var(--muted); font-size: 13px;
+      text-align: center; padding: 24px 0; }}
   </style>
 </head>
 <body>
@@ -207,8 +260,27 @@ def render_authoring_page(
         · <a href="#" id="export-chat">대화 내보내기 / Export</a>
         · <a href="#" id="copy-chat">복사 / Copy</a>
         · <a href="#" id="save-image">이미지로 저장 / Save image</a>
+        · <a href="#" id="open-settings">⚙ 설정 / Settings</a>
       </div>
     </header>
+
+    <div class="settings-overlay" id="settings-overlay"></div>
+    <div class="settings-panel" id="settings-panel">
+      <div class="settings-hdr">
+        <h2>환경 설정 / Settings</h2>
+        <button class="settings-close" id="settings-close">✕</button>
+      </div>
+      <div class="settings-body">
+        <p class="settings-section-title">저장된 키 / Saved keys</p>
+        <div id="senv-list"></div>
+      </div>
+      <div class="settings-add">
+        <p class="settings-section-title" style="margin-bottom:8px">새 키 추가 / Add key</p>
+        <input type="text" id="senv-new-name" placeholder="키 이름 (예: DISCORD_WEBHOOK_URL)" autocomplete="off" spellcheck="false">
+        <input type="password" id="senv-new-value" placeholder="값 / Value" autocomplete="off">
+        <button class="settings-add-btn" id="senv-add-btn">저장 / Save</button>
+      </div>
+    </div>
 
     <div class="thread" id="thread">
       <div class="hint" id="hint">
@@ -1133,6 +1205,126 @@ def render_authoring_page(
     document.getElementById('save-image').addEventListener('click', (e) => {{
       e.preventDefault();
       exportChatImage();
+    }});
+
+    // ── Settings panel ──────────────────────────────────────────────
+    const settingsPanel   = document.getElementById('settings-panel');
+    const settingsOverlay = document.getElementById('settings-overlay');
+    const senvList        = document.getElementById('senv-list');
+
+    async function openSettings() {{
+      await refreshEnvList();
+      settingsPanel.classList.add('open');
+      settingsOverlay.classList.add('open');
+    }}
+    function closeSettings() {{
+      settingsPanel.classList.remove('open');
+      settingsOverlay.classList.remove('open');
+    }}
+    document.getElementById('open-settings').addEventListener('click', (e) => {{
+      e.preventDefault(); openSettings();
+    }});
+    document.getElementById('settings-close').addEventListener('click', closeSettings);
+    settingsOverlay.addEventListener('click', closeSettings);
+
+    async function refreshEnvList() {{
+      try {{
+        const r = await fetch('/authoring-env-list');
+        const keys = await r.json();
+        renderEnvList(keys);
+      }} catch (e) {{
+        senvList.innerHTML = '<p class="settings-empty">불러오기 실패</p>';
+      }}
+    }}
+
+    function renderEnvList(keys) {{
+      senvList.innerHTML = '';
+      if (!keys.length) {{
+        senvList.innerHTML = '<p class="settings-empty">저장된 키가 없어요.</p>';
+        return;
+      }}
+      keys.forEach(name => {{
+        const row = document.createElement('div');
+        row.className = 'senv-row';
+        row.dataset.name = name;
+        row.innerHTML = `
+          <span class="senv-name">${{name}}</span>
+          <span class="senv-mask">••••••</span>
+          <button class="senv-btn edit-btn">수정</button>
+          <button class="senv-btn del del-btn">삭제</button>`;
+        row.querySelector('.edit-btn').onclick = () => showEditRow(name, row);
+        row.querySelector('.del-btn').onclick  = () => deleteEnvKey(name, row);
+        senvList.appendChild(row);
+      }});
+    }}
+
+    function showEditRow(name, row) {{
+      const edit = document.createElement('div');
+      edit.className = 'senv-edit-row';
+      edit.innerHTML = `
+        <div class="senv-name">${{name}}</div>
+        <input type="password" placeholder="새 값 / New value" autocomplete="off">
+        <div class="senv-edit-actions">
+          <button class="senv-btn save-edit-btn" style="background:#111;color:#fff;border:0">저장</button>
+          <button class="senv-btn cancel-edit-btn">취소</button>
+        </div>`;
+      const inp = edit.querySelector('input');
+      edit.querySelector('.save-edit-btn').onclick = async () => {{
+        const val = inp.value.trim();
+        if (!val) return;
+        await saveEnvKey(name, val);
+        edit.remove();
+        row.style.display = 'flex';
+      }};
+      edit.querySelector('.cancel-edit-btn').onclick = () => {{
+        edit.remove(); row.style.display = 'flex';
+      }};
+      row.style.display = 'none';
+      row.after(edit);
+      inp.focus();
+    }}
+
+    async function saveEnvKey(name, value) {{
+      await fetch('/authoring-set-env', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ name, value }}),
+      }});
+    }}
+
+    async function deleteEnvKey(name, row) {{
+      if (!confirm(`"${{name}}" 키를 삭제할까요?`)) return;
+      const r = await fetch('/authoring-delete-env', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ name }}),
+      }});
+      if (r.ok) {{
+        row.remove();
+        if (!senvList.querySelector('.senv-row')) {{
+          senvList.innerHTML = '<p class="settings-empty">저장된 키가 없어요.</p>';
+        }}
+      }}
+    }}
+
+    document.getElementById('senv-add-btn').addEventListener('click', async () => {{
+      const nameEl = document.getElementById('senv-new-name');
+      const valEl  = document.getElementById('senv-new-value');
+      const name = nameEl.value.trim();
+      const value = valEl.value.trim();
+      if (!name || !value) return;
+      const r = await fetch('/authoring-set-env', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ name, value }}),
+      }});
+      if (r.ok) {{
+        nameEl.value = ''; valEl.value = '';
+        await refreshEnvList();
+      }} else {{
+        const msg = await r.text();
+        addError('저장 실패: ' + msg);
+      }}
     }});
 
     msgEl.focus();
