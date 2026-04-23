@@ -700,6 +700,18 @@ def _make_handler(project: Project):
             # future GET / serves the service UI. Only fires on an
             # explicit user decision ("서비스로 띄워줘"), no longer on
             # every "run" click.
+            if self.path == "/authoring-reset-chat":
+                history_path = project.state_dir / "chat_history.jsonl"
+                try:
+                    if history_path.is_file():
+                        history_path.unlink()
+                except OSError as e:
+                    self._send_text(500, f"could not reset chat: {e}\n")
+                    return
+                project.append_ledger({"event": "chat_reset"})
+                self._send_text(200, "ok\n")
+                return
+
             if self.path == "/authoring-complete":
                 from .authoring_chat import mark_authored
                 mark_authored(project)

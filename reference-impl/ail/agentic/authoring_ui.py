@@ -263,6 +263,7 @@ def render_authoring_page(
         · <a href="#" id="copy-chat">복사 / Copy</a>
         · <a href="#" id="save-image">이미지로 저장 / Save image</a>
         · <a href="#" id="open-settings">⚙ 설정 / Settings</a>
+        · <a href="#" id="reset-chat" style="color:#b91c1c;">대화 초기화 / Reset chat</a>
       </div>
     </header>
 
@@ -1185,6 +1186,20 @@ def render_authoring_page(
     }}
     document.getElementById('open-settings').addEventListener('click', (e) => {{
       e.preventDefault(); openSettings();
+    }});
+
+    document.getElementById('reset-chat').addEventListener('click', async (e) => {{
+      e.preventDefault();
+      if (!confirm('대화 기록을 초기화할까요? 이 작업은 되돌릴 수 없습니다.\nReset chat history? This cannot be undone.')) return;
+      try {{
+        const r = await fetch('/authoring-reset-chat', {{ method: 'POST' }});
+        if (!r.ok) {{ alert('초기화 실패: HTTP ' + r.status); return; }}
+        thread.innerHTML = '';
+        hint.style.display = '';
+        thread.appendChild(hint);
+      }} catch (err) {{
+        alert('초기화 실패: ' + err.message);
+      }}
     }});
     document.getElementById('settings-close').addEventListener('click', closeSettings);
     settingsOverlay.addEventListener('click', closeSettings);
