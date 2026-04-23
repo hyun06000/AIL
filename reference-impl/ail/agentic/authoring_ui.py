@@ -234,18 +234,28 @@ def render_authoring_page(
       }}
 
       if (action === 'ready_to_run') {{
-        addRunWidget(false);
+        addRunWidget(false, inputUsedForNext);
       }} else if (action === 'ready_to_serve' || action === 'ready_to_deploy') {{
-        addRunWidget(true);
+        addRunWidget(true, inputUsedForNext);
       }}
     }}
+
+    // Whether the latest agent turn signalled that entry main uses
+    // its input param. Controls whether the Run widget shows an
+    // input textarea. Defaults to true so pre-v1.12.5 history
+    // replays don't lose the input box.
+    let inputUsedForNext = true;
 
     // Inline widget that the user can invoke repeatedly without
     // leaving the chat. For `ready_to_run` it's a plain run box.
     // For `ready_to_serve` it's the same widget wrapped as a service
     // card with a share link to /service (the classic service UI on
     // a separate route, for handing out to non-chat consumers).
-    function addRunWidget(service) {{
+    // `inputUsed` controls whether to render the input textarea —
+    // when false (entry doesn't reference input), the widget is a
+    // bare Run button with no confusing empty input field.
+    function addRunWidget(service, inputUsed) {{
+      if (typeof inputUsed === 'undefined') inputUsed = true;
       const card = document.createElement('div');
       card.className = 'run-card' + (service ? ' service' : '');
 
@@ -272,25 +282,34 @@ def render_authoring_page(
         card.appendChild(title);
       }}
 
-      const input = document.createElement('textarea');
-      input.rows = 1;
-      input.placeholder = service
-        ? '입력이 필요하면 여기 (비워두면 빈 입력) / input (optional)'
-        : '입력 (선택) / input (optional, leave blank if none)';
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.addEventListener('input', () => {{
-        input.style.height = 'auto';
-        input.style.height = Math.min(input.scrollHeight, 160) + 'px';
-      }});
-      input.addEventListener('keydown', (e) => {{
-        if (e.key === 'Enter' && !e.shiftKey
-            && !e.isComposing && e.keyCode !== 229) {{
-          e.preventDefault();
-          fire();
-        }}
-      }});
-      card.appendChild(input);
+      let input = null;
+      if (inputUsed) {{
+        input = document.createElement('textarea');
+        input.rows = 1;
+        input.placeholder = service
+          ? '입력이 필요하면 여기 (비워두면 빈 입력) / input (optional)'
+          : '입력 (선택) / input (optional, leave blank if none)';
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        input.addEventListener('input', () => {{
+          input.style.height = 'auto';
+          input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+        }});
+        input.addEventListener('keydown', (e) => {{
+          if (e.key === 'Enter' && !e.shiftKey
+              && !e.isComposing && e.keyCode !== 229) {{
+            e.preventDefault();
+            fire();
+          }}
+        }});
+        card.appendChild(input);
+      }} else {{
+        const note = document.createElement('div');
+        note.className = 'desc';
+        note.textContent =
+          '이 프로그램은 입력이 필요 없어요. 실행 버튼을 누르세요.';
+        card.appendChild(note);
+      }}
 
       const runBtn = document.createElement('button');
       runBtn.className = 'run-inline';
@@ -308,7 +327,7 @@ def render_authoring_page(
           const r = await fetch('/authoring-run', {{
             method: 'POST',
             headers: {{ 'Content-Type': 'text/plain; charset=utf-8' }},
-            body: input.value,
+            body: input ? input.value : '',
           }});
           placeholder.remove();
           const text = await r.text();
@@ -350,6 +369,23 @@ def render_authoring_page(
         d.className = 'diag';
         d.textContent = r.diagnostic;
         box.appendChild(d);
+      }}
+      // On error, offer a one-click "ask the agent to fix it" button.
+      // Sends a short message to the chat so the agent sees the error
+      // context in history and writes a correction.
+      if (!r.ok) {{
+        const fixBar = document.createElement('div');
+        fixBar.style.marginTop = '8px';
+        const fixBtn = document.createElement('button');
+        fixBtn.className = 'run-inline';
+        fixBtn.style.background = '#b91c1c';
+        fixBtn.textContent = '🔧 에이전트에게 수정 요청 / Ask agent to fix';
+        fixBtn.onclick = () => {{
+          fixBtn.disabled = true;
+          send('방금 발생한 에러를 고쳐주세요. / Please fix the error above.');
+        }};
+        fixBar.appendChild(fixBtn);
+        box.appendChild(fixBar);
       }}
       thread.appendChild(box);
     }}
@@ -398,6 +434,11 @@ def render_authoring_page(
         }} catch (e) {{
           addError('응답 파싱 실패: ' + text.slice(0, 200));
           return;
+        }}
+        // Pick up input-usage flag from the agent turn so the
+        // next Run widget renders with or without the input box.
+        if (typeof data.input_used !== 'undefined') {{
+          inputUsedForNext = data.input_used;
         }}
         addAgent(data.reply || '(empty)', data.files || [], data.action || null);
       }} catch (e) {{

@@ -519,11 +519,107 @@ def test_chat_ui_renders_inline_run_widget_not_one_shot_button(tmp_path):
         }],
     )
     # The `addRunWidget` function exists and is wired to both actions.
-    assert "addRunWidget(false)" in html
-    assert "addRunWidget(true)" in html
+    # Signature now takes (service, inputUsed) — check both call sites.
+    assert "addRunWidget(false, inputUsedForNext)" in html
+    assert "addRunWidget(true, inputUsedForNext)" in html
     # No more one-way-trip redirect to /authoring-complete from a
     # button click — that endpoint is gone from the UI JS.
     assert "authoring-complete" not in html
+
+
+def test_parse_error_in_app_ail_surfaces_in_agent_state(tmp_path):
+    """v1.12.5 — when the LLM writes bad AIL, the next agent turn
+    must see the parse error in its state view. Without this, the
+    agent happily re-emits ready_to_run on broken code."""
+    proj = Project.init(tmp_path / "badcode")
+    # Deliberate parse error — exactly the field-test failure mode
+    # (free-prose in `goal:` containing the `with` keyword, which
+    # the parser treats as the `with context NAME:` production).
+    bad = (
+        'intent find(q: Text) -> Text {\n'
+        '    goal: list developer communities with their links\n'
+        '}\n'
+        'entry main(input: Text) { return find(input) }\n'
+    )
+    proj.write_app_source(bad)
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    state = chat._read_project_state()
+    assert "[PARSE ERROR" in state["app.ail"]
+    # The prompt surfacing the state must carry the marker too, so
+    # the model sees it in its context.
+    prompt = chat._build_goal_prompt(state, [], "hi")
+    assert "[PARSE ERROR" in prompt
+
+
+def test_run_endpoint_input_used_reflects_entry(tmp_path):
+    """v1.12.5 — /authoring-run response includes input_used so the
+    UI knows whether to show the input textarea for subsequent runs."""
+    import json as _json
+
+    proj = Project.init(tmp_path / "nouse")
+    # Entry declares input but never references it.
+    proj.write_app_source(
+        'entry main(input: Text) { return "hello" }')
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/authoring-run",
+        data=b"", method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=2) as r:
+        body = _json.loads(r.read().decode("utf-8"))
+    assert body["ok"] is True
+    assert body["input_used"] is False
+
+
+def test_authoring_chat_turn_includes_input_used(tmp_path):
+    """/authoring-chat response exposes input_used so the ready_to_run
+    widget the agent surfaces can render with or without the input
+    textarea. Before v1.12.5 the field was absent."""
+    proj = Project.init(tmp_path / "echo")
+    # Entry references input.
+    proj.write_app_source(
+        'entry main(input: Text) { return input }')
+    adapter = _ScriptedChatAdapter([
+        "<reply>ok</reply><action>ready_to_run</action>",
+    ])
+    chat = AuthoringChat(proj, adapter)
+    out = chat.turn("run it")
+    assert out["input_used"] is True
+
+
+def test_run_endpoint_parse_error_has_no_traceback(tmp_path):
+    """v1.12.5 — AIL parse/lex/purity errors render cleanly in the
+    UI. No Python traceback in the `diagnostic` field for these
+    user-facing error classes."""
+    import json as _json
+
+    proj = Project.init(tmp_path / "broken")
+    proj.write_app_source("this is not ail code at all !!!")
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/authoring-run",
+        data=b"", method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=2) as r:
+        body = _json.loads(r.read().decode("utf-8"))
+    assert body["ok"] is False
+    # Clean error — no traceback leakage.
+    assert body["diagnostic"] == ""
+    assert "Traceback" not in body.get("error", "")
 
 
 def test_chat_ui_service_card_links_to_service_route(tmp_path):

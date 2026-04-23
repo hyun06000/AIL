@@ -4,6 +4,77 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.12.5 — 2026-04-23
+
+**Field-test fixes.** hyun06000 ran the chat flow with a real prompt
+("research communities for harness engineering"). Three issues:
+
+1. The LLM wrote free-prose inside `goal:` containing the word
+   `with`, which the parser reads as the `with context NAME:`
+   production → `ParseError: expected context at 4:64, got IDENT('their')`.
+2. Clicking Run showed that error wrapped in a full Python
+   traceback — noise to a non-programmer.
+3. The Run widget showed an input textarea even though the entry
+   didn't use `input`, making the user wonder what to type.
+
+### Parse-check visible to the agent
+
+`_read_project_state` now runs the parser on `app.ail` and, on
+failure, annotates the state view with `[PARSE ERROR — this file
+will NOT run until fixed]` plus the clean error message. The agent
+sees this in its prompt and must fix it before re-emitting
+`ready_to_run`.
+
+Prompt additions (from the field-test lessons):
+
+- No `#` comments — AIL uses `//`.
+- Intent constraints are identifier-style phrases
+  (`output_is_valid_json`, `language_is_korean`) — NOT free prose.
+- Don't put JSON shape descriptions in constraints.
+- Only use syntax from the reference card.
+
+### Clean error rendering
+
+`/authoring-run` catches `ParseError`, `LexError`, `PurityError`,
+`ImportResolutionError` and returns the message alone — no Python
+traceback in the `diagnostic` field. Unexpected errors still carry
+a bounded traceback (1 KB max) so internal bugs aren't invisible.
+
+### Input-aware Run widget
+
+Both `/authoring-run` and `/authoring-chat` responses now include
+`input_used: bool`. The UI hides the input textarea when false and
+renders a small note "이 프로그램은 입력이 필요 없어요." Pre-v1.12.5
+history replays default to showing the input (backward compatible).
+
+### 🔧 One-click fix request
+
+Error result bubbles now carry a red "🔧 에이전트에게 수정 요청 /
+Ask agent to fix" button. Click → sends "방금 발생한 에러를
+고쳐주세요." to the chat as the user's next message. The agent sees
+the error in history (and the parse error in its state view from the
+first fix above) and writes a correction. One click, no typing.
+
+### Tests
+
++4 tests in `test_authoring_chat.py`:
+
+- `[PARSE ERROR]` annotation surfaces in agent state + prompt.
+- `/authoring-run` response includes `input_used`.
+- `/authoring-chat` turn response includes `input_used`.
+- `ParseError` from /authoring-run has no Python traceback.
+
+497 passing (+4 from 493).
+
+### Why this cluster of fixes
+
+LLMs will sometimes write invalid AIL — that's expected. The harness
+response should be: catch it early (parse check), show it cleanly
+(no traceback), and make recovery trivial (one click). v1.12.5 closes
+all three.
+
+---
+
 ## v1.12.4 — 2026-04-23
 
 **Chat is the only UI.** Previously `ready_to_serve` clicked → page

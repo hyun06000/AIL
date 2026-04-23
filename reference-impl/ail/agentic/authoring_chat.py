@@ -92,10 +92,22 @@ class AuthoringChat:
             "action": action,
         })
 
+        # Tell the UI whether the entry uses its input parameter so
+        # the Run widget shown next to a ready_to_run/serve action
+        # can hide the input textarea when the program takes no
+        # input (v1.12.5).
+        try:
+            from .web_ui import entry_uses_input
+            app_source = self.project.app_path.read_text(encoding="utf-8")
+            input_used = entry_uses_input(app_source)
+        except Exception:
+            input_used = True
+
         return {
             "reply": reply,
             "files": applied_writes,
             "action": action,
+            "input_used": input_used,
         }
 
     # ---------- prompt construction ----------
@@ -145,6 +157,7 @@ Rules:
   - `<action>ready_to_serve</action>` — use when the user has said they want a long-running service / dashboard / webhook / something other people or apps will call. Renders the same run widget wrapped as a "service card" (green, labeled 서비스 모드) with a link to `/service` — a shareable URL that serves the classic textarea page (or view.html) on a separate route for external consumers. The user STILL stays in the chat; `/service` opens in a new tab only when they click the link.
 - When the conversation history contains a `[Run result — ERROR]` entry, that means the user just ran the program and got an error. Treat this as your top priority: explain briefly what went wrong, update app.ail to fix it, and re-emit `ready_to_run` so they can try again.
 - When the conversation history contains a `[Run result — OK]` entry, the user saw the output. If they don't object, offer either more refinement questions OR `ready_to_serve` if they want a service. Don't re-offer `ready_to_run` with unchanged code.
+- When the PROJECT STATE for `app.ail` includes `[PARSE ERROR]`, the code you previously wrote does NOT parse. Do NOT emit `ready_to_run` or `ready_to_serve`. Instead: write a corrected `<file path="app.ail">` and briefly explain the fix in `<reply>`. Common LLM mistakes to avoid: don't use `#` for comments (AIL uses `//`); `intent` constraints must be short identifier-style phrases like `output_is_valid_json` or `language_is_korean`, NOT free-prose sentences with articles like "their" or "a"; don't put JSON shape descriptions in constraints — that's free prose; only write syntax that appears in the reference card.
 - Match the user's language (Korean or English). If they wrote Korean, reply in Korean.
 - Ask one question at a time. Don't dump 10 decisions in one message.
 - Keep the reply short (1–3 sentences plus a question). The UI is chat — not a document.
@@ -284,6 +297,21 @@ Now respond using the XML format above."""
                     state[name] = "(read error)"
             else:
                 state[name] = ""
+
+        # Parse-check app.ail so the agent sees syntax errors in its
+        # state view and prioritizes fixing them. Without this, the
+        # agent happily re-emits ready_to_run on code that fails to
+        # parse (field test 2026-04-23: LLM wrote free-prose inside
+        # intent goal/constraints blocks).
+        app = state.get("app.ail", "").strip()
+        if app:
+            parse_err = _parse_check(app)
+            if parse_err:
+                state["app.ail"] = (
+                    state["app.ail"]
+                    + f"\n\n[PARSE ERROR — this file will NOT run until "
+                      f"fixed]\n{parse_err}"
+                )
         return state
 
     def _write_file(self, rel_path: str, content: str) -> tuple[bool, str]:
@@ -369,6 +397,21 @@ Now respond using the XML format above."""
         }
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def _parse_check(source: str) -> Optional[str]:
+    """Try parsing an AIL source. Return None on success, else a short
+    human-readable error string (no Python traceback — the agent sees
+    this in its prompt, and the UI surfaces it in run-error bubbles)."""
+    try:
+        from ..parser import parse
+    except Exception:
+        return None
+    try:
+        parse(source)
+    except Exception as e:
+        return f"{type(e).__name__}: {e}"
+    return None
 
 
 def project_is_fresh(project) -> bool:

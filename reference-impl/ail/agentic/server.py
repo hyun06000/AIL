@@ -354,13 +354,44 @@ def _make_handler(project: Project):
                         "diagnostic": diagnostic,
                     }
                 except Exception as e:
-                    import traceback
-                    outcome = {
-                        "ok": False,
-                        "value": "",
-                        "error": f"{type(e).__name__}: {e}",
-                        "diagnostic": traceback.format_exc()[:1000],
-                    }
+                    # AIL-level errors (parse, lex, purity, import
+                    # resolution) are users' actual problem; render
+                    # them cleanly without a Python traceback in the
+                    # user's face. Internal errors still carry a
+                    # bounded traceback for debugging.
+                    from ..parser import ParseError, LexError, PurityError
+                    try:
+                        from ..runtime.executor import ImportResolutionError
+                    except ImportError:
+                        ImportResolutionError = ()
+                    clean_errs = (ParseError, LexError, PurityError)
+                    if ImportResolutionError:
+                        clean_errs = clean_errs + (ImportResolutionError,)
+                    if isinstance(e, clean_errs):
+                        outcome = {
+                            "ok": False,
+                            "value": "",
+                            "error": f"{type(e).__name__}: {e}",
+                            "diagnostic": "",
+                        }
+                    else:
+                        import traceback
+                        outcome = {
+                            "ok": False,
+                            "value": "",
+                            "error": f"{type(e).__name__}: {e}",
+                            "diagnostic": traceback.format_exc()[:1000],
+                        }
+
+                # Tell the UI whether the entry uses its input
+                # parameter so the Run widget can hide the input
+                # textarea for input-free programs (v1.12.5 fix).
+                try:
+                    from .web_ui import entry_uses_input
+                    app_source = project.app_path.read_text(encoding="utf-8")
+                    outcome["input_used"] = entry_uses_input(app_source)
+                except Exception:
+                    outcome["input_used"] = True
 
                 # Record the run result into the chat history so the
                 # agent has context on the next turn — "fix the error

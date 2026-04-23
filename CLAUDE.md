@@ -57,13 +57,13 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 - `~/.pypirc` 직접 읽지 말 것 (transcript 노출). `twine`이 참조함.
 - PyPI는 yank만 가능, 삭제 불가. 버전·태그·CHANGELOG 일치 반드시 확인.
-- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0–1.12.4 (로컬). PyPI는 1.10.1.
+- 현재 게시: 1.8.0–1.8.7, 1.9.0–1.9.13, 1.10.0, 1.10.1, 1.11.0, 1.11.1, 1.12.0–1.12.5 (로컬). PyPI는 1.10.1.
 
 ---
 
 ## NOW — 2026-04-23
 
-**버전:** v1.12.4 (main = dev = origin, PyPI는 v1.10.1 상태). 서빙 모델: `ail-coder:7b-v3`.
+**버전:** v1.12.5 (main = dev = origin, PyPI는 v1.10.1 상태). 서빙 모델: `ail-coder:7b-v3`.
 
 **두 트랙 (상세: [`docs/heaal/README.md`](docs/heaal/README.md)):**
 - **AIL 트랙** — 언어 자체. R3/C4 기준선 AIL parse 80% / answer 70% vs Python 56%. Python 돌파 후 stable.
@@ -111,6 +111,7 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 - **v1.12.2 — chat UI Enter=전송, Shift+Enter=줄바꿈.** 한글 IME 조합 중 Enter는 조합 완료로 처리 (isComposing + keyCode 229 guard).
 - **v1.12.3 — "Run"이 dead-end가 아니라 대화 내 실행으로.** hyun06000 field test: "실행해보기" 누르니 채팅 사라지고 서비스 UI로 교체됨, 잘못 생성된 프로그램을 고칠 방법 없음. 재설계: (1) Run 버튼 → `/authoring-run` → 결과가 채팅 내 result 버블로 나타남, 채팅 유지 (2) `ready_to_run`(대화 내 실행) vs `ready_to_serve`(장기 서비스 deploy, 명시적 선택) 구분 (3) `/back-to-chat` endpoint + 서비스 UI 상단의 "← 대화로 돌아가기" 버튼으로 언제든 대화 복귀 (4) run 결과가 history에 기록되어 다음 턴 에이전트가 에러 맥락 보고 수정 제안. `project_is_fresh` 로직 갱신: chat_history 있으면 그 자체로 채팅 모드.
 - **v1.12.4 — 채팅이 유일한 UI.** ready_to_run은 이제 한 번 누르고 사라지는 버튼이 아닌 **반복 호출 가능한 인라인 widget** (입력 textarea + Run 버튼, 결과 버블들이 누적). ready_to_serve는 **페이지 이동 없음** — 같은 widget이 초록색 "🌐 서비스 모드" 카드로 감싸져 나타나고 `/service` 공유 링크 포함. 새 route `GET /service` = classic textarea UI (외부 공유/curl용 새 탭). 페이지 전환 제로, confirm dialog 제로. 간단한 태스크(ail ask) ↔ 복잡한 태스크(ail up) 구분이 UI 전환이 아니라 카드 스타일 + 링크 유무로만 표현됨.
+- **v1.12.5 — 필드테스트 fix 3종.** hyun06000이 "하네스 엔지니어링 커뮤니티 리서치" 프롬프트로 실제 실행해본 결과: (1) LLM이 `goal:`에 자연어 prose를 쓰면서 `with` 키워드 때문에 parse 실패. (2) 에러에 Python traceback이 그대로 덤프됨. (3) 입력 없는 프로그램인데 input textarea 보임. 수정: (a) `_read_project_state`가 app.ail 파싱 체크해서 실패 시 `[PARSE ERROR]` 주석 달아 에이전트 state에 전달. 에이전트가 다음 턴에 자동 수정 시도. (b) `/authoring-run`이 ParseError/LexError/PurityError를 catch해서 Python traceback 제거. (c) 응답에 `input_used` 포함 → widget이 그에 따라 input box 표시/숨김. (d) 에러 버블에 🔧 "에이전트에게 수정 요청" 버튼 자동 노출 → 원클릭으로 수정 요청 전송.
 
 ---
 
