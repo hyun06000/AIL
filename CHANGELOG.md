@@ -4,6 +4,81 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.13.3 — 2026-04-23
+
+Three related "agent doesn't actually do the work" fixes. Common
+theme: the LLM claims completion, offloads execution to the user,
+or stops after planning.
+
+### Fix 1 — "Draft-only" fallback demoted to last resort
+
+hyun06000 field-test: agent said *"Hacker News는 포스팅 API가 없어서
+초안만 써드릴게요. 복사해서 직접 https://news.ycombinator.com/submit
+에 올려주시면 됩니다."* This is exactly what the project exists to
+kill — pushing the work back onto the non-programmer.
+
+**Prompt rewritten** with a clear hierarchy for channels without
+posting APIs:
+
+1. **Propose an API-equivalent channel and actually post there.** HN
+   → Reddit r/programming (OAuth API) / Mastodon / Bluesky.
+   GeekNews → GitHub Discussion + Korean-instance Mastodon. X/Twitter
+   ($100/mo paid) → Mastodon + Bluesky. LinkedIn personal → drop it.
+2. **Do both** — post to the API channel AND provide the HN draft as
+   a supplement if the user wants to copy it manually.
+3. **Only if the user explicitly insists** on the API-less channel,
+   provide the draft.
+
+Explicit anti-phrasings listed as rejected (❌) with user-facing
+alternatives (✅):
+
+- ❌ "HN은 API가 없어서 초안만 써드릴게요"
+- ❌ "복사해서 직접 올려주시면 됩니다"
+- ✅ "HN은 자동 게시 불가라 Reddit r/programming으로 갈게요."
+- ✅ "Mastodon에 올렸어요. HN 초안도 같이 준비했으니 원하시면…"
+
+### Fix 2 — Finish the job in one turn
+
+Field test: user asked for a PR-creating bot. Agent replied "좋아요!
+만들어드릴게요" and wrote INTENT.md (2720 bytes) — but no
+`app.ail`, no `ready_to_run` action. User had to prompt again to
+actually get the code.
+
+**Prompt now has a FINISH THE JOB IN ONE TURN section.** When the
+user asks to build/create/make anything, the agent's `<file>` tags
+MUST include the `.ail` that realizes it, AND `<action>` MUST be
+`ready_to_run`. Explicit listing of what counts as finished vs. not
+finished. If a credential is needed, write `env.read("NAME")`
+placeholders in the `.ail` — don't use credential-gathering as an
+excuse to skip the file.
+
+### Fix 3 — No claim-reality mismatch
+
+Field test continued: agent wrote second turn "PR 자동 생성 봇
+완성했습니다! 아래 입력창에 토큰을 붙여넣으세요." But STILL only
+INTENT.md was written — no `app.ail` with `env.read`. Result: no
+input box appeared in the UI (the UI triggers off `env.read` calls
+in the `.ail`). User waited on a phantom UI.
+
+**Prompt now explicitly bans claim-reality mismatches:**
+
+- Claimed "완성" without `app.ail` → forbidden
+- Told user to paste a secret but no `env.read` in the code → forbidden
+  ("no call, no input box" — the UI won't surface what the code
+  doesn't reference)
+
+Honest state-reporting examples included in the prompt.
+
+### Tests
+
++2 tests:
+- Draft-only is rejected as first choice; API alternatives listed.
+- Finishing-the-job + claim-reality rules present in prompt.
+
+525 passing (+2 from 523).
+
+---
+
 ## v1.13.2 — 2026-04-23
 
 Two user-requested improvements from live use.

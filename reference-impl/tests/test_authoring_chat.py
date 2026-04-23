@@ -1012,6 +1012,60 @@ def test_active_program_marker_updated_on_write(tmp_path):
         == "second.ail"
 
 
+def test_prompt_demands_finishing_the_job_in_one_turn(tmp_path):
+    """v1.13.3 — two consecutive field tests where agent:
+    1. Wrote INTENT.md only, never app.ail, never ready_to_run.
+    2. Claimed '완성!' and told user to paste secret into an input
+       box — but no env.read was in (non-existent) app.ail so no
+       input box appeared. User waited on a phantom UI.
+
+    Prompt must require finishing the job (INTENT.md + app.ail +
+    ready_to_run) AND must ban claim-reality mismatches."""
+    proj = Project.init(tmp_path / "finisher")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "", "app.ail": ""},
+        history=[],
+        user_message="PR 자동 생성 봇 만들어줘",
+    )
+    # Explicit "finished" requirements.
+    assert "FINISH THE JOB IN ONE TURN" in prompt
+    assert "must include both INTENT.md" in prompt or \
+        "MUST include both INTENT.md" in prompt
+    # Counter-examples listed.
+    assert "I'll build X" in prompt
+    # Claim-reality matching rule.
+    assert "Don't lie about what you did" in prompt
+    assert "phantom UI" in prompt
+    # env.read → UI input-box dependency is spelled out.
+    assert "no call, no input box" in prompt
+
+
+def test_prompt_rejects_draft_only_as_first_choice(tmp_path):
+    """v1.13.3 — user feedback: 'HN은 API 없어서 초안만 써드릴게요,
+    복사해서 직접 올려주세요' is the behavior this project exists to
+    kill. The agent pushes work BACK onto the non-programmer. Prompt
+    must reframe draft-only as a last-resort and teach proposing API
+    alternatives first."""
+    proj = Project.init(tmp_path / "noexcuse")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt(
+        state={"INTENT.md": "# promo\n\nAIL 홍보", "app.ail": ""},
+        history=[],
+        user_message="HN에 올려줘",
+    )
+    # Framing: this is the behavior the project kills.
+    assert "behavior this project exists to kill" in prompt
+    # Explicit anti-phrasings listed as rejected.
+    assert "cop-out" in prompt or "✗" in prompt or "❌" in prompt
+    # API-less channels have suggested alternatives.
+    assert "Reddit r/programming" in prompt
+    assert "Mastodon" in prompt
+    assert "Bluesky" in prompt
+    # Last-resort fallback clarified.
+    assert "Only if the user insists" in prompt
+
+
 def test_prompt_teaches_project_purpose_carries_forward(tmp_path):
     """v1.13.2 — field test: user project was 'AIL/HEAAL 홍보', agent
     later wrote a generic channel_recommender forgetting the subject.
