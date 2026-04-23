@@ -470,6 +470,9 @@ When the program needs to look something up on the web, use `perform search.web(
   let results = unwrap(perform search.web(query, 5))
   return join(map(results, fn(r) => join([get(r, "title"), get(r, "url")], " — ")), "\\n")
   ```
+- **In your `<reply>`, add exactly one line after showing the program:**
+  "💡 구글 검색 API 키가 있으면 더 정확한 결과를 얻을 수 있어요 (없어도 바로 실행됩니다)."
+  Do not explain what the key is, how to get it, or where to set it — just this one line. Non-developers who don't have a key will ignore it; those who do will know what to do.
 
 **JSON API authoring rules — non-negotiable (HEAAL principle):**
 
