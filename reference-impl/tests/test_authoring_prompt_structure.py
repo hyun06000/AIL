@@ -81,22 +81,43 @@ def test_prompt_warns_against_assuming_ail_promo_subject():
     p = _get_prompt()
     # Dedicated warning section must exist.
     assert "THE PROJECT'S SUBJECT IS WHATEVER THE USER SAYS IT IS" in p
-    # Must name the failure explicitly so the model sees itself.
-    assert "ai들만을 위한 커뮤니티" in p or "AI promotion" in p or \
-        "prompt contamination" in p
-    # Must supply non-AIL example subjects so the default isn't
-    # "assume AIL" when filling ambiguity.
-    non_ail_subjects = ["recipe", "weather", "garden", "calendar",
-                        "stock", "newsletter", "poetry", "날씨"]
-    matches = [s for s in non_ail_subjects if s.lower() in p.lower()]
+    # Must flag "pattern-matched from this prompt" explicitly as the
+    # failure mode so the model can spot itself.
+    assert "prompt contamination" in p or \
+        "contamination" in p.lower() or \
+        "pattern-matched" in p.lower()
+    # Example subjects must be BLAND, CANONICAL — "London weather",
+    # "word count", "currency rate" — nothing specific enough to
+    # become its own contamination vector (real user quotes pasted
+    # verbatim had that exact failure). Require ≥3 of this generic
+    # set.
+    bland_subjects = ["날씨", "weather", "단어", "word count",
+                      "환율", "currency", "주식", "stock",
+                      "레시피", "recipe", "번역", "translation",
+                      "뉴스", "news"]
+    matches = [s for s in bland_subjects if s.lower() in p.lower()]
     assert len(matches) >= 3, (
-        "expected the prompt to mention at least 3 non-AIL subject "
-        "examples to neutralize the implicit AIL bias; found: "
+        "expected the prompt to mention at least 3 bland/canonical "
+        "subject examples (weather, word count, currency, etc) to "
+        "neutralize the implicit AIL bias; found: "
         f"{matches}")
+    # Must NOT use specific real-user quotes as examples — those
+    # are contamination vectors themselves.
+    assert "ai들만을 위한 커뮤니티" not in p, (
+        "found a specific real-user quote in the prompt — replace "
+        "with a generic canonical example (e.g. 런던의 날씨).")
     # The AIL description must be framed as tooling, not as the
     # project topic.
     assert "THE LANGUAGE YOU AUTHOR IN" in p
     assert "your TOOL, not the topic" in p
+    # Must explicitly ban the "is this for AIL promotion?"
+    # follow-up question.
+    assert "AIL 홍보하시려는 건가요" in p or \
+        "is this for AIL" in p.lower() or \
+        "이 프로젝트는 AIL" in p
+    # And must provide a correct-pattern example that suggests
+    # generic topics, not AIL ones.
+    assert "런던의" in p or "London" in p or "환율" in p
 
 
 def test_write_helpers_freely_guidance_present():
@@ -147,7 +168,7 @@ def test_http_graphql_rule_present():
 def test_input_hint_rule_present():
     """v1.15.2 UX: agents must declare a # INPUT: hint when entry uses input."""
     p = _get_prompt()
-    assert "# INPUT:" in p
+    assert "// INPUT:" in p
     assert "placeholder" in p.lower()
 
 

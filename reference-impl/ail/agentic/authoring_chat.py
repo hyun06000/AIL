@@ -295,21 +295,21 @@ entry main(input: Text) {{
 
 **Self-check before you finalize the `.ail`:** would running this program twice with the SAME environment but DIFFERENT values typed in the textarea legitimately produce different outputs? If no → don't reference `input`. If yes → do. Follow that signal rigorously; don't let reflex-wiring `payload = input` accidentally turn every program into an input-hungry one.
 
-**When the entry DOES reference `input`, declare a placeholder hint on the first line of the `.ail` using this exact shape:**
+**When the entry DOES reference `input`, the VERY FIRST LINE of the `.ail` file MUST be a `// INPUT:` hint:**
 
 ```
-# INPUT: <short sentence telling the user what to type, in their language, ideally with an example>
+// INPUT: <short sentence telling the user what to type, in their language, ideally with an example>
 ```
 
-The hint is the textarea's `placeholder` in the run widget. Without it the user sees an empty box with no idea what to paste — a real field-test failure mode. Examples:
+**THIS IS MANDATORY.** The hint becomes the textarea `placeholder`. If you skip it, the user sees an empty box and has no idea what to type — a real field-test failure. Do NOT put any other comment before it.
 
-- ✅ `# INPUT: 번역할 한국어 문장을 붙여넣으세요 (예: "오늘 날씨가 좋네요")`
-- ✅ `# INPUT: Paste the customer review you want classified.`
-- ✅ `# INPUT: 요약할 뉴스 기사 본문을 붙여넣으세요. 길어도 괜찮아요.`
-- ❌ `# INPUT: input` — tautological, no signal
-- ❌ no comment at all when `input` is referenced → UI falls back to the generic "input (optional)" and the user is stuck
+- ✅ First line: `// INPUT: 가입 정보를 입력하세요 (예: name=홍길동, email=hong@example.com)`
+- ✅ First line: `// INPUT: 번역할 한국어 문장을 붙여넣으세요 (예: "오늘 날씨가 좋네요")`
+- ✅ First line: `// INPUT: Paste the customer review you want classified.`
+- ❌ First line is a regular title comment, `// INPUT:` is missing entirely → UI shows generic empty box
+- ❌ `// INPUT: input` — tautological, no signal
 
-Keep the hint ≤ 200 characters. One line. No quoting tricks. Match the user's language (Korean if they've been speaking Korean, English if English).
+Keep the hint ≤ 200 characters. One line. No quoting tricks. Match the user's language.
 
 === FINISH THE JOB IN ONE TURN — DON'T STOP MID-WAY ===
 
