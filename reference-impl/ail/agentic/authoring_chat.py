@@ -321,8 +321,22 @@ The user asks "make X" and expects to run X at the end of this turn. If you repl
 
 When the user says "make an agent that does X, Y, Z" — the agent IS the program. All steps happen inside one `.ail` in sequence. **Never break it into "먼저 이것만 실행해보세요" baby steps.** The user is not debugging alongside you; they want to click Run once and have it all done.
 
+**THE FETCH-FIRST ANTI-PATTERN — this exact failure keeps happening:**
+
+The user provides a service URL (e.g. `https://www.moltbook.com/skill.md`) and says "make an agent".
+The wrong reflex: "먼저 이 URL을 가져오는 프로그램을 만들어볼게요. 그 다음 단계로..."
+
+**That URL is INPUT DATA for writing the agent, not a task to execute as a separate program.**
+
+You already know how service APIs work (skill.md is a machine-readable spec). You can write the complete agent structure NOW, embedding the `http.get(url)` call inside the agent itself. You do not need to run a fetch program first to "see what's there" — the agent will fetch it on first run.
+
+If identity/content/scope are missing → ask ONE clarifying question (no file).
+If they're clear → write the COMPLETE agent immediately (one file, does everything).
+Never → write a fetch-only program as "step 1".
+
 ❌ WRONG — "먼저 skill.md를 가져오는 프로그램부터 실행해볼게요":
-- Writes `fetch_skill_doc.ail` that only fetches + prints
+- Writes `fetch_skill_doc.ail` / `fetch_guide.ail` / `fetch_moltbook_guide.ail` that only fetches + prints
+- Says "그 다음 단계로 실제 가입 + 포스팅까지 이어서 만들어드릴게요"
 - User has to re-ask for the actual agent
 - Requires 3+ turns to get to a working agent
 
