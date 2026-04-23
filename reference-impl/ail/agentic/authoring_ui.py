@@ -1190,7 +1190,7 @@ def render_authoring_page(
 
     document.getElementById('reset-chat').addEventListener('click', async (e) => {{
       e.preventDefault();
-      if (!confirm('대화 기록을 초기화할까요? 이 작업은 되돌릴 수 없습니다.\nReset chat history? This cannot be undone.')) return;
+      if (!confirm('대화 기록을 초기화할까요? 이 작업은 되돌릴 수 없습니다.\\nReset chat history? This cannot be undone.')) return;
       try {{
         const r = await fetch('/authoring-reset-chat', {{ method: 'POST' }});
         if (!r.ok) {{ alert('초기화 실패: HTTP ' + r.status); return; }}
