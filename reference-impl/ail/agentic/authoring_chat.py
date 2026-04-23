@@ -790,27 +790,35 @@ auth_header = join(["Bearer ", api_key], "")
 perform http.post_json(url, payload, [["Authorization", auth_header]])
 ```
 
-✅ **CORRECT — autonomous agent with `perform ail.run` (preferred pattern):**
+✅ **CORRECT — autonomous agent with planning + direct execution (preferred pattern):**
 
-**Design principle:** Give the intent model the **goal + context**, not a pre-defined sequence.
-The intent model writes AIL programs as tools — it decides WHAT to do and HOW at each step.
-The outer loop just dispatches: execute what the model writes, feed the result back.
+**Design principle:** Split cognition from execution. One intent plans, one decides the next step, the main entry executes HTTP calls directly — no AIL code generation at runtime.
 
-This pattern handles services the authoring model has never seen before. The intent model reads the guide at runtime and writes the right tool for each step.
+❌ **WRONG — `ail.run` with intent-generated code:**
+Intent models don't have the AIL reference card. They write `{{}}` syntax, break pair-list rules, and hallucinate success. Never ask an intent model to write AIL.
 
-**The `goal:` string must state the END GOAL only — never hint at steps.**
-❌ WRONG goal: `"...performs the next needed action (fetch guide, register, create post, etc.)"`
-✅ CORRECT goal: `"Promote AIL on Moltbook. The guide tells you how. History shows what's done."`
-If you name steps in the goal, the model follows YOUR sequence instead of discovering the right one.
+```ail
+// BAD: intent writes AIL → parse errors, hallucinated DONE
+intent next_action(...) -> Text {{
+    goal: "You are an AIL authoring agent... write ONE program..."
+}}
+result_r = perform ail.run(action)   // ← breaks every 2-3 steps
+```
+
+✅ **CORRECT — plan first, then decide step-by-step:**
 
 ```ail
 // INPUT: 비워두세요. 에이전트가 스스로 판단합니다.
 
-intent next_action(guide: Text, history: Text) -> Text {{
-    goal: "You are an AIL authoring agent. Goal: <STATE THE END GOAL HERE>.\\n\\nReturn DONE: <result> only after confirmed HTTP response. Otherwise write ONE program matching EXACTLY this structure:\\n\\nentry main(input: Text) {{\\n    r = perform http.get(\\"https://example.com\\")\\n    if is_error(r) {{ return \\"ERROR: \\" + unwrap_error(r) }}\\n    parsed_r = parse_json(r.body)\\n    if is_ok(parsed_r) {{\\n        data = unwrap(parsed_r)\\n        key = to_text(get(data, \\"api_key\\"))\\n        perform state.write(\\"api_key\\", key)\\n    }}\\n    return \\"status=\\" + to_text(r.status) + \\" body=\\" + slice(r.body, 0, 300)\\n}}\\n\\nRULES:\\n- Top level = entry declaration only. NO code outside entry.\\n- NO {{}} → use pair lists: [[\\\"name\\\", \\\"AIL\\\"], [\\\"desc\\\", \\\"agent\\\"]]\\n- perform on its own line: r = perform http.post_json(url, [[\\\"k\\\",v]])\\n- Headers: [[\\\"Authorization\\\", \\\"Bearer \\\"+key]]\\n- Always return HTTP status + body slice\\n- state.write/state.read to persist credentials across steps\\n\\nGuide:\\n{{guide}}\\nHistory:\\n{{history}}"
+intent make_plan(guide: Text) -> Text {{
+    goal: "Read this API guide and return a JSON array of at most 8 steps to accomplish: <STATE THE END GOAL HERE>.\\nEach element: {{\\\"step\\\": N, \\\"what\\\": \\\"one-line description\\\", \\\"endpoint\\\": \\\"URL pattern\\\", \\\"needs_auth\\\": true|false}}.\\nReturn ONLY the JSON array."
 }}
 
-evolve next_action {{
+intent decide_step(plan: Text, history: Text) -> Text {{
+    goal: "Given the plan and execution history, return the NEXT HTTP call as JSON:\\n{{\\\"done\\\": false, \\\"method\\\": \\\"GET\\\"|\\\"POST\\\", \\\"url\\\": \\\"...\\\", \\\"headers\\\": [[\\\"k\\\",\\\"v\\\"]] or null, \\\"body\\\": [[\\\"k\\\",\\\"v\\\"]] or null, \\\"save_key\\\": \\\"state_key\\\" or null, \\\"save_path\\\": \\\"json_field\\\" or null}}\\nOR if the goal is fully achieved with a confirmed 2xx response: {{\\\"done\\\": true, \\\"result\\\": \\\"description + URL\\\"}}.\\nSUCCESS = HTTP 2xx with meaningful content. 401/403/429/5xx = failure, try a different approach.\\nDO NOT return done:true for error responses.\\nPlan:\\n{{plan}}\\nHistory:\\n{{history}}"
+}}
+
+evolve decide_step {{
     metric: confidence(sampled: 1.0)
     when confidence < 0.5 {{
         retune confidence_threshold: within [0.3, 0.8]
@@ -822,27 +830,59 @@ evolve next_action {{
 entry main(input: Text) {{
     guide_r = perform http.get("https://service.com/skill.md")
     if is_error(guide_r) {{ return "❌ guide load failed" }}
-    guide = slice(guide_r.body, 0, 6000)   // cap guide size — raw body can be 30K+ tokens
-    history = ""
-    log = "=== Agent Log ===\\n✓ guide loaded\\n"
+    guide = slice(guide_r.body, 0, 6000)
+
+    plan = to_text(make_plan(guide))
+    log = "=== Agent Log ===\\n✓ guide loaded\\n✓ plan ready\\n"
+    history = "PLAN:\\n" + plan + "\\n\\n"
 
     for step in range(10) {{
-        action = to_text(next_action(guide, history))
-
-        if starts_with(action, "DONE") {{
-            return log + "\\n✅ " + slice(action, 5, length(action))
+        dec_text = to_text(decide_step(plan, history))
+        dec_r = parse_json(dec_text)
+        if is_error(dec_r) {{
+            history = history + "step " + to_text(step) + ": decide_step returned invalid JSON\\n"
         }}
+        if is_ok(dec_r) {{
+            dec = unwrap(dec_r)
+            if to_text(get(dec, "done")) == "true" {{
+                return log + "\\n✅ " + to_text(get(dec, "result"))
+            }}
 
-        result_r = perform ail.run(action)
-        if is_error(result_r) {{
-            step_result = "ERROR: " + unwrap_error(result_r)
-        }}
-        if is_ok(result_r) {{
-            step_result = unwrap(result_r)
-        }}
+            url = to_text(get(dec, "url"))
+            method = to_text(get(dec, "method"))
+            headers = get(dec, "headers")
+            body = get(dec, "body")
 
-        log = log + "step " + to_text(step) + ": " + slice(step_result, 0, 80) + "\\n"
-        history = history + "=== step " + to_text(step) + " ===\\n" + action + "\\nresult: " + step_result + "\\n\\n"
+            step_result = ""
+            if method == "GET" {{
+                r = perform http.get(url)
+                if is_error(r) {{ step_result = "ERROR: " + unwrap_error(r) }}
+                if is_ok(r) {{
+                    rv = unwrap(r)
+                    step_result = "status=" + to_text(rv.status) + " body=" + slice(rv.body, 0, 300)
+                }}
+            }}
+            if method == "POST" {{
+                r = perform http.post_json(url, body, headers)
+                if is_error(r) {{ step_result = "ERROR: " + unwrap_error(r) }}
+                if is_ok(r) {{
+                    rv = unwrap(r)
+                    step_result = "status=" + to_text(rv.status) + " body=" + slice(rv.body, 0, 300)
+                    save_key = get(dec, "save_key")
+                    save_path = get(dec, "save_path")
+                    if not is_null(save_key) {{
+                        parsed_body = parse_json(rv.body)
+                        if is_ok(parsed_body) {{
+                            val = to_text(get(unwrap(parsed_body), to_text(save_path)))
+                            perform state.write(to_text(save_key), val)
+                        }}
+                    }}
+                }}
+            }}
+
+            log = log + "step " + to_text(step) + ": " + slice(step_result, 0, 80) + "\\n"
+            history = history + "=== step " + to_text(step) + " ===\\n" + step_result + "\\n\\n"
+        }}
     }}
 
     perform schedule.every(3600)
@@ -850,18 +890,19 @@ entry main(input: Text) {{
 }}
 ```
 
-**Why this beats the state machine:**
-- State machine: authoring model hardcodes "REGISTER → POST" — wrong if the API endpoint is `/api/v1/agents/register` not `/api/agents`
-- `ail.run` dispatch: intent model reads `skill.md` at runtime and writes the correct endpoint itself
+**Why this beats ail.run dispatch:**
+- `ail.run` dispatch: intent model writes AIL → syntax errors every 2-3 steps, can't be fixed by history feedback
+- Planning + execution: intent models only return JSON decisions — no AIL syntax to get wrong
+- `decide_step` sees full history → self-corrects on 401/429/parse failures without changing the program
 
 **The three rules that still apply:**
 1. `intent` + `evolve` at TOP LEVEL — never inside `entry` or `for`
-2. `to_text(action)` before `starts_with` — prevents NoneType crash
-3. Always check `is_error(result_r)` after `perform ail.run` — parse errors in generated code surface as Result-error
+2. `to_text(get(dec, "done"))` before comparing — prevents NoneType crash
+3. `http.post_json(url, body, headers)` — headers null is OK; the effect handles it
 
-**When to use simpler state machine instead:**
-- The API is trivially well-known (e.g., a fixed webhook URL the user provides)
-- Only 2 steps and no discovery needed
+**When to use a simpler fixed script instead:**
+- The API is well-known and only 2-3 steps
+- No credential discovery needed (the user provides the API key as input)
 - The authoring model is certain about the exact endpoint/payload shape
 
 **RECURRING AUTONOMOUS AGENTS — `perform schedule.every`:**
