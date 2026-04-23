@@ -18,7 +18,7 @@ from .parser import parse
 from .runtime import Executor, ConfidentValue, MockAdapter
 from .runtime.model import ModelAdapter
 
-__version__ = "1.43.0"
+__version__ = "1.44.0"
 
 
 def compile_source(source: str):
@@ -91,6 +91,7 @@ def run(
     approve_review=None,
     calibrator=None,
     log_callback=None,
+    authoring_system_prompt: Optional[str] = None,
 ) -> tuple[ConfidentValue, "Trace"]:
     """Run an AIL program. Returns (result, trace).
 
@@ -144,6 +145,7 @@ def run(
         program, adapter, ask_human=ask_human,
         metric_fn=metric_fn, approve_review=approve_review,
         calibrator=calibrator, log_callback=log_callback,
+        authoring_system_prompt=authoring_system_prompt,
     )
     result = executor.run_entry(resolved_inputs)
     return result, executor.trace
