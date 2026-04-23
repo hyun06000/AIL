@@ -4,6 +4,17 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.30.0 — 2026-04-24
+
+**search.web 실패 시 사용자 친화적 에러 메시지.**
+
+DuckDuckGo 차단 등으로 모든 백엔드가 실패하면 기술적 영어 메시지
+(`all backends failed — DuckDuckGo: no results (CAPTCHA or empty response)`)
+대신 한국어 안내 + Google API 키 설정 유도 메시지 표시.
+authoring prompt에 `is_error` 체크 패턴 추가 — bare `unwrap()` 금지.
+
+---
+
 ## v1.29.0 — 2026-04-24
 
 **이미지 저장: html2canvas로 실제 UI 그대로 캡처.**

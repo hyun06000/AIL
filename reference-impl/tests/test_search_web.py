@@ -151,7 +151,7 @@ def test_search_web_all_backends_fail_returns_error(monkeypatch):
                     side_effect=urllib.error.URLError("network down")):
         result = _make_exec()._search_web([_cv("q")], {}, _origin())
     assert result.value["ok"] is False
-    assert "all backends failed" in result.value["error"]
+    assert "검색 결과를 가져오지 못했어요" in result.value["error"]
 
 
 # ---------------------------------------------------------------------------

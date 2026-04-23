@@ -1593,7 +1593,10 @@ class Executor:
             last_err = f"DuckDuckGo: {type(e).__name__}: {e}"
 
         return self._result_err(
-            f"search.web: all backends failed — {last_err}", origin)
+            "검색 결과를 가져오지 못했어요. "
+            "Google 검색 API 키를 설정하면 더 안정적으로 검색할 수 있어요. "
+            "(⚙ 설정에서 GOOGLE_SEARCH_API_KEY와 GOOGLE_SEARCH_CX를 추가하세요)",
+            origin)
 
     def _file_read(self, args: list[ConfidentValue],
                    kwargs: dict[str, ConfidentValue],

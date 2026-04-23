@@ -645,6 +645,14 @@ When the program needs to look something up on the web, use `perform search.web(
 - Returns `Result[List[Record]]`. Each Record has `title`, `url`, `snippet`.
 - The runtime tries Google (if `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX` are set), then SearXNG (if `SEARXNG_BASE_URL` is set), then DuckDuckGo — automatically. The author writes one line; the runtime finds the best available backend.
 - Always `unwrap()` the result before iterating. Each item: `get(item, "title")`, `get(item, "url")`, `get(item, "snippet")`.
+- **Always handle search failure gracefully.** Never use bare `unwrap(perform search.web(...))` — always check `is_error` first and return a friendly Korean message if it fails:
+  ```ail
+  results_r = perform search.web(query, 5)
+  if is_error(results_r) {{
+      return join(["검색 결과를 가져오지 못했어요: ", unwrap_error(results_r)], "")
+  }}
+  results = unwrap(results_r)
+  ```
 - **CITATION RULE — non-negotiable:** Any program that summarizes, lists, or reports information from `search.web` results MUST include the source URL for every item in its return string. Never summarize without a URL. The user must be able to verify where each piece of information came from.
   - ✅ CORRECT — title as clickable link + snippet (markdown link syntax renders as `<a target="_blank">`):
     ```ail
