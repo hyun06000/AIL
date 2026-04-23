@@ -2415,14 +2415,23 @@ class Executor:
             self.trace.record("model_invoke", intent=intent.name, goal=goal_str,
                               constraints=constraints_str)
 
-            response, coerced_value, validation_error = self._invoke_with_validation(
-                intent=intent,
-                goal_str=goal_str,
-                constraints_str=constraints_str,
-                context_dict=context_dict,
-                inputs={pname: local[pname].value for (pname, _) in intent.params if pname in local},
-                examples=example_pairs or None,
-            )
+            try:
+                response, coerced_value, validation_error = self._invoke_with_validation(
+                    intent=intent,
+                    goal_str=goal_str,
+                    constraints_str=constraints_str,
+                    context_dict=context_dict,
+                    inputs={pname: local[pname].value for (pname, _) in intent.params if pname in local},
+                    examples=example_pairs or None,
+                )
+            except Exception as adapter_exc:
+                # Model adapter failure (network error, API 500, context too
+                # large, etc.) — surface as a low-confidence error string so
+                # the AIL program can observe and adapt rather than crashing.
+                err_msg = f"INTENT_ERROR: {type(adapter_exc).__name__}: {adapter_exc}"
+                self.trace.record("intent_adapter_error",
+                                  intent=intent.name, error=err_msg)
+                return ConfidentValue(err_msg, 0.0, origin=origin)
 
             raw = response.raw or {}
             self.trace.record("model_response",
