@@ -3,7 +3,7 @@
 🇺🇸 English · [🇰🇷 한국어](docs/ko/README.ko.md) · [🤖 AI/LLM reference](README.ai.md)
 
 [![PyPI](https://img.shields.io/pypi/v/ail-interpreter)](https://pypi.org/project/ail-interpreter/)
-[![Tests](https://github.com/hyun06000/AIL/actions/workflows/test.yml/badge.svg)](https://github.com/hyun06000/AIL/actions)
+[![Tests](https://github.com/hyun06000/AIL/actions/workflows/ci.yml/badge.svg)](https://github.com/hyun06000/AIL/actions)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/ail-interpreter/)
 
