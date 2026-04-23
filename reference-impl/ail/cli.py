@@ -22,6 +22,37 @@ from . import run, compile_source, ask, AuthoringError, __version__
 from .runtime import MockAdapter
 
 
+def _find_free_port(preferred: int = 8080) -> int:
+    """Return `preferred` if available, otherwise the next free port.
+    Scans up to 64 ports above `preferred` to avoid wandering to weird
+    high numbers; falls back to an OS-assigned port if that exhausts."""
+    import socket
+    for p in range(preferred, preferred + 64):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", p))
+            s.close()
+            return p
+        except OSError:
+            s.close()
+            continue
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    p = s.getsockname()[1]
+    s.close()
+    return p
+
+
+def _try_open_browser(url: str) -> None:
+    """Best-effort open the URL in the user's default browser. Silent
+    on failure — the URL is already printed to stdout."""
+    try:
+        import webbrowser
+        webbrowser.open(url, new=1, autoraise=True)
+    except Exception:
+        pass
+
+
 def _write_source(dest: str, source: str) -> None:
     """Write AIL source text to `dest`. `-` writes to stdout.
 
@@ -72,9 +103,20 @@ def main(argv: list[str] | None = None) -> int:
     p_parse.add_argument("file", help="Path to .ail source file")
 
     p_init = sub.add_parser("init",
-        help="Scaffold a new agentic AIL project (creates folder + INTENT.md)")
+        help="Scaffold a new AIL project AND launch the authoring chat "
+             "UI in a browser. Talk to the agent in plain language; it "
+             "writes INTENT.md and app.ail incrementally. Replaces the "
+             "old 'edit INTENT.md manually then run ail up' flow.")
     p_init.add_argument("name",
         help="Project directory name. The folder is created in the cwd.")
+    p_init.add_argument("--port", type=int, default=None,
+        help="Port for the authoring server (default 8080, or next "
+             "free port if occupied).")
+    p_init.add_argument("--no-chat", action="store_true",
+        help="Scaffold and exit — skip launching the chat UI. For "
+             "scripted / CI use.")
+    p_init.add_argument("--no-open", action="store_true",
+        help="Don't auto-open the chat URL in the default browser.")
 
     p_up = sub.add_parser("up",
         help="Read INTENT.md, author/load app.ail, run tests, serve HTTP")
@@ -162,10 +204,22 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Error: {type(e).__name__}: {e}", file=sys.stderr)
             return 1
         print(f"Initialized AIL project at {proj.root}")
-        print(f"  edit:  {proj.intent_path}")
-        print(f"  then:  ail up {args.name}        (from here)")
-        print(f"     or: cd {args.name} && ail up  (from inside the project)")
-        return 0
+
+        if args.no_chat:
+            print(f"  edit:  {proj.intent_path}")
+            print(f"  then:  ail up {args.name}")
+            return 0
+
+        # Launch the authoring chat UI. The server auto-detects the
+        # fresh state and serves the chat page on GET /.
+        from .agentic.server import serve_project
+        port = args.port or _find_free_port(8080)
+        url = f"http://127.0.0.1:{port}/"
+        print(f"  chat:  {url}")
+        if not args.no_open:
+            _try_open_browser(url)
+        print(f"  (Ctrl+C to stop)\n")
+        return serve_project(proj, port=port, host="127.0.0.1", watch=True)
 
     if args.cmd == "up":
         from .agentic import Project, bring_up

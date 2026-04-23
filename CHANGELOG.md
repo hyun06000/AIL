@@ -4,6 +4,156 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.12.0 — 2026-04-23
+
+**Primary entry point redesign: `ail init` launches a conversational
+authoring chat.** Non-programmers don't edit `INTENT.md`. They
+describe what they want in a chat, and an agent writes INTENT.md and
+app.ail incrementally — same pattern as Claude Code, but for AIL
+projects in a browser tab.
+
+This closes the "humans never touch the code layer" claim from
+scaffolding through authoring through running. The user never opens
+a `.ail` file.
+
+### Flow
+
+```
+$ ail init my-app
+✓ Created ./my-app/
+  chat:  http://127.0.0.1:8080/
+
+[browser opens]
+Agent: 어떤 걸 만들고 싶으세요?
+You:   텍스트 감정 분석 서비스요
+Agent: 좋아요. 빈 입력은 에러로? 아니면 중립?
+       ✓ INTENT.md 작성 (80 bytes)
+You:   에러로
+Agent: 알겠어요, 기본 틀 준비됐어요.
+       ✓ INTENT.md (120 bytes)
+       ✓ app.ail (250 bytes)
+       [▶ 실행해보기]  ← click
+```
+
+Click "실행해보기" → the same page reloads as the regular service UI
+(textarea / view.html, depending on the project). If tests fail or
+behavior is wrong, user closes tab and relaunches `ail up` — the chat
+history is preserved on disk and resumes where it left off.
+
+### Added — `ail/agentic/authoring_chat.py`
+
+`AuthoringChat(project, adapter)` with a single `turn(user_message)`
+entry point. Loads last 12 turns of history, reads current project
+file state, builds a prompt with the AIL reference card + protocol
+rules, calls the adapter, parses the response, writes files (with
+path-traversal / extension / size safety checks), appends to
+`.ail/chat_history.jsonl`.
+
+XML response protocol (what the LLM must emit):
+
+```
+<reply>user-facing message</reply>
+<file path="INTENT.md">full new content</file>
+<file path="app.ail">full new content</file>
+<action>ready_to_run</action>
+```
+
+`<reply>` required; everything else optional. `<action>` is a UI
+affordance — when present, the chat shows a "Run it now" button.
+
+Safety:
+- allowed extensions: `.md`, `.ail`, `.html`, `.json`, `.txt`
+- rejects path traversal, absolute paths, escapes from project root
+- 64 KB per-file write cap
+- only two recognized actions (`ready_to_run`, `ready_to_deploy`)
+
+### Added — `ail/agentic/authoring_ui.py`
+
+The chat HTML/JS. Served on `GET /` when the project is fresh (no
+`authored_at` marker, no meaningful `app.ail`). Standard chat bubbles,
+typing indicator, file-write confirmations inline, auto-resizing
+textarea, Ctrl+Enter to send. History replayed from server on page
+load so a tab close and reopen doesn't lose context.
+
+### Added — server endpoints
+
+- `POST /authoring-chat` — body = user message, response = JSON
+  `{reply, files, action}`.
+- `POST /authoring-complete` — marks project authored, future
+  `GET /` serves the service UI.
+
+`GET /` now branches: fresh project → chat UI, authored → existing
+view.html or textarea UI.
+
+### Modified — `ail init`
+
+`ail init <name>` now scaffolds the project AND launches the
+authoring server AND opens the URL in the default browser.
+
+Flags:
+- `--port N` — port for the authoring server (default 8080, scans
+  up to +64 for a free port).
+- `--no-chat` — scaffold and exit (scripted / CI use; preserves the
+  v1.11 behavior).
+- `--no-open` — don't auto-open the browser (the URL is still
+  printed to stdout).
+
+### Integration with existing pieces
+
+| Feature | Role |
+|---|---|
+| `intent` | agent decides what to ask and write |
+| `perform state.*` | chat history + project state on disk |
+| `--auto-fix` | still available for `ail up` runtime failures |
+| `ail chat` | still available for one-shot natural-language edits |
+| v1.10.0 harness | intent responses still type-validated |
+| v1.10.1 diagnostics | runtime errors still surface in the service UI |
+
+### Existing examples unchanged
+
+All five agentic examples (word-counter, csv-stats, visit-counter,
+sentiment, news-ticker, ail-herald) have real `app.ail` files with
+`entry main`, so they're detected as authored and serve their
+existing UIs — no regression.
+
+### Tests
+
+- +20 tests in `test_authoring_chat.py` covering XML parsing (5),
+  file-write safety (5), `project_is_fresh` detection (4), turn
+  integration (3), server integration (3).
+- 482 passing total (+20 from 462).
+
+### What this replaces
+
+The old flow:
+
+```
+$ ail init my-app
+# now open my-app/INTENT.md in a text editor
+# write your description
+$ ail up my-app
+# hope the agent authors app.ail correctly
+# if not, ail chat ... or manual edit
+```
+
+Becomes:
+
+```
+$ ail init my-app
+[chat opens, describe what you want, click Run]
+```
+
+### Not included (future work)
+
+- `<action>ready_to_deploy</action>` handshake for PyPI / Fly.io /
+  etc. — the plumbing is there but no implementation yet.
+- Streaming agent responses. Current implementation waits for the
+  full LLM response before rendering.
+- Split-pane "chat + preview" during the run phase. For now the
+  transition is a full page reload.
+
+---
+
 ## v1.11.1 — 2026-04-23
 
 **ail-herald becomes a real onboarding agent.** Field feedback from

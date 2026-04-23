@@ -167,6 +167,33 @@ def _make_handler(project: Project):
                 self.wfile.write(body)
                 return
             if self.path in ("/", ""):
+                # Fresh project (no authored_at marker, no meaningful
+                # app.ail) → serve the authoring chat UI. Users describe
+                # what they want in plain language; the agent writes
+                # INTENT.md and app.ail incrementally. Clicking "Run it
+                # now" sets the marker and future GET / serves the
+                # regular service UI.
+                from .authoring_chat import project_is_fresh
+                if project_is_fresh(project):
+                    from .authoring_ui import render_authoring_page
+                    from .authoring_chat import AuthoringChat
+                    chat = AuthoringChat(project, adapter=None)
+                    history = chat._load_history()
+                    html = render_authoring_page(
+                        project_name=project.root.name,
+                        host=self.server.server_address[0],
+                        port=self.server.server_address[1],
+                        history=history,
+                    )
+                    body = html.encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+
                 # If the project has a view.html, serve it as the
                 # dashboard page. The page's client-side JS is expected
                 # to POST to / for data from entry main. This keeps
@@ -221,6 +248,45 @@ def _make_handler(project: Project):
                                  "or open / in a browser.\n")
 
         def do_POST(self):  # noqa: N802 — stdlib name
+            # Authoring chat turn: user message → agent reply + file writes.
+            if self.path == "/authoring-chat":
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                user_msg = self.rfile.read(length).decode("utf-8") if length else ""
+                if not user_msg.strip():
+                    self._send_text(400, "empty message\n")
+                    return
+                try:
+                    from .authoring_chat import AuthoringChat
+                    from .. import _default_adapter
+                    adapter = _default_adapter()
+                    chat = AuthoringChat(project, adapter=adapter)
+                    result = chat.turn(user_msg)
+                except Exception as e:
+                    import traceback
+                    self._send_text(
+                        500,
+                        f"authoring error: {type(e).__name__}: {e}\n"
+                        f"{traceback.format_exc()}\n",
+                    )
+                    return
+                import json as _json
+                payload = _json.dumps(result, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
+            # Handoff from authoring to running: marks project as ready
+            # so subsequent GET / serves the service UI.
+            if self.path == "/authoring-complete":
+                from .authoring_chat import mark_authored
+                mark_authored(project)
+                project.append_ledger({"event": "authoring_complete"})
+                self._send_text(200, "ok\n")
+                return
+
             if self.path != "/":
                 self._send_text(404, "POST / only\n")
                 return
