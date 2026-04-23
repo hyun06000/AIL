@@ -582,6 +582,15 @@ Built-in effects:
     discussions, etc.). The authoring prompt enforces use for the
     irreversible-effect class; the effect itself is the grammatical
     hook that makes the gate non-bypassable.
+  - `search.web(query: Text, count?: Number) -> Result[List[Record]]` —
+    web search with automatic backend fallback. Each result Record has
+    `title`, `url`, `snippet` fields. Backend priority:
+    (1) Google Custom Search API — set `GOOGLE_SEARCH_API_KEY` +
+    `GOOGLE_SEARCH_CX` env vars; skipped if absent or quota exceeded.
+    (2) SearXNG — set `SEARXNG_BASE_URL` env var; skipped if absent.
+    (3) DuckDuckGo HTML — always tried; no key needed.
+    Confidence reflects backend quality: Google 0.9, SearXNG 0.8,
+    DuckDuckGo 0.7. Returns Result-error only when all backends fail.
   - `log(message: Any)` — stderr, returns nothing
   - `human_ask(question: Text) -> Text`
 

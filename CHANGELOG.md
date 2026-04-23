@@ -4,6 +4,46 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.19.0 — 2026-04-24
+
+**`perform search.web` — three-backend web search effect.**
+
+### What changed
+
+- **`perform search.web(query, count?) -> Result[List[Record]]`** added to
+  executor. Each result Record has `title`, `url`, `snippet`. Backend
+  priority with automatic fallback:
+  1. Google Custom Search API (confidence 0.9) — activated by
+     `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX` env vars; silently
+     skipped if absent or quota exceeded.
+  2. SearXNG (confidence 0.8) — activated by `SEARXNG_BASE_URL`; skipped
+     if absent.
+  3. DuckDuckGo HTML scrape (confidence 0.7) — always tried; no key
+     needed.
+  Returns `Result-error` only when all three backends fail.
+- **`browser.fetch` removed** before shipping — headless browser carries
+  too high an IP-block risk for a shared effect (hyun06000 decision).
+  The dispatch stub and implementation were both deleted.
+- **Reference card + spec** (`08-reference-card.ai.md`) updated with
+  `search.web` signature and backend docs.
+- **Authoring prompt** (`_build_goal_prompt`) has a new `WEB SEARCH`
+  section showing the canonical `unwrap(perform search.web(...))` +
+  `get(item, "title")` / `get(item, "url")` pattern.
+- **10 new tests** in `tests/test_search_web.py` — urllib mock-based,
+  covering happy path, missing/empty query, backend fallback order,
+  count kwarg and cap, all-backends-fail, and explicit assertion that
+  `browser.fetch` raises `RuntimeError`.
+
+### Why no `browser.fetch`
+
+Every headless-browser implementation that scrapes at scale eventually
+gets IP-blocked. Shipping it as a built-in effect would bake that risk
+into every AIL project. The right fix is either a dedicated scraping
+service (proxied, authenticated) or a user-supplied URL. Deferred
+indefinitely.
+
+---
+
 ## v1.18.0 — 2026-04-24
 
 **Three user-surfaced issues from field test: prompt contamination,

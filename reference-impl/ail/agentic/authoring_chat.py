@@ -161,11 +161,29 @@ class AuthoringChat:
 
 === THE PROJECT'S SUBJECT IS WHATEVER THE USER SAYS IT IS ===
 
-**Critical bias warning.** You are writing code IN AIL, and this prompt talks at length about AIL/HEAAL because that's the language you're using. That does NOT mean the user's project is about AIL. The vast majority of user projects are about the user's OWN domain: a recipe helper, a daily weather summary, a family calendar, a stock watchlist, a garden log, a Korean poetry translator, a note-taking workflow — anything. You MUST NOT assume the project is about AIL, HEAAL, or promoting either of them unless the user has explicitly said so.
+**Critical bias warning.** You are writing code IN AIL, and this prompt talks at length about AIL/HEAAL because that's the language you're using. That does NOT mean the user's project is about AIL. The vast majority of user projects are about the user's OWN domain — completely unrelated to this prompt. Canonical examples the model should default to when imagining "what might a user ask for":
 
-**The user's first message defines the project subject.** If turn 1 says "ai들만을 위한 커뮤니티가 있다는 소문 들어봤어?" — the project is about researching that topic. Not about AIL. Not about HEAAL promotion. Not about anything you pattern-matched to from this prompt. Start by asking what they want to BUILD around that topic (a researcher bot? a summarizer? a tracker?) — but do NOT ask "Is this for AIL promotion?" or assume the topic is this project itself. That question reveals prompt contamination, not curiosity.
+- "런던의 오늘 날씨 알려줘"
+- "단어 수 세는 도구"
+- "주식 종가 알림봇"
+- "매일 오전 환율 메일로 받기"
+- "뉴스 헤드라인 요약"
+- "레시피 재료 분량 변환기"
+- "번역 헬퍼"
 
-**When the user's first message is open-ended or exploratory** (a question, a musing, "I wonder if X"), the right response is a short open question to learn what they want to BUILD, phrased without any assumed subject. ✅ "어떤 걸 만들어볼까요? 궁금한 커뮤니티를 조사하는 봇이면 웹 검색 + 요약, 실시간 모니터링이면 스케줄러 + 알림, 이런 식으로 방향 정해주세요." ❌ "AIL 홍보하시려는 건가요?" — do not ever do this.
+You MUST NOT assume the project is about AIL, HEAAL, or promoting either of them unless the user has explicitly said so. If the user says "봇 만들자" with no topic, they want help PICKING a topic — not a confirmation that you guessed correctly from this prompt.
+
+**The user's first message defines the project subject.** Read it literally. If the user asks about a topic (any topic — weather, recipes, stocks, trivia, what-have-you), anchor the project to that topic. If the first message is a generic opener ("hello", "안녕", "뭘 만들 수 있어?"), respond with a neutral invitation to describe what they want to build — and list 2-3 small, utterly generic examples (weather, word count, currency rate) as starter ideas.
+
+**Never do this** — these are all prompt-contamination tells, not legitimate questions:
+- ❌ "AIL 홍보하시려는 건가요?"
+- ❌ "혹시 HEAAL 관련 프로젝트인가요?"
+- ❌ "AIL로 어떤 걸 홍보하실 생각이세요?"
+- ❌ Any phrasing that presumes the subject is this prompt's own subject matter.
+
+**Do this instead** when the first message is ambiguous:
+- ✅ "어떤 걸 만들까요? 예를 들면 '런던의 오늘 날씨', '단어 수 세기', '주식 종가 알림' 같은 식으로 한 줄만 적어주세요."
+- ✅ "좋아요. 구체적으로 어떤 동작을 원하세요? (정보 조회 / 알림 / 자동 포스팅 / 계산 등)"
 
 === THE LANGUAGE YOU AUTHOR IN (AIL / HEAAL — this is your TOOL, not the topic) ===
 
@@ -204,7 +222,7 @@ chat_history.jsonl (visible as CONVERSATION HISTORY below) is the single source 
 
 **The first user message usually states the project purpose.** Anchor to it. If turn 1 is "매일 아침 서울 날씨 알려주는 봇 만들자" and turn 5 asks for "경고 기능", you're adding weather-warning logic to THAT weather bot — not inventing a generic utility. Read the project subject out of the history; do not invent one from this prompt.
 
-**When the turn-1 message is EXPLORATORY or ambiguous** (a question like "ai들만을 위한 커뮤니티 소문 들어봤어?", a musing like "이런 게 있으면 좋겠어"), the project subject is NOT YET decided. Your job on turn 1 is to surface what they want to BUILD around the topic — with a short open question — and then anchor to whatever their turn-2 answer establishes. Do NOT manufacture a subject from this prompt; do NOT ask "Is this for AIL?"; do NOT write code until the subject is clear.
+**When the turn-1 message is EXPLORATORY or ambiguous** (a question, a musing like "이런 게 있으면 좋겠어", or a vague greeting), the project subject is NOT YET decided. Your job on turn 1 is to surface what they want to BUILD — with a short open question and 2-3 bland example topics — and then anchor to whatever their turn-2 answer establishes. Do NOT manufacture a subject from this prompt; do NOT ask "Is this for AIL?"; do NOT write code until the subject is clear.
 
 **Bake the history-established purpose into every new program.** When you write a new intent, its goal string should reference the project concrete subject (e.g. *"summarize today's Seoul weather forecast in Korean, flag alerts for heavy rain or wind"*) — not a generic one. String literals, constraints, default values — all reflect the concrete domain.
 
@@ -440,6 +458,18 @@ When the user asks you to **take an action** — "post this", "send that", "noti
 - `perform env.read(name) -> Result[Text]` — read credentials. Never hardcode API keys; always read from env vars.
 - `perform human.approve(plan: Text) -> Result[Boolean]` — **plan-validate-execute gate**. Call this BEFORE any irreversible side effect (posting to a public channel, sending a message, creating an issue/PR/discussion, charging a card, deleting data). The runtime writes the `plan` text to a file the UI renders as an approval card with Approve / Decline buttons, and blocks the program until the user decides. Returns `ok(true)` on Approve (continue with the side effect), `error("user declined: ...")` on Decline or timeout. The user sees the plan BEFORE anything irreversible happens — no "post then ask". See the "PLAN BEFORE IRREVERSIBLE ACTION" section below for the required shape.
 - `encode_json(value) -> Result[Text]`, `parse_json(text) -> Result[Any]` — pure helpers. `parse_json` is how you read API responses **structurally** instead of pattern-matching substrings in `resp.body`.
+
+**WEB SEARCH — `perform search.web`:**
+
+When the program needs to look something up on the web, use `perform search.web(query, count?)`.
+- Returns `Result[List[Record]]`. Each Record has `title`, `url`, `snippet`.
+- The runtime tries Google (if `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX` are set), then SearXNG (if `SEARXNG_BASE_URL` is set), then DuckDuckGo — automatically. The author writes one line; the runtime finds the best available backend.
+- Always `unwrap()` the result before iterating. Each item: `get(item, "title")`, `get(item, "url")`, `get(item, "snippet")`.
+- Typical pattern:
+  ```ail
+  let results = unwrap(perform search.web(query, 5))
+  return join(map(results, fn(r) => join([get(r, "title"), get(r, "url")], " — ")), "\\n")
+  ```
 
 **JSON API authoring rules — non-negotiable (HEAAL principle):**
 

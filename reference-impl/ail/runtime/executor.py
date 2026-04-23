@@ -465,13 +465,15 @@ class Executor:
             return self._env_read(args, kwargs, origin)
         if name == "human.approve":
             return self._human_approve(args, kwargs, origin)
+        if name == "search.web":
+            return self._search_web(args, kwargs, origin)
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
             f"http.post_json, http.graphql, file.read, file.write, "
             f"clock.now, state.read, state.write, state.has, "
             f"state.delete, schedule.every, env.read, human.approve, "
-            f"or a declared effect)"
+            f"search.web, or a declared effect)"
         )
 
     # --- clock effect (L2 case study 2026-04-23 — fills the "hardcoded
@@ -1299,6 +1301,205 @@ class Executor:
         return ConfidentValue(
             {"_result": True, "ok": True, "value": data},
             1.0, origin=origin)
+
+    def _search_web(self, args: list[ConfidentValue],
+                    kwargs: dict[str, ConfidentValue],
+                    origin: Origin) -> ConfidentValue:
+        """Web search with a three-backend fallback chain.
+
+        Shape:
+            perform search.web(query, count?) -> Result[List[Record]]
+
+        Each Record: { title: Text, url: Text, snippet: Text }
+
+        Backend priority:
+          1. Google Custom Search API (confidence 0.9)
+             — requires GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX env vars.
+             Skipped if keys absent; skipped on quota/auth errors.
+          2. SearXNG (confidence 0.8)
+             — requires SEARXNG_BASE_URL env var (e.g. http://localhost:8888).
+             Skipped if var absent.
+          3. DuckDuckGo HTML scrape (confidence 0.7)
+             — always tried; no key needed.
+
+        Returns Result-error only when ALL backends fail.
+        """
+        import urllib.request
+        import urllib.parse
+        import urllib.error
+        import json as _json
+        import os
+
+        if not args and "query" not in kwargs:
+            return self._result_err(
+                "search.web needs a query argument", origin)
+        query = str(args[0].value if args else kwargs["query"].value).strip()
+        if not query:
+            return self._result_err(
+                "search.web: query must be a non-empty string", origin)
+
+        count = 10
+        if len(args) >= 2:
+            try:
+                count = max(1, min(int(args[1].value), 20))
+            except (TypeError, ValueError):
+                pass
+        elif "count" in kwargs:
+            try:
+                count = max(1, min(int(kwargs["count"].value), 20))
+            except (TypeError, ValueError):
+                pass
+
+        last_err = "no backend attempted"
+
+        # --- Backend 1: Google Custom Search API ---
+        api_key = os.environ.get("GOOGLE_SEARCH_API_KEY", "")
+        cx = os.environ.get("GOOGLE_SEARCH_CX", "")
+        if api_key and cx:
+            try:
+                params = urllib.parse.urlencode({
+                    "q": query, "key": api_key, "cx": cx, "num": count,
+                })
+                req = urllib.request.Request(
+                    f"https://www.googleapis.com/customsearch/v1?{params}",
+                    headers={"User-Agent": "ail-search/1.0"},
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = _json.loads(
+                        resp.read().decode("utf-8", errors="replace"))
+                items = data.get("items") or []
+                results = [
+                    {"title": item.get("title", ""),
+                     "url": item.get("link", ""),
+                     "snippet": item.get("snippet", "")}
+                    for item in items
+                ]
+                if results:
+                    self.trace.record(
+                        "search_web", backend="google",
+                        query=query[:100], count=len(results))
+                    return ConfidentValue(
+                        {"_result": True, "ok": True, "value": results},
+                        0.9, origin=origin)
+                last_err = "Google: no results"
+            except urllib.error.HTTPError as e:
+                last_err = f"Google: HTTP {e.code}"
+            except Exception as e:
+                last_err = f"Google: {type(e).__name__}: {e}"
+
+        # --- Backend 2: SearXNG ---
+        searxng_base = os.environ.get("SEARXNG_BASE_URL", "").rstrip("/")
+        if searxng_base:
+            try:
+                params = urllib.parse.urlencode({
+                    "q": query, "format": "json", "categories": "general",
+                })
+                req = urllib.request.Request(
+                    f"{searxng_base}/search?{params}",
+                    headers={
+                        "User-Agent": "ail-search/1.0",
+                        "Accept": "application/json",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = _json.loads(
+                        resp.read().decode("utf-8", errors="replace"))
+                items = (data.get("results") or [])[:count]
+                results = [
+                    {"title": item.get("title", ""),
+                     "url": item.get("url", ""),
+                     "snippet": item.get("content", "")}
+                    for item in items
+                ]
+                if results:
+                    self.trace.record(
+                        "search_web", backend="searxng",
+                        query=query[:100], count=len(results))
+                    return ConfidentValue(
+                        {"_result": True, "ok": True, "value": results},
+                        0.8, origin=origin)
+                last_err = "SearXNG: no results"
+            except Exception as e:
+                last_err = f"SearXNG: {type(e).__name__}: {e}"
+
+        # --- Backend 3: DuckDuckGo HTML scrape ---
+        try:
+            import html as _html_mod
+            from html.parser import HTMLParser
+
+            params = urllib.parse.urlencode({"q": query, "kl": "us-en"})
+            req = urllib.request.Request(
+                f"https://html.duckduckgo.com/html/?{params}",
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"
+                    ),
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                html_body = resp.read().decode("utf-8", errors="replace")
+
+            class _DDGParser(HTMLParser):
+                def __init__(self_p):
+                    super().__init__()
+                    self_p.results: list[dict] = []
+                    self_p._cur: dict | None = None
+                    self_p._capture_title = False
+                    self_p._capture_snippet = False
+                    self_p._buf: list[str] = []
+
+                def handle_starttag(self_p, tag, attrs):
+                    amap = dict(attrs)
+                    cls = amap.get("class", "")
+                    if tag == "div" and "result__body" in cls:
+                        self_p._cur = {"title": "", "url": "", "snippet": ""}
+                    elif self_p._cur is not None:
+                        if tag == "a" and "result__a" in cls:
+                            self_p._cur["url"] = amap.get("href", "")
+                            self_p._capture_title = True
+                            self_p._buf = []
+                        elif tag in ("a", "div") and "result__snippet" in cls:
+                            self_p._capture_snippet = True
+                            self_p._buf = []
+
+                def handle_endtag(self_p, tag):
+                    if self_p._capture_title and tag == "a":
+                        self_p._cur["title"] = _html_mod.unescape(
+                            "".join(self_p._buf)).strip()
+                        self_p._capture_title = False
+                        self_p._buf = []
+                    elif self_p._capture_snippet and tag in ("a", "div"):
+                        self_p._cur["snippet"] = _html_mod.unescape(
+                            "".join(self_p._buf)).strip()
+                        self_p._capture_snippet = False
+                        self_p._buf = []
+                        if self_p._cur.get("url"):
+                            self_p.results.append(self_p._cur)
+                        self_p._cur = None
+
+                def handle_data(self_p, data):
+                    if self_p._capture_title or self_p._capture_snippet:
+                        self_p._buf.append(data)
+
+            parser = _DDGParser()
+            parser.feed(html_body)
+            results = parser.results[:count]
+            if results:
+                self.trace.record(
+                    "search_web", backend="duckduckgo",
+                    query=query[:100], count=len(results))
+                return ConfidentValue(
+                    {"_result": True, "ok": True, "value": results},
+                    0.7, origin=origin)
+            last_err = "DuckDuckGo: no results (CAPTCHA or empty response)"
+        except Exception as e:
+            last_err = f"DuckDuckGo: {type(e).__name__}: {e}"
+
+        return self._result_err(
+            f"search.web: all backends failed — {last_err}", origin)
 
     def _file_read(self, args: list[ConfidentValue],
                    kwargs: dict[str, ConfidentValue],
