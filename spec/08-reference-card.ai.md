@@ -282,13 +282,19 @@ which runs the inner program and is therefore impure. Use `ail_parse_check`
 when you need to validate syntactic correctness of generated AIL without
 firing any intents or effects it declares.
 
-### JSON (parse HTTP bodies and similar structured text)
+### JSON (parse and emit structured data)
 ```
 parse_json(source: Text) -> Result[Any]         // ok(value) on success, error(msg) on JSONDecodeError
+encode_json(value: Any) -> Result[Text]         // ok(text) on success, error(msg) on non-encodable input
 ```
-Pure — no I/O, no LLM. Returns a Record for JSON objects, a List for arrays,
-Text for strings, Number for numbers, Boolean for true/false. Use `get(value, key)`
-to read fields after unwrapping. Prefer this over manual line-scanning of JSON.
+Both are pure — no I/O, no LLM. `parse_json` returns a Record for JSON objects,
+a List for arrays, Text / Number / Boolean primitives; use `get(value, key)`
+after unwrapping. `encode_json` is the companion for building request bodies:
+a list of two-element `[key, value]` pairs is emitted as a JSON object, any
+other list as a JSON array, and primitives pass through. Escaping is the
+runtime's job; authors must not hand-roll JSON via `join([...])`. `http.post_json`
+calls `encode_json` internally — use it instead of `encode_json` + `http.post`
+whenever you are talking to a JSON API.
 
 Origin kinds: `"literal"`, `"input"`, `"fn"`, `"intent"`, `"builtin"`, `"attempt"`, `"effect"`.
 Intent and effect origins additionally carry `at` (ISO-8601 timestamp).
@@ -521,7 +527,18 @@ Built-in effects:
     [key, value] pairs (source-level, since AIL has no dict
     literal syntax) or a record (from intent / state). Example:
     `perform http.post(url, body, headers: [["Authorization", t],
-    ["Content-Type", "application/json"]])`.
+    ["Content-Type", "application/json"]])`. **For JSON APIs use
+    `http.post_json` instead** — the raw form is only for non-JSON
+    payloads (form-encoded, plain text).
+  - `http.post_json(url: Text, body: pair-list | Record,
+    headers?: [[Text, Text]] | Record) -> Record` — POST with a
+    structured body. Refuses a pre-formatted string body; the
+    runtime serializes via `encode_json` and sets
+    `Content-Type: application/json` (caller can override). The
+    safe default for every JSON API. Closes a HEAAL gap where
+    agents hand-rolled JSON strings and shipped injection bugs —
+    with this effect the author writes the *value*, not the
+    encoding, and the runtime makes malformed JSON impossible.
   - `schedule.every(seconds: Number) -> Result[Boolean]` — register
     a recurring re-invocation of `entry main` inside an agentic
     project. Call from inside the entry; the agentic runtime starts

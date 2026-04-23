@@ -4,6 +4,78 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.15.0 — 2026-04-23
+
+**HEAAL gap closed: JSON serialization moves into the runtime.**
+
+hyun06000's 2026-04-23 promo-bot field test exposed a structural
+harness failure: the agent spent 12 turns chasing a malformed GitHub
+GraphQL request, hand-rolling JSON via `join(["\"title\": \"", escape_json_text(TITLE), "\""])`,
+swallowing the 400, and eventually fabricating the return value
+("GitHub Discussion created successfully: True"). hyun06000's
+verdict: *"return을 믿지말고 검증을 하라고. 이거 하네스에서 벗어나네?"*
+Correct — nothing in AIL stopped the agent from shipping an injection
+bug, and nothing forced it to actually read the API response.
+
+The fix is HEAAL at the runtime layer: make malformed JSON
+impossible to express.
+
+### New primitives
+
+- **`perform http.post_json(url, body, headers?)`** — body is a
+  structured AIL value (list of `[key, value]` pairs at the source
+  level, records anywhere). Strings are **refused** with a clear
+  pointer at the raw `http.post` form for non-JSON payloads. The
+  runtime serializes via `encode_json` and auto-sets
+  `Content-Type: application/json`. Authors write the *value*, never
+  the encoding.
+- **`encode_json(value) -> Result[Text]`** — pure companion to the
+  existing `parse_json`. Handles pair-lists-as-objects with the same
+  convention `http.post` headers already used. Refuses ok/error
+  `Result` wrappers explicitly to force an `unwrap()` at the
+  author's boundary.
+
+### Authoring prompt rewrite
+
+- Three canonical "post to X" examples (Discord, Mastodon, GitHub
+  GraphQL) rewritten from `join([...])` + hand-rolled `escape_json_text`
+  to `http.post_json` + `parse_json(resp.body)` verification.
+- New "JSON API authoring rules" section bans hand-rolled JSON
+  outright, requires response-body parsing before claiming success,
+  and forbids fabricating return values from literals.
+- The GraphQL example explicitly shows the `errors` field check —
+  HTTP 200 is not logical success for GraphQL, and the old prompt
+  never said so.
+
+### Why this was structural, not a bug
+
+`parse_json` had already existed since HEAAL E2, but the authoring
+prompt never referenced it — in 12 turns the agent never once
+reached for it. The fix is runtime + prompt together: adding the
+companion `encode_json` / `http.post_json` and teaching the prompt
+to use them. Without both, the gap re-opens.
+
+### Internal
+
+- `_json_normalize` helper in `runtime/executor.py` recognises the
+  pair-list-as-object convention recursively; Result wrappers raise
+  a typed error that surfaces as `encode_json` error Result.
+- `tests/test_json_effects.py` adds 11 tests: flat / nested pair
+  lists, quote + newline + backslash escaping, plain-list arrays,
+  Result-wrapper rejection (ok and error), plus integration tests
+  for `http.post_json` against an `HTTPServer` echo endpoint
+  (structured body round-trip, text-body rejection, auto
+  Content-Type, caller Authorization preservation, non-2xx
+  handling).
+
+### Not a grammar change
+
+This is L2 runtime surface — two new built-in names (`encode_json`
+plus `http.post_json`), no parser or keyword changes. The v1.8
+grammar freeze stands.
+
+---
+
 ## v1.14.0 — 2026-04-23
 
 **Architectural pivot: chat_history is the agent's memory, not

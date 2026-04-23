@@ -441,6 +441,8 @@ class Executor:
             return self._http_effect("GET", args, kwargs, origin)
         if name == "http.post":
             return self._http_effect("POST", args, kwargs, origin)
+        if name == "http.post_json":
+            return self._http_post_json(args, kwargs, origin)
         if name == "file.read":
             return self._file_read(args, kwargs, origin)
         if name == "file.write":
@@ -462,7 +464,7 @@ class Executor:
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
-            f"file.read, file.write, clock.now, "
+            f"http.post_json, file.read, file.write, clock.now, "
             f"state.read, state.write, state.has, state.delete, "
             f"schedule.every, env.read, or a declared effect)"
         )
@@ -831,6 +833,128 @@ class Executor:
             return ConfidentValue(
                 {"_result": True, "ok": False,
                  "error": f"http {method} {url}: {e}"},
+                0.0, origin=origin,
+            )
+
+    def _http_post_json(self, args: list[ConfidentValue],
+                        kwargs: dict[str, ConfidentValue],
+                        origin: Origin) -> ConfidentValue:
+        """HTTP POST with structural JSON body.
+
+        HEAAL gap closer (2026-04-23 promo-bot field test): agents
+        producing API calls kept hand-rolling JSON via `join(["\\"k\\":
+        \\"", v, "\\""])` and silently emitting malformed bodies — the
+        archetypal injection-class bug AIL exists to make impossible.
+        This effect refuses a Text body and requires a structured value
+        (pair-list / record / list), forwards it to encode_json, and
+        auto-sets Content-Type. Authors can still fall back to raw
+        `http.post` for non-JSON payloads.
+        """
+        import urllib.request
+        import urllib.error
+        url = str(args[0].value) if args else str(
+            kwargs.get("url", ConfidentValue("", 1.0)).value)
+        if len(args) >= 2:
+            body_raw = args[1].value
+        elif "body" in kwargs:
+            body_raw = kwargs["body"].value
+        else:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": "http.post_json: needs a body argument"},
+                1.0, origin=origin)
+
+        if isinstance(body_raw, str):
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": ("http.post_json: body must be structured "
+                           "(record or list of [key, value] pairs), not a "
+                           "pre-formatted JSON string. Build the body as "
+                           "an AIL value and the runtime will serialize "
+                           "it. For a raw string body, use http.post.")},
+                1.0, origin=origin)
+
+        try:
+            normalized = _json_normalize(body_raw)
+            import json as _json
+            body_text = _json.dumps(normalized, ensure_ascii=False)
+        except Exception as e:
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": ("http.post_json: could not encode body: "
+                           f"{type(e).__name__}: {e}")},
+                1.0, origin=origin)
+
+        custom_headers: dict[str, str] = {}
+        if "headers" in kwargs:
+            raw_headers = kwargs["headers"].value
+            if isinstance(raw_headers, dict):
+                for hk, hv in raw_headers.items():
+                    if hv is None:
+                        continue
+                    custom_headers[str(hk)] = str(hv)
+            elif isinstance(raw_headers, list):
+                for pair in raw_headers:
+                    if isinstance(pair, (list, tuple)) and len(pair) == 2:
+                        if pair[1] is None:
+                            continue
+                        custom_headers[str(pair[0])] = str(pair[1])
+
+        merged_headers = {
+            "User-Agent": "ail-http-effect/1.0",
+            "Content-Type": "application/json",
+        }
+        # Caller's Content-Type wins only if they explicitly set one —
+        # unusual but possible (e.g. application/vnd.github+json).
+        merged_headers.update(custom_headers)
+
+        try:
+            req = urllib.request.Request(
+                url, method="POST",
+                data=body_text.encode("utf-8"),
+                headers=merged_headers,
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                content = resp.read().decode("utf-8", errors="replace")
+                status = float(resp.status)
+            result = {
+                "status": status,
+                "body": content,
+                "ok": 200 <= status < 300,
+            }
+            self.trace.record(
+                "http_call", method="POST_JSON", url=url,
+                status=status, ok=result["ok"],
+                body_preview=content[:200] if not result["ok"] else None,
+            )
+            return ConfidentValue(result, 1.0, origin=origin)
+        except urllib.error.HTTPError as e:
+            status = float(e.code)
+            try:
+                content = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                content = ""
+            result = {
+                "status": status,
+                "body": content,
+                "ok": False,
+            }
+            self.trace.record(
+                "http_call", method="POST_JSON", url=url,
+                status=status, ok=False,
+                reason=getattr(e, "reason", ""),
+                body_preview=content[:200],
+            )
+            return ConfidentValue(result, 1.0, origin=origin)
+        except urllib.error.URLError as e:
+            self.trace.record(
+                "http_call", method="POST_JSON", url=url,
+                status=None, ok=False,
+                network_error=str(e),
+            )
+            return ConfidentValue(
+                {"_result": True, "ok": False,
+                 "error": f"http.post_json {url}: {e}"},
                 0.0, origin=origin,
             )
 
@@ -1305,6 +1429,27 @@ class Executor:
                         {"_result": True, "ok": False,
                          "error": f"{type(e).__name__}: {e}"}, conf)
 
+        if name == "encode_json":
+            # encode_json(value: Any) -> Result[Text]
+            # Pure. Companion to parse_json. Closes the HEAAL gap where
+            # agents hand-rolled JSON bodies via `join(["\"key\": \"", val,
+            # "\""])` and broke on embedded quotes/newlines/backslashes.
+            # Accepts records, lists, lists-of-pairs (same convention as
+            # http headers — two-element [key, value] lists form an
+            # object), primitives, and null. Escaping is the runtime's
+            # responsibility, not the author's.
+            if len(raw) >= 1:
+                try:
+                    normalized = _json_normalize(raw[0])
+                    import json as _json
+                    text = _json.dumps(normalized, ensure_ascii=False)
+                    return ConfidentValue(
+                        {"_result": True, "ok": True, "value": text}, conf)
+                except Exception as e:
+                    return ConfidentValue(
+                        {"_result": True, "ok": False,
+                         "error": f"{type(e).__name__}: {e}"}, conf)
+
         if name == "ail_parse_check":
             # ail_parse_check(source: Text) -> Result[Text]
             # Returns ok(source) if the given source parses as a valid AIL
@@ -1747,6 +1892,48 @@ class Executor:
 
 
 # --- utilities ---
+
+
+def _json_normalize(value):
+    """Convert an AIL runtime value into something json.dumps can serialize.
+
+    AIL has no dict literal syntax, so the canonical way to build an
+    object inline is a list of two-element [key, value] lists — same
+    convention `http.post` uses for `headers`. This helper recognises
+    that shape recursively: a list whose every element is a 2-list with
+    a string-ish first element becomes a JSON object; any other list
+    becomes a JSON array. Python dicts pass through (from intents or
+    earlier parse_json calls). Primitives pass through after Result-
+    error detection (errors shouldn't silently encode to {"_result":
+    true, ...} — they should propagate).
+
+    Raises ValueError if given an ok-Result or error-Result by
+    mistake; the caller should unwrap() first so the encoding is of
+    the payload, not the wrapper.
+    """
+    # Reject Result wrappers — the author almost certainly meant the
+    # unwrapped value, not the provenance container. Surfacing an
+    # explicit error beats silently emitting {"_result": true, "ok":
+    # true, "value": ...} which no real API accepts.
+    if isinstance(value, dict) and value.get("_result") is True:
+        if value.get("ok"):
+            raise ValueError(
+                "encode_json: got an ok-Result; call unwrap() first")
+        raise ValueError(
+            "encode_json: got an error-Result; cannot serialize an error")
+    if isinstance(value, list):
+        # Pair-list shape: every element is a [k, v] with k a string.
+        if value and all(
+            isinstance(e, list) and len(e) == 2 and isinstance(e[0], str)
+            for e in value
+        ):
+            # Duplicate keys resolve last-wins (same as JSON parsers).
+            return {e[0]: _json_normalize(e[1]) for e in value}
+        return [_json_normalize(e) for e in value]
+    if isinstance(value, dict):
+        return {str(k): _json_normalize(v) for k, v in value.items()}
+    # Primitives — let json.dumps decide.
+    return value
 
 
 def _default_context() -> ContextDecl:
