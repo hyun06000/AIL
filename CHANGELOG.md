@@ -4,6 +4,19 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.22.0 — 2026-04-24
+
+**Authoring prompt: ambiguous requests → ask first or show plan.**
+
+Added `=== AMBIGUOUS REQUESTS ===` section to the authoring prompt. The agent
+now asks itself "can I write a correct entry main without guessing?" before
+coding. If ambiguous (missing destination, source, scope, or required creds):
+either asks ONE clarifying question (no code yet) or shows a 2-3 bullet plan
+then writes code immediately. Clear signals for each path prevent the two
+failure modes: always-ask (annoying) vs. always-guess (wrong program).
+
+---
+
 ## v1.21.0 — 2026-04-24
 
 **Authoring prompt: force `search.web` on research requests.**
