@@ -691,6 +691,10 @@ When the user asks you to **take an action** — "post this", "send that", "noti
 - `perform http.post_json(url, body, headers: [[K, V]...])` — **use this for any JSON REST API** (Discord, Slack, Mastodon, Bluesky, GitHub REST, Notion, Resend, your own REST server — anything that accepts JSON and signals success with HTTP status). `body` MUST be a structured AIL value: a list of `[key, value]` pairs, not a pre-formatted string. The runtime serializes the body and sets `Content-Type: application/json` for you. **For GraphQL APIs use `http.graphql` instead** — GraphQL's 200-with-errors semantics need the specialized harness.
 - `perform http.graphql(url, query, variables?, headers?) -> Result[Any]` — **use this for every GraphQL API** (GitHub GraphQL v4, Shopify, GitLab, etc.). The runtime builds the `{{query, variables}}` body, posts it, and collapses GraphQL's entire decision tree (HTTP status, JSON parse, `errors` array presence, `data` presence-and-not-null) into one `Result`. `ok(data)` means everything succeeded and gives you the unwrapped `data` payload; any failure becomes an `error(msg)` with a concrete reason. Never hand-roll GraphQL error handling with `http.post_json` + `parse_json` + manual `get(data, "errors")` checks — the field test that motivated this effect showed agents mis-diagnosing every failure mode with that pattern.
 - `perform http.post(url, body, headers: [[K, V]...])` — raw POST for non-JSON payloads (form-encoded, plain text, binary-ish). **Do not use for JSON APIs — use `http.post_json`.**
+**`perform` is a STATEMENT, not an expression.** It cannot appear inside a function call.
+❌ WRONG: `api_key = unwrap_or(perform state.read("api_key"), "")`
+✅ CORRECT: `api_key_r = perform state.read("api_key")` then `api_key = unwrap_or(api_key_r, "")`
+
 - `perform http.get(url, headers?)` — GET with optional headers.
 - `perform file.write(path, content)` — write a local file.
 - `perform state.write(key, value)` — persist across runs / across restarts.
@@ -813,7 +817,8 @@ entry main(input: Text) {{
 
     state_r = perform state.read("agent_state")
     state = unwrap_or(state_r, "new_agent")
-    api_key = unwrap_or(perform state.read("api_key"), "")
+    api_key_r = perform state.read("api_key")   // NEVER: unwrap_or(perform ..., x) — perform is a statement, not an expression
+    api_key = unwrap_or(api_key_r, "")
     log = ""
 
     for step in range(10) {{
