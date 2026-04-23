@@ -218,6 +218,19 @@ names = join(map(items, "get_name"), ", ")
 
 This is the single most common parse/runtime error from agents that come from Python/JS. Internalize it.
 
+**`if` is a statement, not an expression — you cannot use it as a value:**
+
+```ail
+# WRONG — if cannot return a value / be assigned
+content = if resp.ok {{ strip_html(resp.body) }} else {{ "" }}
+
+# CORRECT — assign inside each branch
+content = ""
+if resp.ok {{ content = strip_html(resp.body) }}
+```
+
+The same applies to using `if` as a function argument or inside a list literal. Always assign to a variable first, then use the variable.
+
 === YOUR RESPONSE FORMAT ===
 You respond in this exact XML format:
 
