@@ -18,6 +18,23 @@ from .agent import _looks_like_error
 from .project import Project
 
 
+def _friendly_api_error(exc: BaseException) -> str:
+    """Map known API/network exceptions to one-line Korean messages."""
+    name = type(exc).__name__
+    msg = str(exc)
+    if "OverloadedError" in name or "529" in msg:
+        return "API가 일시적으로 과부하 상태예요. 잠시 후 다시 시도해주세요."
+    if "RateLimitError" in name or "429" in msg:
+        return "API 요청 한도를 초과했어요. 잠시 후 다시 시도해주세요."
+    if "AuthenticationError" in name or "401" in msg:
+        return "API 키가 올바르지 않아요. ANTHROPIC_API_KEY를 확인해주세요."
+    if "APIConnectionError" in name or "ConnectionError" in name:
+        return "API 서버에 연결할 수 없어요. 인터넷 연결을 확인해주세요."
+    if "APITimeoutError" in name or "TimeoutError" in name:
+        return "API 응답 시간이 초과됐어요. 잠시 후 다시 시도해주세요."
+    return f"오류가 발생했어요: {name}: {msg}"
+
+
 def _resolve_program_path(project, requested: str):
     """Pick which .ail file to run for /authoring-run.
 
@@ -486,12 +503,9 @@ def _make_handler(project: Project):
                     chat = AuthoringChat(project, adapter=adapter)
                     result = chat.turn(user_msg)
                 except Exception as e:
-                    import traceback
-                    self._send_text(
-                        500,
-                        f"authoring error: {type(e).__name__}: {e}\n"
-                        f"{traceback.format_exc()}\n",
-                    )
+                    import traceback as _tb
+                    _tb.print_exc(file=sys.stderr)
+                    self._send_text(500, _friendly_api_error(e) + "\n")
                     return
                 import json as _json
                 payload = _json.dumps(result, ensure_ascii=False).encode("utf-8")

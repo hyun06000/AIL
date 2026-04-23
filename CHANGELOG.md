@@ -4,6 +4,16 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.23.0 — 2026-04-24
+
+**서버: API 오류를 친절한 한 줄 메시지로 변환.**
+
+Anthropic OverloadedError(529) 등이 raw traceback으로 채팅 UI에 노출되던 문제 수정.
+`_friendly_api_error` 헬퍼로 알려진 오류(Overloaded/RateLimit/Auth/Connection/Timeout)를
+한국어 한 줄로 매핑. traceback은 터미널 stderr로만 출력.
+
+---
+
 ## v1.22.0 — 2026-04-24
 
 **Authoring prompt: ambiguous requests → ask first or show plan.**
