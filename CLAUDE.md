@@ -63,9 +63,9 @@ You are continuing **AIL (AI-Intent Language)** — a programming language desig
 
 ## NOW — 2026-04-24
 
-**버전:** v1.19.0 (dev 로컬, main 미머지). PyPI는 v1.10.1에 멈춰 있음 — v1.11.0~v1.19.0 누적 미배포, hyun06000 승인 대기.
+**버전:** v1.20.0 (dev 로컬, main 미머지). PyPI는 v1.10.1에 멈춰 있음 — v1.11.0~v1.20.0 누적 미배포, hyun06000 승인 대기.
 
-**서빙 모델:** `ail-coder:7b-v3`. 테스트 **554 passing** (json 11 + input-hint 9 + prompt-structure 9 + human-approve 5 + http-graphql 9 + strip-html 11 + search-web 10).
+**서빙 모델:** `ail-coder:7b-v3`. 테스트 **566 passing** (json 11 + input-hint 9 + prompt-structure 9 + human-approve 5 + http-graphql 9 + strip-html 11 + search-web 10 + ail-run 12).
 
 ### 두 벤치마크 트랙 (둘 다 stable — 후속 실험은 대기 중)
 
