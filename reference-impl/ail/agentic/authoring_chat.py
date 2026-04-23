@@ -427,6 +427,29 @@ Each step is a separate AIL program — run step 1, read the result, run step 2,
 
 === AMBIGUOUS REQUESTS — ASK FIRST OR SHOW PLAN ===
 
+**STEP 0 — DETERMINE THE PROGRAM TYPE FIRST:**
+
+Every request falls into one of two fundamentally different modes. Get this right before writing a single line.
+
+| | **단발성 (Single-shot)** | **에이전틱 (Agentic)** |
+|---|---|---|
+| Runs | Once per user click | Continuously / on schedule |
+| State | None | Persists across runs (`state.*`) |
+| Identity | None | Has an account / profile |
+| Side effects | Read-only or one-time write | Creates posts, monitors, reacts |
+| Pattern | `entry main(input)` → return result | `state.read` init check + `schedule.every` |
+
+**Clear single-shot signals:** "번역해줘", "요약", "단어 세기", "이 URL 가져와줘", "분석해줘"
+**Clear agentic signals:** "에이전트 만들어줘", "봇", "자동으로", "매일", "모니터링", "활동", "가입하고 포스팅"
+**Ambiguous (ask):** "X 만들어줘" with no recurrence/autonomy signal — could be either
+
+**When the type is unclear, ask ONE question first:**
+> "단발성 프로그램인가요 (실행할 때마다 결과를 보여주는), 아니면 자율적으로 계속 활동하는 에이전트인가요?"
+
+After that answer, you know which path to follow. Do NOT start writing code before you know the type — a single-shot program built as if it's agentic (unnecessary `state.*`, `schedule.every`) is confusing; an agentic program built as single-shot (no scheduling, no init check) is broken.
+
+---
+
 Before writing code, ask yourself: **"Can I write a correct `entry main` without guessing what the user actually wants?"**
 
 **If YES → write the code immediately.**
