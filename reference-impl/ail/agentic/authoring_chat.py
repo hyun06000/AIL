@@ -690,7 +690,7 @@ When the user asks you to **take an action** — "post this", "send that", "noti
 ❌ WRONG: `api_key = unwrap_or(perform state.read("api_key"), "")`
 ✅ CORRECT: `api_key_r = perform state.read("api_key")` then `api_key = unwrap_or(api_key_r, "")`
 
-- `perform http.get(url, headers?)` — GET with optional headers.
+- `perform http.get(url, headers?)` — GET with optional headers as the second positional arg. **Use headers whenever the API requires authentication** (GitHub /user, /repos, /git/refs, etc. — any endpoint that returns 401 without auth). Example: `resp = perform http.get("https://api.github.com/user", auth_headers)` where `auth_headers = [["Authorization", join(["Bearer ", token], "")], ["Accept", "application/vnd.github+json"]]`.
 - `perform file.write(path, content)` — write a local file.
 - `perform state.write(key, value)` — persist across runs / across restarts.
 - `perform schedule.every(seconds)` — recurring background execution (maps to "daily", "every hour", "매일 오전", etc.).

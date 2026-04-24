@@ -500,6 +500,7 @@ Interactions with prior phases:
 content = perform file.read("/path/to/file")      // Text | Result-error
 ok = perform file.write("/path/out", "contents")  // Result
 resp = perform http.get("https://api.example.com/data")
+resp = perform http.get("https://api.github.com/user", auth_headers)  // authenticated GET
   // resp is a Record: {status: Number, body: Text, ok: Boolean}
 resp = perform http.post("https://api.example.com", "payload")
 perform log("diagnostic message")                 // to stderr
@@ -513,8 +514,11 @@ and whose `at` is an ISO-8601 timestamp — you can audit exactly when
 the side effect happened and what fed into it.
 
 Built-in effects:
-  - `http.get(url: Text) -> Record`  — `{status, body, ok}` on response
-  - `http.post(url: Text, body: Text) -> Record`
+  - `http.get(url: Text, headers?: [[Text, Text]] | Record) -> Record`
+    — `{status, body, ok}` on response. Optional headers as second
+    positional arg or `headers:` kwarg: `perform http.get(url, auth)`.
+    Required for any authenticated GET (GitHub /user, /repos, etc.).
+  - `http.post(url: Text, body: Text, headers?: [[Text, Text]] | Record) -> Record`
   - `file.read(path: Text) -> Text | Result-error`
   - `file.write(path: Text, content: Text) -> Result`
   - `clock.now(format?: Text) -> Text` — ISO-8601 UTC by default

@@ -907,16 +907,22 @@ class Executor:
             elif "body" in kwargs:
                 body = kwargs["body"].value
 
-        # Optional headers: pass as kwarg only. Two accepted shapes:
-        #   - a record (dict at runtime, typically from intent/state)
-        #   - a list of 2-element [key, value] lists — since AIL has
-        #     no dict literal syntax, this is how source code builds
-        #     headers inline: `headers: [["Content-Type", "application/
-        #     json"], ["Authorization", token]]`.
+        # Optional headers: kwarg OR positional.
+        # GET:  perform http.get(url)  OR  perform http.get(url, headers)
+        # POST: perform http.post(url, body)  OR  perform http.post(url, body, headers)
+        # Two accepted shapes for the headers value:
+        #   - a record (dict at runtime)
+        #   - a list of 2-element [key, value] lists
         # A User-Agent is always set unless the caller overrides it.
         custom_headers: dict[str, str] = {}
-        if "headers" in kwargs:
-            raw_headers = kwargs["headers"].value
+        _headers_cv = kwargs.get("headers")
+        if _headers_cv is None:
+            # positional: GET→args[1], POST→args[2]
+            pos = 1 if method == "GET" else 2
+            if len(args) > pos:
+                _headers_cv = args[pos]
+        if _headers_cv is not None:
+            raw_headers = _headers_cv.value
             if isinstance(raw_headers, dict):
                 for hk, hv in raw_headers.items():
                     if hv is None:

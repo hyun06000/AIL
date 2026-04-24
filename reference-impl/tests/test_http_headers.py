@@ -31,6 +31,18 @@ class _HeaderEchoHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # quiet
         return
 
+    def do_GET(self):  # noqa: N802
+        self.__class__.received.append({
+            "headers": {k: v for k, v in self.headers.items()},
+            "body": "",
+        })
+        resp = b"ok"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(resp)))
+        self.end_headers()
+        self.wfile.write(resp)
+
     def do_POST(self):  # noqa: N802
         length = int(self.headers.get("Content-Length", "0") or "0")
         body = self.rfile.read(length).decode("utf-8") if length else ""
@@ -109,6 +121,59 @@ def test_http_post_works_without_headers_kwarg(tmp_path):
         src = f"""
 entry main(input: Text) {{
     r = perform http.post("http://127.0.0.1:{port}/", "plain")
+    return to_text(r.status)
+}}
+"""
+        result, _ = run(str(_write(tmp_path, src)), input="")
+        assert result.value == "200"
+    finally:
+        server.shutdown()
+
+
+def test_http_get_sends_authorization_header_positional(tmp_path):
+    server, port = _start_server()
+    try:
+        src = f"""
+entry main(input: Text) {{
+    auth = [["Authorization", "Bearer my-github-token"]]
+    r = perform http.get("http://127.0.0.1:{port}/", auth)
+    if r.ok {{ return "ok" }}
+    return "fail"
+}}
+"""
+        result, _ = run(str(_write(tmp_path, src)), input="")
+        assert result.value == "ok"
+        received = _HeaderEchoHandler.received[-1]
+        assert received["headers"]["Authorization"] == "Bearer my-github-token"
+    finally:
+        server.shutdown()
+
+
+def test_http_get_sends_authorization_header_kwarg(tmp_path):
+    server, port = _start_server()
+    try:
+        src = f"""
+entry main(input: Text) {{
+    auth = [["Authorization", "Bearer kwarg-token"]]
+    r = perform http.get("http://127.0.0.1:{port}/", headers: auth)
+    if r.ok {{ return "ok" }}
+    return "fail"
+}}
+"""
+        result, _ = run(str(_write(tmp_path, src)), input="")
+        assert result.value == "ok"
+        received = _HeaderEchoHandler.received[-1]
+        assert received["headers"]["Authorization"] == "Bearer kwarg-token"
+    finally:
+        server.shutdown()
+
+
+def test_http_get_without_headers_still_works(tmp_path):
+    server, port = _start_server()
+    try:
+        src = f"""
+entry main(input: Text) {{
+    r = perform http.get("http://127.0.0.1:{port}/")
     return to_text(r.status)
 }}
 """

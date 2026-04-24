@@ -4,6 +4,21 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.47.2 — 2026-04-24
+
+**fix: `http.get` now accepts optional headers as second positional arg.**
+
+`perform http.get(url, headers)` was silently ignoring the headers — the implementation only read from `kwargs["headers"]`, never from `args[1]`. Public repo GET endpoints work without auth, so the bug was invisible until an authenticated GET (GitHub /user, /repos/*/git/refs, etc.) returned 401. Field test: `awesome_list_pr.ail` Turn 1 `GET /user` → 401 despite valid token.
+
+- `perform http.get(url)` — unchanged (backward compatible)
+- `perform http.get(url, auth_headers)` — now works (positional)
+- `perform http.get(url, headers: auth_headers)` — now works (kwarg, was already supported)
+- Reference card updated with new signature and authenticated GET example
+- Authoring prompt updated with explicit guidance + GitHub example
+- 3 new tests in `test_http_headers.py`
+
+---
+
 ## v1.47.1 — 2026-04-24
 
 **fix: authoring prompt — always `trim()` credentials from `env.read`.**
