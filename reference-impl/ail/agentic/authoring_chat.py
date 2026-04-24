@@ -243,6 +243,24 @@ names = join(map(items, "get_name"), ", ")
 
 This is the single most common parse/runtime error from agents that come from Python/JS. Internalize it.
 
+**`pure fn` CANNOT call `perform` or any non-pure fn.** The parser rejects this before runtime. If the helper needs to read or write `state.*`, call `http.*`, touch `env.read`, or use `clock.now`, it is NOT pure — drop the `pure` keyword.
+
+```ail
+# WRONG — parser rejects: "pure fn contains perform"
+pure fn save_entry(payload: Text) -> Text {{
+  perform state.write("entries", payload)
+  return "ok"
+}}
+
+# CORRECT — drop `pure` because the body has a side effect
+fn save_entry(payload: Text) -> Text {{
+  perform state.write("entries", payload)
+  return "ok"
+}}
+```
+
+Rule of thumb: if the body contains `perform …` anywhere (even inside a nested `attempt`, `branch`, or helper call), the declaration must be `fn`, not `pure fn`. `pure fn` is only for math/string/list transforms that depend on arguments alone. This is the second most common parse error — check each helper you write against this rule before emitting the file.
+
 **`if` is a statement, not an expression — you cannot use it as a value:**
 
 ```ail
