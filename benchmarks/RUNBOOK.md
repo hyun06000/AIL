@@ -170,6 +170,22 @@ data yet.
    running it, DOCUMENT the bug in the commit body and skip that
    prompt on this run. Do not silently edit the prompt.
 
+## Measurement discipline (added 2026-04-24, PRINCIPLES.md §5)
+
+> "측정은 감각을 교정한다." — Arche
+
+- **N ≥ 3 run** before calling anything a result. Single runs are smoke
+  tests, not conclusions; the A/B v2 experiment flipped a 27-prompt
+  subjective winner between runs (A 13-7 → 11 vs 10), and a single
+  run would have shipped a wrong story.
+- **Three metrics, one table.** Always report accuracy, subjective
+  quality (judge or human), and **tokens in+out per prompt** together.
+  Narratives that omit cost or variance are not evidence.
+- **Record prompt bytes.** The instrumented anthropic adapter already
+  logs `system_prompt` / `user_prompt` / `raw_response_text` into the
+  trace. Keep that on for any run whose conclusion might influence
+  language design.
+
 ## When you're done
 
 Tell hyun06000: "benchmark ran on N models, snapshots committed,

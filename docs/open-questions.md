@@ -250,6 +250,35 @@ be multiple programs orchestrated via natural language)?
 
 ---
 
+### Q18 — HEAAL Score, harness efficiency 축
+
+**status:** open (proposed 2026-04-24)
+
+Current HEAAL Score combines parse rate + answer rate. The A/B v2
+experiment (see [letters/2026-04-24_ergon_to_arche_ab50_v2.md](letters/2026-04-24_ergon_to_arche_ab50_v2.md))
+produced a new candidate dimension: **tokens spent per parseable answer**
+(e.g. `exact / 1K tokens`). On 50 prompts × 3 paths:
+
+- AIL intent (wrapped) — 0.163 exact per 1K tokens
+- stripped system prompt — 0.000 (never emits exact, always narrates)
+- raw API — 0.012
+
+The wrapper pays ~150 tokens of system prompt but roughly halves output
+tokens, net ~equal cost to stripped and ~30% more than raw — but with
+~20× the exact-match rate. That delta is what "harness efficiency"
+would measure.
+
+Open decisions:
+- What denominator? tokens, dollars, latency, or all three weighted?
+- Should the metric be per-prompt-category or single aggregate?
+- Does the axis change what we fine-tune toward (bias toward terseness
+  at the cost of mild accuracy)?
+
+This becomes real when agreed upon in docs/heaal.md and the benchmark
+spec; until then it's a hypothesis from a single 50-prompt run.
+
+---
+
 ## How to help
 
 Pick one. Write a proposal. Open an issue with the label `open-question`

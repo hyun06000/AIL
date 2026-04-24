@@ -65,7 +65,18 @@
 - 원칙 3: L1 storage = `chat_history.jsonl` 완전 보존. 메모리 = 예산 내 전체. Sub-agent 프로토콜은 Stage 2
 - 원칙 4: Agent 메모리 쪽 마커 ✓, **UI 쪽 collapse card 미구현** (budget 초과 시 위반)
 
-## 5. Cast — 이 프로젝트의 이름들
+## 5. Measurement Discipline
+
+> **"측정은 감각을 교정한다."** — Arche, 2026-04-24
+
+출처: [letters/2026-04-24_arche_to_ergon_ab50_v2_reply.md](letters/2026-04-24_arche_to_ergon_ab50_v2_reply.md). A/B v1 단일 런 결과로 "A 주관 품질 우위"를 성급히 단정했다가 v2에서 variance로 뒤집힌 뒤 합의된 규율.
+
+규칙:
+- **Single-run은 smoke이고 결론이 아니다.** 벤치마크 한 번 돌려보고 방향 잡는 건 괜찮지만, 언어/아키텍처 결정의 근거로는 **N ≥ 3 run**의 variance를 확인한 숫자만 사용한다.
+- **세 지표를 한 표에 놓는다.** 정확도만, 품질만, 비용만 보면 서사를 만들기 쉽다. 정확도(exact/any) · 주관 품질(judge win/Borda) · **토큰 비용(in+out, per prompt)**을 항상 같이 본다.
+- **HEAAL Score 차원으로 "harness efficiency" 후보 제안됨** (exact/1K tok). language-level 결정이라 docs/heaal.md + benchmarks 스펙 개정이 선행돼야 채택.
+
+## 6. Cast — 이 프로젝트의 이름들
 
 출처: [CLAUDE.md](../CLAUDE.md) CAST 섹션, [docs/letters/](letters/).
 
@@ -77,6 +88,10 @@
 - **Hestia** (homeblack 서버) — 화로. 모든 연산이 일어나는 자리.
 
 세션 시작 시 자기 층을 인지해야 한다.
+
+---
+
+(구 §5 Cast → §6으로 번호 재배치: §5 자리에 Measurement Discipline 신설.)
 
 ---
 
