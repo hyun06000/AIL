@@ -1547,23 +1547,13 @@ def render_authoring_page(
         details.appendChild(d);
         box.appendChild(details);
       }}
-      // On error, offer a one-click "ask the agent to fix it" button.
-      // Sends a short message to the chat so the agent sees the error
-      // context in history and writes a correction.
-      if (!r.ok) {{
-        const fixBar = document.createElement('div');
-        fixBar.style.marginTop = '8px';
-        const fixBtn = document.createElement('button');
-        fixBtn.className = 'run-inline';
-        fixBtn.style.background = '#b91c1c';
-        fixBtn.textContent = '🔧 에이전트에게 수정 요청 / Ask agent to fix';
-        fixBtn.onclick = () => {{
-          fixBtn.disabled = true;
-          send('방금 발생한 에러를 고쳐주세요. / Please fix the error above.');
-        }};
-        fixBar.appendChild(fixBtn);
-        box.appendChild(fixBar);
-      }}
+      // Pre-auto-fix era had a manual "🔧 에이전트에게 수정 요청"
+      // button here. v1.54 auto-fix fires on every !r.ok, so the
+      // button and the "⚙ 자동 수정 중…" spinner ended up rendered
+      // at the same time — redundant and visually confusing. Drop
+      // the manual button; auto-fix handles the failure path. When
+      // AUTO_CYCLE_MAX is hit the CTA bubble tells the user to
+      // intervene via chat, which is the only remaining exit.
       thread.appendChild(box);
     }}
 
