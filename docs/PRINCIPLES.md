@@ -66,6 +66,23 @@
 - 원칙 3: L1 storage = `chat_history.jsonl` 완전 보존. 메모리 = 예산 내 전체. Sub-agent 프로토콜은 Stage 2
 - 원칙 4: Agent 메모리 쪽 마커 ✓, **UI 쪽 collapse card 미구현** (budget 초과 시 위반)
 
+## 8. 에이전트는 프로젝트 디렉토리를 작업실처럼 쓴다 (user, 2026-04-24 night)
+
+> **"에이전트는 아티펙트를 계속 만들어내도 좋다는 명세 하나 있었으면 좋겠음. 지금 에이전트들이 너무 프로젝트 디렉토리를 소극적으로 쓰는 느낌 나중에는 그림도 그리고 막 어 막 그래야겠지."** — hyun06000
+
+`.ail` + `view.html` 둘만 쓰는 소극적 agent가 default인 상황을 역전. 프로젝트 디렉토리는 agent의 **작업실**이고, run의 중간 산출물·사람-가독 리포트·SVG 다이어그램·반복 프롬프트·데이터 덤프는 모두 남길 가치가 있다. 프로젝트가 오래될수록 agent가 만든 artifact의 결이 풍부해져야 한다.
+
+**실현 (v1.58.4):**
+- `_ALLOWED_EXTENSIONS` 확장: code(`.py .js .ts .sh`), data(`.json .jsonl .yaml .toml .csv .tsv .xml`), prose(`.md .txt .rst`), UI(`.html .css .svg`), templates(`.prompt .tmpl .template`), plus `.ail` (기본).
+- 서브디렉토리 허용 (`./data/x.csv`, `./prompts/y.prompt`).
+- Path-traversal (`..`), 화이트리스트 외 확장자 (`.exe`, `.png`, `.bin`) 여전히 거부.
+- 바이너리(이미지 등)는 source format으로 (SVG → PNG 변환은 사용자가 별도로).
+- Authoring prompt에 "프로젝트 디렉토리는 작업실" 섹션. Spec-first 단계의 "생성할 도구" 목록에 artifact 전부 포함.
+
+**가드레일 유지:**
+- 관련 없는 파일 덮어쓰기 금지 (§6 — 각 `.ail`은 도구).
+- 모든 artifact 생성은 채팅 응답에 이유 명시 (silent write 금지).
+
 ## 7. 새 에이전트는 명세 승인을 먼저 받는다 (user, 2026-04-24 late evening)
 
 > **"사용자가 에이전트를 요구할 때는 자세하고 명확한 에이전트 명세를 먼저 승인받고 에이전트를 빌드하는 것으로 수정. 사용자 입장에서는 짧고 간략한 설계에 의존한 믿음으로 기다리는 시간을 버텨야 함. 상세하고 명확한 설명은 에이전트 오류도 막아줄 것으로 보임. 태스크 순서 지향적보다는 어떤 도구를 생성하게 하고 어떤 목적을 가지게 할 것이며 어떤 행동 플랜을 제시할지 설명. 특히 에이전트가 하위 에이전트를 생성할 수 있다고 알려주고 허용하는 부분까지 추가."**

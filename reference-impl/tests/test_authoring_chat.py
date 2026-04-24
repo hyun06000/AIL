@@ -146,11 +146,34 @@ def test_write_file_rejects_absolute(tmp_path):
 
 
 def test_write_file_rejects_disallowed_extension(tmp_path):
+    """v1.58.4 expanded the whitelist to cover agent workshop artifacts
+    (code, data, docs, templates). Genuinely unwanted extensions —
+    executables, archives — must still be rejected."""
     proj = Project.init(tmp_path / "p")
     chat = AuthoringChat(proj, adapter=_ScriptedChatAdapter([]))
-    ok, detail = chat._write_file("malware.sh", "rm -rf /")
-    assert not ok
-    assert "extension" in detail
+    for path in ("malware.exe", "archive.tar.gz", "data.bin", "photo.png"):
+        ok, detail = chat._write_file(path, "irrelevant")
+        assert not ok, f"{path} should be rejected"
+        assert "extension" in detail
+
+
+def test_write_file_accepts_expanded_artifact_extensions(tmp_path):
+    """Agents should freely produce the artifact types we whitelist
+    (PRINCIPLES §8, user request 2026-04-24): data, prose, templates,
+    SVG, etc., not just .ail + .html + .md."""
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, adapter=_ScriptedChatAdapter([]))
+    for path, content in [
+        ("report.md", "# Summary"),
+        ("raw.json", '{"x": 1}'),
+        ("data.csv", "a,b\n1,2"),
+        ("config.yaml", "key: value"),
+        ("dashboard.svg", "<svg/>"),
+        ("prompts/classify.prompt", "You are..."),
+        ("notes.txt", "scratch"),
+    ]:
+        ok, detail = chat._write_file(path, content)
+        assert ok, f"{path} should be accepted: {detail}"
 
 
 def test_write_file_rejects_oversize(tmp_path):

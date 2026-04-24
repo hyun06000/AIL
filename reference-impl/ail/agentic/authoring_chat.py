@@ -35,7 +35,24 @@ from typing import Any, Optional
 from ..runtime.model import ModelAdapter
 
 
-_ALLOWED_EXTENSIONS = {".md", ".ail", ".html", ".json", ".txt"}
+# Artifact extensions the agent can freely create in the project root.
+# hyun06000 2026-04-24: "에이전트는 아티펙트를 계속 만들어내도 좋다.
+# 지금 에이전트들이 너무 프로젝트 디렉토리를 소극적으로 씀. 나중에는
+# 그림도 그리고 막 어 막 그래야겠지." The project directory is the
+# agent's workshop, not a minimum viable sandbox.
+_ALLOWED_EXTENSIONS = {
+    # Code + program logic
+    ".ail", ".py", ".js", ".ts", ".sh",
+    # Web / UI
+    ".html", ".css", ".svg",
+    # Data
+    ".json", ".jsonl", ".yaml", ".yml", ".toml", ".csv", ".tsv", ".xml",
+    # Docs / prose
+    ".md", ".txt", ".rst",
+    # Prompts / templates the agent iterates on (also useful for
+    # multi-step pipelines where a prompt lives beside code)
+    ".prompt", ".tmpl", ".template",
+}
 _MAX_FILE_BYTES = 64 * 1024  # 64 KB per file write
 # History inclusion policy (see docs/letters/2026-04-24_ergon_to_arche_ab50.md
 # and the "UI ≤ agent memory" principle).
@@ -225,6 +242,28 @@ The concrete value the user will see when it worked — a URL, a non-empty file,
 - The chat history contains a `[Run result — ERROR]` and the current turn is a fix for it (auto-fix path)
 
 **Why this rule wins over "Do the work. Stop asking":** the user explicitly directed us to this flow. They said: "사용자 입장에서는 짧고 간략한 설계에 의존한 믿음으로 기다리는 시간을 버텨야 함. 상세하고 명확한 설명은 에이전트 오류도 막아줄 것으로 보임." Spec-first is how "do the work" looks for turn 1 of a new agent.
+
+=== THE PROJECT DIRECTORY IS YOUR WORKSHOP — USE IT GENEROUSLY ===
+
+hyun06000 (user): "에이전트는 아티펙트를 계속 만들어내도 좋다. 지금 에이전트들이 너무 프로젝트 디렉토리를 소극적으로 씀. 나중에는 그림도 그리고 막 어 막 그래야겠지."
+
+**Don't be shy about creating files.** If a run yields structured data the user might want to open, save it as its own file. If you iterate on a prompt, keep the current version in a `.prompt` file. If you produce a one-page report, save it as `.md`. If the pipeline has intermediate steps whose outputs are useful, persist each step. Every run is a chance for the agent's workshop to get richer.
+
+**Artifact examples the project directory welcomes:**
+- `report_<date>.md` — a human-readable summary of a run
+- `raw_<date>.json` — the unprocessed data the run was based on
+- `dashboard.svg` — an SVG the agent generated from data (just write the SVG source as text)
+- `notes.md` — running scratchpad the agent maintains across turns
+- `prompts/classify_v2.prompt` — the current prompt the agent is iterating on
+- `config.yaml` — parameters that outlast any single run
+
+**Allowed file extensions** (whitelist): `.ail .py .js .ts .sh .html .css .svg .json .jsonl .yaml .yml .toml .csv .tsv .xml .md .txt .rst .prompt .tmpl .template`. Subdirectories are fine: `./data/x.csv`, `./prompts/y.prompt`. Path-traversal (`..`) and extensions outside the list are rejected; if you need binary formats (PNG, PDF), write source formats that render to them (SVG → PNG via a one-step external conversion the user can trigger).
+
+**Two guardrails still apply:**
+1. Don't overwrite unrelated files. One program per file (PRINCIPLES §6 — each `.ail` is a tool). When adding a new artifact, pick a new name.
+2. Every artifact should have a reason visible in the chat reply: "saved the raw data as `raw_2026-04-24.json` so we can re-analyze without re-fetching." Silent file creation is noise.
+
+**The spec-first flow is unchanged** — when drafting the spec, enumerate the artifacts the agent will create in the "생성할 도구 / Tools" section. The user approves the full artifact plan upfront.
 
 === TWO CRITICAL PARSE ERRORS — AVOID THESE EVERY TIME ===
 
