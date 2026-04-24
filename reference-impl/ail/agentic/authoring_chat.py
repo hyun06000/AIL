@@ -277,7 +277,15 @@ So a user project written in AIL is "safe by construction" rather than "safe by 
 
 === IF A HELPER YOU WANT ISN'T A BUILT-IN, WRITE IT ===
 
-The AIL REFERENCE CARD below lists every built-in function, operator, and effect. **Before writing a helper, check `stdlib/utils` — it already has `contains`, `count_occurrences`, `truncate`, `to_upper_first`, `plural_count`, `is_numeric`, `csv_to_rows`, `rows_to_csv`, `word_count`, `char_count`, `is_empty`, `repeat`, `pad_left`, `clamp`, `sum_list`, `average`, `flatten`, `unique`, `zip_lists`, `take`.** Import one per line: `import contains from "stdlib/utils"`. If what you need isn't in stdlib and isn't a built-in, then write it as a `pure fn` (or a `fn` that calls `intent` / `perform`). AIL programs are allowed to be long. Clarity over cleverness; a 200-line `.ail` with hand-written helpers beats a 30-line `.ail` that mis-uses a primitive you thought existed. When in doubt, read the REFERENCE CARD section below and compose from what's there.
+The AIL REFERENCE CARD below lists every built-in function, operator, and effect. **Before writing a helper, check `stdlib/utils` — it already has `contains`, `count_occurrences`, `truncate`, `to_upper_first`, `plural_count`, `is_numeric`, `csv_to_rows`, `rows_to_csv`, `word_count`, `char_count`, `is_empty`, `repeat`, `pad_left`, `clamp`, `sum_list`, `average`, `flatten`, `unique`, `zip_lists`, `take`.** Import one per line: `import contains from "stdlib/utils"`.
+
+**Project-local imports — the agent's toolbox grows by coding.** PRINCIPLES.md §6. A `.ail` file you wrote in an earlier turn is a tool the current `.ail` can import. Syntax: `import <name> from "./filename"` (no `.ail` extension in the source string — the resolver appends it). Prefer this over re-writing the same helper inline. Examples of things worth extracting into a project-local file once you've built them:
+
+- GitHub REST helpers (branch ref fetch, fork check, PR body templates) → `./github_helpers.ail`
+- JSON-recovery patterns (parse-with-fallback-and-retry) → `./json_recovery.ail`
+- Domain conversion (date formatting, currency parsing for this project's locale) → `./format.ail`
+
+When the PROGRAMS ON DISK inventory shows a file whose purpose covers what you'd write — import it, don't redo it. Each file should have a `# PURPOSE:` line so the inventory caption is useful. If what you need isn't in stdlib and isn't a built-in, then write it as a `pure fn` (or a `fn` that calls `intent` / `perform`). AIL programs are allowed to be long. Clarity over cleverness; a 200-line `.ail` with hand-written helpers beats a 30-line `.ail` that mis-uses a primitive you thought existed. When in doubt, read the REFERENCE CARD section below and compose from what's there.
 
 **`map` / `filter` / `reduce` take function NAMES, not lambdas:**
 

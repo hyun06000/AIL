@@ -7,7 +7,7 @@ from .parser import parse
 from .runtime import Executor, ConfidentValue, MockAdapter
 from .runtime.model import ModelAdapter
 
-__version__ = "1.56.0"
+__version__ = "1.57.0"
 
 
 def compile_source(source: str):
@@ -127,10 +127,24 @@ def run(
         resolved_inputs.setdefault(first_param_name, input)
 
     adapter = adapter or _default_adapter()
+    # When source_or_path was an actual file, its parent directory is
+    # the natural project_root for resolving `import X from "./y"`.
+    # Programs the agent wrote earlier in this project become callable
+    # from the current file. PRINCIPLES.md §6 — the agent's toolbox
+    # grows as it codes.
+    project_root = None
+    if looks_like_path:
+        try:
+            p = Path(source_or_path)
+            if p.exists() and p.is_file():
+                project_root = p.parent.resolve()
+        except (OSError, ValueError):
+            pass
     executor = Executor(
         program, adapter, ask_human=ask_human,
         metric_fn=metric_fn, approve_review=approve_review,
         calibrator=calibrator, log_callback=log_callback,
+        project_root=project_root,
     )
     result = executor.run_entry(resolved_inputs)
     return result, executor.trace

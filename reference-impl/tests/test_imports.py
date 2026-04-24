@@ -56,9 +56,37 @@ def test_unknown_stdlib_module_raises():
         resolve("stdlib/nonexistent_module")
 
 
-def test_relative_import_rejected_in_mvp():
-    with pytest.raises(ImportResolutionError, match="relative imports"):
+def test_relative_import_requires_base_directory():
+    """Without importing_from, a `./` import has no base to resolve
+    against. This is distinct from the v1.56 change where relative
+    imports ARE supported when the executor passes project_root."""
+    with pytest.raises(ImportResolutionError, match="no base directory"):
         resolve("./my_helpers")
+
+
+def test_relative_import_resolves_project_local_ail_file(tmp_path):
+    """PRINCIPLES.md §6 (user, 2026-04-24): "에이전트가 스스로 필요한
+    도구를 코딩하고 .ail 파일로 저장해서 그걸 import할 수 있게 하면
+    좋을듯." This test is the keystone — each program the agent
+    writes becomes a reusable tool for the next program."""
+    (tmp_path / "greeter.ail").write_text(
+        'pure fn hello(name: Text) -> Text {\n'
+        '    return join(["Hello, ", name, "!"], "")\n'
+        '}\n',
+        encoding="utf-8",
+    )
+    prog = resolve("./greeter", importing_from=tmp_path)
+    fn_names = [
+        d.name for d in prog.declarations if hasattr(d, "name")
+    ]
+    assert "hello" in fn_names
+
+
+def test_relative_import_confined_to_project_root(tmp_path):
+    """`../../etc/passwd` type escapes are rejected."""
+    (tmp_path / "proj").mkdir()
+    with pytest.raises(ImportResolutionError, match="escapes"):
+        resolve("../../outside", importing_from=tmp_path / "proj")
 
 
 def test_url_import_rejected():

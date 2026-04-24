@@ -38,6 +38,7 @@ from .provenance import (
 from .parallel import plan_groups
 from .calibration import Calibrator, default_calibrator
 from ..stdlib import resolve as resolve_import, ImportResolutionError
+from pathlib import Path
 
 
 @dataclass
@@ -73,7 +74,8 @@ class Executor:
                  ask_human=None, metric_fn=None, approve_review=None,
                  calibrator: Optional[Calibrator] = None,
                  _ail_run_depth: int = 0,
-                 log_callback=None):
+                 log_callback=None,
+                 project_root: Optional[Path] = None):
         """
         Parameters:
           program       — compiled AIL program
@@ -102,6 +104,7 @@ class Executor:
         self.calibrator = calibrator if calibrator is not None else default_calibrator()
         self._ail_run_depth = _ail_run_depth
         self.log_callback = log_callback
+        self.project_root = project_root
 
         self.intents: dict[str, IntentDecl] = {}
         self.contexts: dict[str, ContextDecl] = {}
@@ -140,7 +143,9 @@ class Executor:
                     )
                 _visiting.add(d.source)
                 try:
-                    imported_program = resolve_import(d.source)
+                    imported_program = resolve_import(
+                        d.source, importing_from=self.project_root,
+                    )
                 except ImportResolutionError:
                     raise
                 self.imported_sources.append(d.source)

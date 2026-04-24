@@ -65,10 +65,45 @@ def resolve(source: str, importing_from: Path | None = None) -> "Program":
         return program
 
     if source.startswith("./") or source.startswith("../"):
-        raise ImportResolutionError(
-            "relative imports are not supported in MVP; "
-            "inline the referenced intents for now."
-        )
+        # Project-local import. `importing_from` is the directory of
+        # the .ail file that issued this import (passed down from the
+        # executor's constructor). Each program the authoring agent
+        # writes becomes a reusable tool as long as other programs in
+        # the project can import from it.
+        # PRINCIPLES.md §6 (2026-04-24, user): "코딩을 할수록
+        # 에이전트가 사용할 수 있는 도구의 양이 늘어나야 함."
+        if importing_from is None:
+            raise ImportResolutionError(
+                "relative import '" + source + "' has no base directory "
+                "(executor received no project_root). Pass project_root "
+                "to run() or Executor so './x' can resolve."
+            )
+        rel = source[2:] if source.startswith("./") else source
+        target = (importing_from / rel).resolve()
+        if target.suffix != ".ail":
+            target = target.with_suffix(".ail")
+        # Confine relative imports to the project tree so `../../../etc`
+        # can't escape into the host filesystem.
+        base = importing_from.resolve()
+        try:
+            target.relative_to(base)
+        except ValueError:
+            raise ImportResolutionError(
+                f"relative import '{source}' escapes the project root "
+                f"({base}); only intra-project paths are allowed."
+            )
+        if not target.is_file():
+            raise ImportResolutionError(
+                f"relative import '{source}' resolves to {target}, "
+                "but that file does not exist."
+            )
+        try:
+            program = parse(target.read_text(encoding="utf-8"))
+        except Exception as e:
+            raise ImportResolutionError(
+                f"failed to parse {target}: {e}"
+            ) from e
+        return program
 
     if "://" in source:
         raise ImportResolutionError(
