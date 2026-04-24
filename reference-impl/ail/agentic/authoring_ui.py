@@ -1520,8 +1520,15 @@ def render_authoring_page(
     }}
 
     function looksLikeMarkdown(text) {{
-      // Heuristic: contains at least one markdown marker
-      return /^#{{1,3}}\\s|^\\s*[-*]\\s|\\*\\*|\\[.+\\]\\(|^---/m.test(text);
+      // Heuristic: contains at least one markdown marker.
+      // Widened v1.58.10 — field test showed replies dominated by
+      // fenced code or inline backtick code rendered raw because
+      // the old regex didn't catch ``` or `x`.
+      if (!text) return false;
+      if (/^```/m.test(text)) return true;
+      if (/^#{{1,6}}\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|\\*\\*|\\[.+\\]\\(|^---|^\\|/m.test(text)) return true;
+      if (/`[^`\\n]+`/.test(text)) return true;
+      return false;
     }}
 
     function addRunResult(r) {{
