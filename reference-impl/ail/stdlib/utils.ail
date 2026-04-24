@@ -41,7 +41,7 @@ pure fn clamp(value: Number, lo: Number, hi: Number) -> Number {
     return value
 }
 
-pure fn sum_list(numbers: Number) -> Number {
+pure fn sum_list(numbers: [Number]) -> Number {
     total = 0
     for n in numbers {
         total = total + n
@@ -49,12 +49,12 @@ pure fn sum_list(numbers: Number) -> Number {
     return total
 }
 
-pure fn average(numbers: Number) -> Number {
+pure fn average(numbers: [Number]) -> Number {
     if length(numbers) == 0 { return 0 }
     return sum_list(numbers) / length(numbers)
 }
 
-pure fn flatten(nested: Text) -> Text {
+pure fn flatten(nested: [[Any]]) -> [Any] {
     result = []
     for sublist in nested {
         for item in sublist {
@@ -64,7 +64,7 @@ pure fn flatten(nested: Text) -> Text {
     return result
 }
 
-pure fn unique(items: Text) -> Text {
+pure fn unique(items: [Any]) -> [Any] {
     seen = []
     result = []
     for item in items {
@@ -76,21 +76,103 @@ pure fn unique(items: Text) -> Text {
     return result
 }
 
-pure fn zip_lists(a: Text, b: Text) -> Text {
+pure fn zip_lists(a: [Any], b: [Any]) -> [[Any]] {
     result = []
     limit = length(a)
     if length(b) < limit { limit = length(b) }
     for i in range(0, limit) {
-        result = append(result, [slice(a, i, i + 1), slice(b, i, i + 1)])
+        result = append(result, [get(a, i), get(b, i)])
     }
     return result
 }
 
-pure fn take(items: Text, n: Number) -> Text {
+pure fn take(items: [Any], n: Number) -> [Any] {
     if n >= length(items) { return items }
     result = []
     for i in range(0, n) {
-        result = append(result, slice(items, i, i + 1))
+        result = append(result, get(items, i))
     }
     return result
+}
+
+// --- Step B additions (v1.52): helpers the authoring agent keeps
+// re-inventing inline. Every program that counts sub-strings, checks
+// containment, clips long text, or handles singular/plural grammar
+// used to hand-roll these. Now they're one import away.
+
+pure fn contains(text: Text, sub: Text) -> Boolean {
+    // Returns true iff `sub` appears anywhere in `text`.
+    // Implemented via split length — exact because split(t, s) always
+    // returns length(count + 1), so length > 1 means at least one match.
+    // When sub == "" split returns [t], giving length 1; guard it.
+    if length(sub) == 0 { return false }
+    return length(split(text, sub)) > 1
+}
+
+pure fn count_occurrences(text: Text, sub: Text) -> Number {
+    // Counts non-overlapping occurrences of `sub` in `text`.
+    // split puts N+1 pieces between N matches; `sub == ""` is
+    // meaningless so we return 0 for that case.
+    if length(sub) == 0 { return 0 }
+    return length(split(text, sub)) - 1
+}
+
+pure fn truncate(text: Text, max: Number) -> Text {
+    // Returns the first `max` characters of text plus an ellipsis if
+    // clipped. Under the limit returns text unchanged. `max` below 1
+    // returns an empty string.
+    if max < 1 { return "" }
+    if length(text) <= max { return text }
+    return join([slice(text, 0, max), "…"], "")
+}
+
+pure fn to_upper_first(text: Text) -> Text {
+    // Capitalize the first character; leave the rest untouched.
+    // Korean / non-alphabetic characters are returned as-is by `upper`.
+    if length(text) == 0 { return text }
+    return join([upper(slice(text, 0, 1)), slice(text, 1, length(text))], "")
+}
+
+pure fn plural_count(n: Number, singular: Text, plural: Text) -> Text {
+    // Render "1 entry" / "3 entries" — the tiny gluework every UI
+    // needs and every program used to inline.
+    if n == 1 { return join([to_text(n), " ", singular], "") }
+    return join([to_text(n), " ", plural], "")
+}
+
+pure fn is_numeric(text: Text) -> Boolean {
+    // True iff the trimmed text parses as a number.
+    // Uses to_number which returns a Result; unwrap_or gives a sentinel
+    // that tells us whether the parse succeeded.
+    trimmed = trim(text)
+    if length(trimmed) == 0 { return false }
+    // "not-a-number" sentinel chosen so any real numeric input differs.
+    n = unwrap_or(to_number(trimmed), -999999999.5)
+    if n == -999999999.5 {
+        // Only reject if the input didn't literally say so.
+        return trimmed == "-999999999.5"
+    }
+    return true
+}
+
+pure fn csv_to_rows(csv: Text) -> [[Text]] {
+    // Naive RFC 4180 subset: newline-separated rows, comma-separated
+    // cells. Does NOT handle quoted commas or embedded newlines —
+    // real CSV needs a parser; this is for simple agent-generated data.
+    rows = []
+    for line in split(csv, "\n") {
+        if length(trim(line)) > 0 {
+            rows = append(rows, split(line, ","))
+        }
+    }
+    return rows
+}
+
+pure fn rows_to_csv(rows: [[Text]]) -> Text {
+    // Inverse of csv_to_rows. Same caveat about quoting.
+    lines = []
+    for row in rows {
+        lines = append(lines, join(row, ","))
+    }
+    return join(lines, "\n")
 }

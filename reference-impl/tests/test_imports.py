@@ -102,6 +102,48 @@ def test_importing_stdlib_makes_intents_callable():
     assert "summarize" in adapter.calls
 
 
+def test_stdlib_utils_new_helpers_execute_correctly():
+    """v1.52 additions to stdlib/utils.ail. These are the fns authoring
+    agents used to reinvent inline; each end-to-end call here is a
+    regression guard against the bug class of "pure fn compiles but
+    runtime shape is wrong" that hit the pre-fix sum_list/flatten."""
+    from ail import compile_source, MockAdapter
+    from ail.runtime import Executor
+
+    src = """
+    import contains from "stdlib/utils"
+    import count_occurrences from "stdlib/utils"
+    import truncate from "stdlib/utils"
+    import to_upper_first from "stdlib/utils"
+    import plural_count from "stdlib/utils"
+    import is_numeric from "stdlib/utils"
+    import csv_to_rows from "stdlib/utils"
+    import rows_to_csv from "stdlib/utils"
+
+    entry main(input: Text) {
+        c = contains("hello world", "wor")
+        n = count_occurrences("a,b,c,d", ",")
+        t = truncate("abcdefghij", 4)
+        u = to_upper_first("korean")
+        p = plural_count(3, "item", "items")
+        nm = is_numeric("  42.5 ")
+        csv = rows_to_csv(csv_to_rows("a,b\\nc,d"))
+        return join([to_text(c), to_text(n), t, u, p, to_text(nm), csv], "|")
+    }
+    """
+    program = compile_source(src)
+    executor = Executor(program, MockAdapter())
+    result = executor.run_entry({"input": ""})
+    parts = str(result.value).split("|")
+    assert parts[0] == "true"       # contains
+    assert parts[1] == "3"          # count_occurrences
+    assert parts[2] == "abcd…"      # truncate with ellipsis
+    assert parts[3] == "Korean"     # to_upper_first
+    assert parts[4] == "3 items"    # plural_count (n != 1)
+    assert parts[5] == "true"       # is_numeric
+    assert parts[6] == "a,b\nc,d"   # csv round-trip
+
+
 def test_importing_language_brings_in_all_intents():
     """Importing any symbol from a module brings the whole module's
     declarations into scope in the MVP (whole-module import).

@@ -360,6 +360,15 @@ fn average(numbers: [Number]) -> Number
 fn flatten(nested: [[T]]) -> [T]
 fn unique(items: [T]) -> [T]
 fn take(items: [T], n: Number) -> [T]
+fn zip_lists(a: [T], b: [U]) -> [[Any]]
+fn contains(text: Text, sub: Text) -> Boolean
+fn count_occurrences(text: Text, sub: Text) -> Number
+fn truncate(text: Text, max: Number) -> Text      // clips + adds …
+fn to_upper_first(text: Text) -> Text
+fn plural_count(n: Number, singular: Text, plural: Text) -> Text
+fn is_numeric(text: Text) -> Boolean
+fn csv_to_rows(csv: Text) -> [[Text]]             // naive, no quoting
+fn rows_to_csv(rows: [[Text]]) -> Text
 ```
 
 ## RESERVED KEYWORDS
