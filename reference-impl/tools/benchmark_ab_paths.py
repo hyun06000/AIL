@@ -48,6 +48,14 @@ def call_wrapped(adapter: AnthropicAdapter, prompt: dict) -> ModelResponse:
     )
 
 
+def _usage(resp) -> dict:
+    u = getattr(resp, "usage", None)
+    return {
+        "input_tokens": getattr(u, "input_tokens", None) if u else None,
+        "output_tokens": getattr(u, "output_tokens", None) if u else None,
+    }
+
+
 def call_stripped(adapter: AnthropicAdapter, prompt: dict) -> ModelResponse:
     import anthropic
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
@@ -62,7 +70,8 @@ def call_stripped(adapter: AnthropicAdapter, prompt: dict) -> ModelResponse:
     ).strip()
     return ModelResponse(
         value=text, confidence=1.0, model_id=resp.model,
-        raw={"system_prompt": prompt["text"], "user_prompt": "(proceed)"},
+        raw={"system_prompt": prompt["text"], "user_prompt": "(proceed)",
+             **_usage(resp)},
     )
 
 
@@ -79,7 +88,7 @@ def call_direct(adapter: AnthropicAdapter, prompt: dict) -> ModelResponse:
     ).strip()
     return ModelResponse(
         value=text, confidence=1.0, model_id=resp.model,
-        raw={"user_prompt": prompt["text"]},
+        raw={"user_prompt": prompt["text"], **_usage(resp)},
     )
 
 
@@ -137,6 +146,7 @@ def main():
                     value = resp.value if isinstance(resp.value, str) else json.dumps(resp.value, ensure_ascii=False)
                     score = score_expected(resp.value, prompt.get("expected"))
                     print(f"  {path_name:12s} {dt:4.1f}s  {score['kind']:13s}  {value[:80]}")
+                    raw = resp.raw or {}
                     f.write(json.dumps({
                         "prompt_id": prompt["id"],
                         "category": prompt["category"],
@@ -148,6 +158,8 @@ def main():
                         "latency_s": round(dt, 2),
                         "model": resp.model_id,
                         "score": score,
+                        "input_tokens": raw.get("input_tokens"),
+                        "output_tokens": raw.get("output_tokens"),
                     }, ensure_ascii=False) + "\n")
                     f.flush()
                 except Exception as e:
