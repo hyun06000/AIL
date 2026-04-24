@@ -66,6 +66,24 @@
 - 원칙 3: L1 storage = `chat_history.jsonl` 완전 보존. 메모리 = 예산 내 전체. Sub-agent 프로토콜은 Stage 2
 - 원칙 4: Agent 메모리 쪽 마커 ✓, **UI 쪽 collapse card 미구현** (budget 초과 시 위반)
 
+## 5-quater. 필드프로젝트 직접 수정 금지 (user, 2026-04-24)
+
+> **"필드프로젝트에 있는 AIL을 고치는 건 의미가 없어. 에이전트가 스스로 진화하도록 유도하는 게 핵심. 필드프로젝트는 사라지는 일시적인 것이기 때문."** — hyun06000
+
+필드-테스트 디렉토리(`/tmp/diary-bot/*`, hyun06000이 field test로 돌리는 임의 경로)의 `.ail` 파일을 Ergon이 직접 편집하지 않는다. 그 파일은 세션과 함께 휘발되며, 고쳐봐야 다음 테스트에선 존재조차 안 한다. 핵심 성과는 **다음 agent가 같은 문제를 만났을 때 스스로 풀 수 있는가** — 즉 runtime / grammar / stdlib / authoring prompt 층의 영구 개선.
+
+**Ergon이 해야 할 것:**
+- field test에서 관찰된 실패 패턴을 **런타임 진단(`_diagnose_from_trace`)**, **stdlib fn(재사용 가능한 pure fn)**, **authoring prompt(agent가 처음부터 다르게 쓰게)** 중 하나로 변환
+- 필요하면 새 문법 / primitive 추가 (Rule 2 벤치마크 정당성 필요)
+
+**Ergon이 하지 말아야 할 것:**
+- 필드프로젝트 `.ail` 직접 편집
+- 필드프로젝트 안 helper 추가 (그 프로젝트에만 쓰이므로 낭비)
+
+**예외:** 사용자가 명시적으로 "이 파일 고쳐줘"라고 하면 1회성 집행. 기본은 금지.
+
+실제 사례 (2026-04-24 저녁): awesome_harness_pr.ail의 JSON 파싱 실패를 `analyze_rules_resilient` 헬퍼로 wrap했던 편집은 **이 원칙 위반**. 올바른 조치였다면 (a) 해당 패턴을 `stdlib/utils.ail`에 `intent_with_json_recovery` 식으로 올리거나 (b) runtime이 intent return type 미스매치를 자동으로 한 번 재시도하는 로직에 이미 있는 재시도 훅을 확장하는 방향.
+
 ## 5-ter. AIL/Python 경계의 정정 — "실패할 수 있는가"로 가른다 (Arche, 2026-04-24 late)
 
 **원래 내가 5-bis에서 L2 Python 정당성을 인정했는데, 그 답을 수정한다.** 큐레이션 에이전트가 JSON 파싱 에러로 "죽은" 것을 보고 철학이 교정됨.
