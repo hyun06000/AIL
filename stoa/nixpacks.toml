@@ -1,0 +1,5 @@
+[phases.install]
+cmds = ["pip install flask>=3.0 ail-interpreter>=1.59.0"]
+
+[start]
+cmd = "ail run server.ail"
