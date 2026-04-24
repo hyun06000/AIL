@@ -364,6 +364,52 @@ def _make_handler(project: Project, serve_only: bool = False):
                 self.wfile.write(body)
                 return
 
+            if self.path in ("/authoring-tree", "/authoring-tree/"):
+                # NERDTree-style file inventory for the side panel.
+                # hyun06000 2026-04-24: "프로젝트 파일구조 트리가
+                # 한눈에 캡션과 함께 보이면 좋겠음."
+                import json as _json
+                from .authoring_chat import (
+                    list_project_programs, extract_purpose,
+                )
+                entries = []
+                programs = list_project_programs(project)
+                for p in programs:
+                    entries.append({
+                        "path": p["name"],
+                        "kind": "ail",
+                        "bytes": p["bytes"],
+                        "caption": p.get("purpose") or "(no # PURPOSE: comment)",
+                        "parses": p.get("parses", True),
+                    })
+                for extra in ("view.html", "INTENT.md", "README.md"):
+                    fp = project.root / extra
+                    if fp.is_file():
+                        try:
+                            content = fp.read_text(encoding="utf-8")
+                        except OSError:
+                            content = ""
+                        caption = {
+                            "view.html": "runtime UI shell",
+                            "INTENT.md": "legacy intent doc",
+                            "README.md": "project readme",
+                        }[extra]
+                        entries.append({
+                            "path": extra,
+                            "kind": "doc" if extra.endswith(".md") else "html",
+                            "bytes": len(content.encode("utf-8")),
+                            "caption": caption,
+                            "parses": True,
+                        })
+                entries.sort(key=lambda e: (e["kind"] != "ail", e["path"]))
+                payload = _json.dumps({"entries": entries}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
             if self.path in ("/authoring-deploy/status",
                              "/authoring-deploy-status"):
                 # Liveness probe + stale cleanup lives in

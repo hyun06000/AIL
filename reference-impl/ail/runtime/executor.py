@@ -434,8 +434,31 @@ class Executor:
         given value's history involved a side-effecting operation.
         Parents are the arg origins — an effect consuming an LLM result
         (via intent) correctly shows `intent` upstream of `effect`.
+
+        hyun06000 field test 2026-04-24: "에이전트 실행 중에 로그가
+        스트리밍되지 않아서 답답함." The hop was that programs needed
+        to sprinkle `perform log(...)` calls for any progress to show
+        up. They don't. We auto-emit a short `→ <effect>` line for
+        every effect call so the run-log panel becomes live without
+        program cooperation. Explicit `perform log` calls still
+        stream as before.
         """
         origin = effect_origin(name, parents_of(args))
+
+        # Auto-emit step marker (skip `log` itself — it already emits,
+        # double-logging would spam).
+        if name != "log" and self.log_callback is not None:
+            try:
+                preview = ""
+                if args:
+                    v = args[0].value
+                    if isinstance(v, str):
+                        preview = " " + (v if len(v) <= 100 else v[:97] + "…")
+                    else:
+                        preview = " " + _truncate(v, 100)
+                self.log_callback(f"→ perform {name}{preview}")
+            except Exception:
+                pass
 
         if name in ("human_ask", "ask_human"):
             question = (args[0].value if args else kwargs.get("question", ConfidentValue("?", 1.0)).value)
@@ -2425,6 +2448,14 @@ class Executor:
         args: list[ConfidentValue],
         kwargs: dict[str, ConfidentValue],
     ) -> ConfidentValue:
+        # Auto-emit an intent-call marker to the live log stream so
+        # the user sees "asking the model" happening rather than a
+        # silent pause. See _builtin_effect for the same pattern.
+        if self.log_callback is not None:
+            try:
+                self.log_callback(f"→ intent {intent.name}")
+            except Exception:
+                pass
         self.trace.record("intent_call", name=intent.name,
                           args=[a.value for a in args])
         self.trace.enter()

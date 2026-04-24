@@ -656,6 +656,61 @@ def test_ui_has_auto_fix_handler_on_failed_run(tmp_path):
     assert "AUTO_FIX_MAX" in html
 
 
+def test_authoring_tree_endpoint_lists_project_files_with_captions(tmp_path):
+    """The NERDTree-style side panel reads from /authoring-tree. Each
+    entry must carry a one-line caption (PURPOSE for .ail, canned
+    descriptors for view.html / INTENT.md / README.md)."""
+    import json as _json
+    proj = Project.init(tmp_path / "tree")
+    (proj.root / "diary.ail").write_text(
+        "# PURPOSE: 날짜별 일기 기록\nentry main() { return 1 }",
+        encoding="utf-8",
+    )
+    (proj.root / "view.html").write_text(
+        "<!doctype html><body>x</body>", encoding="utf-8",
+    )
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/authoring-tree", timeout=2) as r:
+        d = _json.loads(r.read().decode("utf-8"))
+    entries = {e["path"]: e for e in d["entries"]}
+    assert "diary.ail" in entries
+    assert entries["diary.ail"]["caption"] == "날짜별 일기 기록"
+    assert entries["diary.ail"]["kind"] == "ail"
+    assert "view.html" in entries
+    assert entries["view.html"]["kind"] == "html"
+
+
+def test_effects_emit_auto_log_markers_during_run(tmp_path):
+    """hyun06000 2026-04-24: "로그가 스트리밍 안 돼서 답답함." The
+    fix is runtime-level auto-emission of '→ perform X' markers for
+    every effect call, so progress shows up even without explicit
+    `perform log(...)` in the program."""
+    from ail import compile_source, MockAdapter
+    from ail.runtime import Executor
+
+    collected = []
+    src = """
+    entry main(input: Text) {
+        x = perform clock.now()
+        return "ok"
+    }
+    """
+    program = compile_source(src)
+    ex = Executor(program, MockAdapter(),
+                  log_callback=lambda s: collected.append(s))
+    ex.run_entry({"input": ""})
+    assert any("→ perform clock.now" in s for s in collected)
+
+
 def test_admin_stop_endpoint_only_in_serve_mode(tmp_path):
     """The /admin/stop endpoint is exposed only when serve_only=True.
     In edit mode it must return 404 so accidentally POSTing to it from

@@ -58,6 +58,36 @@ def render_authoring_page(
     .page {{ max-width: 720px; margin: 0 auto; padding: 24px;
       display: flex; flex-direction: column;
       height: 100vh; overflow: hidden; }}
+    #file-tree {{
+      position: fixed; top: 0; left: 0; width: 260px; height: 100vh;
+      padding: 16px 12px; border-right: 1px solid var(--border);
+      background: #fafafa; overflow-y: auto; font-size: 12px;
+      box-sizing: border-box; z-index: 100; transition: transform 0.2s;
+    }}
+    #file-tree.collapsed {{ transform: translateX(-252px); }}
+    #file-tree h3 {{ font-size: 12px; font-weight: 600; margin: 0 0 8px;
+      color: var(--muted); letter-spacing: 0.04em;
+      text-transform: uppercase; font-family: inherit; }}
+    #file-tree .ft-item {{ padding: 6px 8px; border-radius: 4px;
+      margin-bottom: 2px; cursor: pointer; }}
+    #file-tree .ft-item:hover {{ background: #e5e7eb; }}
+    #file-tree .ft-name {{ font-family: ui-monospace, Menlo, monospace;
+      font-weight: 500; color: #111; }}
+    #file-tree .ft-bad .ft-name {{ color: #b91c1c; }}
+    #file-tree .ft-caption {{ color: #6b7280; margin-top: 2px;
+      line-height: 1.35; font-size: 11px; }}
+    #file-tree .ft-meta {{ color: #9ca3af; font-size: 10px;
+      margin-top: 1px; font-family: ui-monospace, Menlo, monospace; }}
+    #file-tree-toggle {{ position: fixed; top: 12px; left: 268px;
+      z-index: 101; background: #fff; border: 1px solid var(--border);
+      padding: 4px 8px; border-radius: 4px; cursor: pointer;
+      font-family: inherit; font-size: 11px; color: var(--muted);
+      transition: left 0.2s; }}
+    #file-tree.collapsed + #file-tree-toggle {{ left: 12px; }}
+    @media (max-width: 900px) {{
+      #file-tree {{ transform: translateX(-252px); }}
+      #file-tree.open {{ transform: translateX(0); }}
+    }}
     header {{ margin-bottom: 12px; flex-shrink: 0; }}
     h1 {{ margin: 0; font-size: 18px; letter-spacing: -0.01em; }}
     .sub {{ color: var(--muted); font-size: 13px; margin-top: 2px; }}
@@ -278,6 +308,12 @@ def render_authoring_page(
       </div>
     </header>
 
+    <aside id="file-tree">
+      <h3>📁 프로젝트 / Project files</h3>
+      <div id="file-tree-body"><span style="color:#9ca3af">로딩…</span></div>
+    </aside>
+    <button id="file-tree-toggle" onclick="toggleFileTree()">◀ hide</button>
+
     <div id="deploy-bar" style="display:flex;align-items:center;gap:10px;
          padding:8px 12px;margin-bottom:8px;border:1px solid #e5e7eb;
          border-radius:8px;background:#fff;font-size:13px;"></div>
@@ -347,6 +383,64 @@ def render_authoring_page(
       ? !!programsForNext[0].input_used : true;
     let envRequiredForNext = programsForNext.length > 0
       ? (programsForNext[0].env_required || []) : [];
+
+    // File tree — NERDTree-style side panel, refreshed after every
+    // agent turn so file writes appear immediately.
+    const fileTreeEl = document.getElementById('file-tree');
+    const fileTreeBody = document.getElementById('file-tree-body');
+    const fileTreeToggle = document.getElementById('file-tree-toggle');
+    function toggleFileTree() {{
+      fileTreeEl.classList.toggle('collapsed');
+      fileTreeToggle.textContent =
+        fileTreeEl.classList.contains('collapsed') ? '▶ show' : '◀ hide';
+    }}
+    window.toggleFileTree = toggleFileTree;
+    function kindIcon(kind) {{
+      return kind === 'ail' ? '🧩'
+           : kind === 'html' ? '👁'
+           : kind === 'doc' ? '📄'
+           : '📦';
+    }}
+    async function refreshFileTree() {{
+      try {{
+        const r = await fetch('/authoring-tree');
+        if (!r.ok) return;
+        const d = await r.json();
+        fileTreeBody.innerHTML = '';
+        if (!d.entries || d.entries.length === 0) {{
+          fileTreeBody.innerHTML =
+            '<span style="color:#9ca3af">아직 파일 없음</span>';
+          return;
+        }}
+        for (const e of d.entries) {{
+          const item = document.createElement('div');
+          item.className = 'ft-item' + (e.parses ? '' : ' ft-bad');
+          const name = document.createElement('div');
+          name.className = 'ft-name';
+          name.textContent = kindIcon(e.kind) + ' ' + e.path +
+                             (e.parses ? '' : ' ✗');
+          item.appendChild(name);
+          const cap = document.createElement('div');
+          cap.className = 'ft-caption';
+          cap.textContent = e.caption;
+          item.appendChild(cap);
+          const meta = document.createElement('div');
+          meta.className = 'ft-meta';
+          meta.textContent = e.bytes + ' bytes';
+          item.appendChild(meta);
+          item.addEventListener('click', async () => {{
+            try {{
+              const fr = await fetch(
+                '/authoring-file?path=' + encodeURIComponent(e.path));
+              const fd = await fr.json();
+              alert(e.path + '\\n\\n' + (fd.content || '(empty)').slice(0, 4000));
+            }} catch(err) {{}}
+          }});
+          fileTreeBody.appendChild(item);
+        }}
+      }} catch (e) {{ /* ignore */ }}
+    }}
+    refreshFileTree();
 
     // Token usage (hyun06000 2026-04-24: "토큰 얼마나 쓰는지 알
     // 수 없는 건 단점"). Session total is seeded from storage so
@@ -1322,6 +1416,9 @@ def render_authoring_page(
           appendTokenFooter(thread.lastElementChild, data.input_tokens, data.output_tokens);
           renderTokenWidget();
         }}
+        // Agent turn may have written files — refresh the tree so
+        // the user sees new / updated files immediately.
+        refreshFileTree();
       }} catch (e) {{
         clearInterval(pendingTimer);
         pendingTurn.remove();
