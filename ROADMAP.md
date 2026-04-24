@@ -75,6 +75,21 @@ Queued for the next grammar-freeze window (conditions in `spec/09-stability.md`)
 
 ---
 
+## Effect signature enforcement (runtime hardening backlog)
+
+These are known HEAAL gaps in the effect system — places where passing a wrong argument silently fails instead of raising a clear error. Not urgent (current field failures are fixed), but each one is a hole in the harness. Open until effect signatures are formally validated at runtime.
+
+| Gap | Observed failure | Proposed fix |
+|---|---|---|
+| `perform http.get(url, wrong_type)` — non-list/dict second arg silently ignored, auth header not sent | 401 on authenticated GET endpoints | Validate arg type at dispatch; raise `EffectArgError` if arg 2 is not a pair-list or dict |
+| `perform http.post_json(url, text_body)` — text body refused with error message but no parse-time check | Runtime error only, not grammar error | Future: declare body type in effect signature so `pure fn` purity checker can also catch it |
+| `perform http.graphql(url, q, vars, headers)` — 4th positional arg was silently ignored (fixed v1.46.4) | 403 on authenticated GraphQL | Fixed. Documented here as prior art for the pattern. |
+| `perform env.read(name)` — trailing newline in stored value passes silently, causes 401 on write APIs | Auth works for GET (public), fails for POST/PUT | `trim()` in authoring prompt (v1.47.1). Ideal fix: runtime trims automatically. |
+
+**When to close:** When the effect dispatcher validates arg count + type against a formal signature table and raises a structured error on mismatch. Not before — prompt-level guidance is a workaround, not a harness.
+
+---
+
 ## Go runtime expansion
 
 The Go interpreter covers: `fn`, `intent`, `entry`, control flow, `Result`, and `attempt`. Features still Python-only (provenance, purity checking, parallelism, calibration, agentic projects) can be brought over once the higher priorities above are resolved.
