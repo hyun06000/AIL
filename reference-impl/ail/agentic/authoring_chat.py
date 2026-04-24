@@ -332,6 +332,23 @@ entry main(input: Text) {{
 
 Keep the hint ≤ 200 characters. One line. No quoting tricks. Match the user's language.
 
+**EVERY `.ail` file MUST ALSO carry a `# PURPOSE:` one-liner near the top:**
+
+```
+# PURPOSE: <one-sentence summary of what this program does, in the user's language>
+// INPUT: ...        (if the entry uses input)
+entry main(...) { ... }
+```
+
+The PURPOSE line is how both the UI dropdown and you-on-future-turns know what the program is for without reading the whole source. The UI shows `filename — purpose` in the program picker. On subsequent turns, the `--- PROGRAMS ON DISK (inventory) ---` block in PROJECT STATE lists every program with its purpose, so you can scan what exists before deciding to create a new file vs. edit an existing one.
+
+- ✅ `# PURPOSE: 매일 아침 서울 날씨와 할 일 목록을 합쳐 Slack 스타일 메시지로 출력`
+- ✅ `# PURPOSE: Fetch AIL repo stars/forks and compose a one-line promotion post`
+- ❌ missing PURPOSE comment → inventory shows "(no # PURPOSE: comment — consider adding one)", future turns have to read the full source to remember intent
+- ❌ `# PURPOSE: does stuff` — useless, no signal
+
+Keep it ≤ 200 characters, one line, in the user's language.
+
 === YOUR ROLE: AUTHOR, NOT EXECUTOR ===
 
 **You are the authoring model. You write AIL programs. You do NOT execute logic, fetch URLs, or process data yourself.**
@@ -1325,7 +1342,19 @@ If the answer to any checkbox is NO and the task required it — go back and add
 
     def _format_state(self, state: dict[str, str]) -> str:
         lines = []
+        inventory = state.get("__PROGRAM_INVENTORY__")
+        if inventory:
+            lines.append("--- PROGRAMS ON DISK (inventory) ---")
+            lines.append(inventory)
+            lines.append(
+                "[Each program's full source is rendered below. Use this "
+                "inventory to scan what exists before deciding to create a "
+                "new file vs. edit an existing one.]"
+            )
+            lines.append("")
         for name, content in state.items():
+            if name == "__PROGRAM_INVENTORY__":
+                continue
             lines.append(f"--- {name} ---")
             if not content.strip():
                 lines.append("(empty)")
@@ -1512,6 +1541,12 @@ If the answer to any checkbox is NO and the task required it — go back and add
         # All `.ail` programs in the project root — each with its
         # own full source and parse-check annotation.
         programs = list_project_programs(self.project)
+        if programs:
+            inventory_lines = []
+            for info in programs:
+                purpose = info.get("purpose") or "(no # PURPOSE: comment — consider adding one)"
+                inventory_lines.append(f"  - {info['name']}: {purpose}")
+            state["__PROGRAM_INVENTORY__"] = "\n".join(inventory_lines)
         for info in programs:
             name = info["name"]
             try:
@@ -1662,6 +1697,7 @@ def list_project_programs(project) -> list[dict]:
             "entry_present": has_entry,
             "input_used": entry_uses_input(source) if has_entry else False,
             "input_hint": extract_input_hint(source),
+            "purpose": extract_purpose(source),
             "env_required": [
                 {"name": n, "set": n in os.environ}
                 for n in list_required_env_vars(source)
@@ -1685,6 +1721,30 @@ _INPUT_HINT_RE = re.compile(
     r'^[ \t]*(?:#|//)[ \t]*INPUT[ \t]*:[ \t]*(.+?)[ \t]*$',
     re.IGNORECASE | re.MULTILINE,
 )
+
+
+_PURPOSE_RE = re.compile(
+    r'^[ \t]*(?:#|//)[ \t]*PURPOSE[ \t]*:[ \t]*(.+?)[ \t]*$',
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def extract_purpose(app_source: str) -> Optional[str]:
+    """Return the first `# PURPOSE: ...` / `// PURPOSE: ...` comment
+    body, or None. Parallel to extract_input_hint. A one-line summary
+    of what the program does — surfaced in the UI program picker and
+    in the agent's project inventory so neither side has to read the
+    full source to know what sits on disk."""
+    if not app_source:
+        return None
+    head = "\n".join(app_source.splitlines()[:20])
+    m = _PURPOSE_RE.search(head)
+    if not m:
+        return None
+    purpose = m.group(1).strip()
+    if len(purpose) > 200:
+        purpose = purpose[:197] + "..."
+    return purpose or None
 
 
 def extract_input_hint(app_source: str) -> Optional[str]:

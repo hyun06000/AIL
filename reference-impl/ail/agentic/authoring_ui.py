@@ -526,7 +526,8 @@ def render_authoring_page(
         programs.forEach(p => {{
           const opt = document.createElement('option');
           opt.value = p.name;
-          opt.textContent = p.name + (p.parses ? '' : ' (parse error)');
+          const purposeSuffix = p.purpose ? ' — ' + p.purpose : '';
+          opt.textContent = p.name + purposeSuffix + (p.parses ? '' : ' (parse error)');
           if (p.name === selected) opt.selected = true;
           sel.appendChild(opt);
         }});

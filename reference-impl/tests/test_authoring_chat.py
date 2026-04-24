@@ -450,6 +450,70 @@ def test_prompt_no_longer_claims_full_log_unconditionally(tmp_path):
     assert "<<<FILE" in prompt, "prompt must teach the file-fence convention"
 
 
+def test_extract_purpose(tmp_path):
+    from ail.agentic.authoring_chat import extract_purpose
+    assert extract_purpose(
+        "# PURPOSE: fetches weather and formats a message\nentry main() { return 42 }"
+    ) == "fetches weather and formats a message"
+    assert extract_purpose(
+        "// PURPOSE: 날씨 메시지 포맷터\nentry main() { return 42 }"
+    ) == "날씨 메시지 포맷터"
+    assert extract_purpose("entry main() { return 42 }") is None
+    assert extract_purpose("# PURPOSE:   \n") is None
+
+
+def test_program_inventory_surfaces_purpose_to_agent(tmp_path):
+    """Agent sees a scan-friendly inventory block in PROJECT STATE,
+    not just filenames — so it knows what sits on disk without
+    parsing every file's body."""
+    from ail.agentic.authoring_chat import AuthoringChat
+    proj = Project.init(tmp_path / "p")
+    (proj.root / "weather.ail").write_text(
+        "# PURPOSE: 매일 아침 날씨 요약\nentry main() { return 1 }",
+        encoding="utf-8",
+    )
+    (proj.root / "joke.ail").write_text(
+        "# PURPOSE: 하루의 농담 한 줄 뽑기\nentry main() { return 2 }",
+        encoding="utf-8",
+    )
+    (proj.root / "plain.ail").write_text(
+        "entry main() { return 3 }", encoding="utf-8",
+    )
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    state = chat._read_project_state()
+    assert "__PROGRAM_INVENTORY__" in state
+    inventory = state["__PROGRAM_INVENTORY__"]
+    assert "weather.ail: 매일 아침 날씨 요약" in inventory
+    assert "joke.ail: 하루의 농담 한 줄 뽑기" in inventory
+    # The file without a PURPOSE comment should still appear, flagged.
+    assert "plain.ail" in inventory
+    assert "(no # PURPOSE:" in inventory
+    # Formatted state must render inventory above the per-file sources.
+    formatted = chat._format_state(state)
+    assert "PROGRAMS ON DISK (inventory)" in formatted
+    assert formatted.index("PROGRAMS ON DISK") < formatted.index("--- weather.ail ---")
+
+
+def test_list_project_programs_includes_purpose(tmp_path):
+    from ail.agentic.authoring_chat import list_project_programs
+    proj = Project.init(tmp_path / "p")
+    (proj.root / "a.ail").write_text(
+        "# PURPOSE: does thing A\nentry main() { return 1 }", encoding="utf-8",
+    )
+    programs = list_project_programs(proj)
+    assert any(p["name"] == "a.ail" and p["purpose"] == "does thing A"
+               for p in programs)
+
+
+def test_prompt_teaches_purpose_convention(tmp_path):
+    from ail.agentic.authoring_chat import AuthoringChat
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt({}, [], "hi")
+    assert "# PURPOSE:" in prompt
+    assert "PROGRAMS ON DISK (inventory)" in prompt or "filename — purpose" in prompt
+
+
 def test_history_persists_across_instances(tmp_path):
     proj = Project.init(tmp_path / "demo")
     c1 = AuthoringChat(
