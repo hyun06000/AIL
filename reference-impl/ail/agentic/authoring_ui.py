@@ -595,15 +595,51 @@ def render_authoring_page(
       statusBubble.style.cssText =
         'background:#fef3c7;border:1px solid #fde68a;color:#78350f;' +
         'font-size:13px;';
+      // hyun06000 2026-04-24: "자동수정도 약간의 로그를 실시간으로
+      // 볼 수 있을까?" The wait was opaque; now show elapsed time
+      // + a rolling hint about the three stages the auto-fix goes
+      // through (reading error, asking the model, applying file).
+      const elapsedLine = document.createElement('div');
+      const hintLine = document.createElement('div');
+      elapsedLine.style.cssText = 'margin-top:4px;font-size:11px;color:#92400e;';
+      hintLine.style.cssText =
+        'margin-top:2px;font-size:11px;color:#b45309;' +
+        'font-family:ui-monospace,Menlo,monospace;';
       statusBubble.innerHTML =
-        '⚙ <b>자동 수정 중…</b><br>' +
+        '⚙ <b>자동 수정 중…</b> ' +
         '<span style="font-size:11px;color:#92400e">' +
-        '에이전트가 에러를 읽고 스스로 코드를 고치고 있어요 ' +
-        '(' + (attempt + 1) + '/' + AUTO_FIX_MAX + '). ' +
-        '클릭 필요 없음 — 잠시만 기다려주세요.</span>';
+        '(' + (attempt + 1) + '/' + AUTO_FIX_MAX +
+        ') 에이전트가 에러를 읽고 스스로 고치고 있어요. ' +
+        '클릭 필요 없음.</span>';
+      statusBubble.appendChild(elapsedLine);
+      statusBubble.appendChild(hintLine);
       status.appendChild(statusBubble);
       thread.appendChild(status);
       scrollBottom();
+
+      const fixStart = Date.now();
+      const stages = [
+        '→ 에러 메시지 읽기…',
+        '→ 진단 로그 분석…',
+        '→ Claude에게 수정 요청 전송…',
+        '→ 응답 대기 (생성 중)…',
+        '→ 응답 대기 (여전히 생성 중)…',
+      ];
+      let stageIdx = 0;
+      const fixTimer = setInterval(() => {{
+        const s = Math.floor((Date.now() - fixStart) / 1000);
+        elapsedLine.textContent = '⏱ ' + s + 's 경과';
+        // Advance the hint every ~3s so the user sees movement even
+        // though we can't stream the model output yet.
+        const targetIdx = Math.min(
+          Math.floor(s / 3), stages.length - 1);
+        if (targetIdx !== stageIdx) {{
+          stageIdx = targetIdx;
+          hintLine.textContent = stages[stageIdx];
+        }} else if (!hintLine.textContent) {{
+          hintLine.textContent = stages[0];
+        }}
+      }}, 250);
 
       const errSummary =
         '이전 실행이 에러로 끝났어. PRINCIPLES.md §4 — 저자 모델은 ' +
@@ -619,6 +655,7 @@ def render_authoring_page(
           headers: {{ 'Content-Type': 'text/plain; charset=utf-8' }},
           body: errSummary,
         }});
+        clearInterval(fixTimer);
         status.remove();
         const text = await r.text();
         if (!r.ok) {{ addError('자동 수정 실패: ' + text); return; }}
@@ -683,6 +720,7 @@ def render_authoring_page(
           }}, 800);
         }}
       }} catch (e) {{
+        clearInterval(fixTimer);
         status.remove();
         addError('자동 수정 네트워크 오류: ' + e.message);
       }}
