@@ -52,7 +52,7 @@ class PurityError(Exception):
 _PURE_BUILTINS: frozenset[str] = frozenset({
     # Text
     "length", "split", "join", "trim", "upper", "lower",
-    "starts_with", "ends_with", "replace", "slice",
+    "starts_with", "ends_with", "replace", "slice", "index_of",
     # List
     "get", "append", "sort", "reverse", "range",
     "map", "filter", "reduce",

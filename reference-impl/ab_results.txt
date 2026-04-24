@@ -1,0 +1,142 @@
+
+========================================================================
+QUESTION: korean_nuance
+========================================================================
+Goal: translate the following English idiom into natural Korean that preserves its implication, not a literal gloss
+Input: beating a dead horse
+
+--- A  wrapped (current AIL intent)  (1.9s) ---
+소 귀에 경 읽기
+
+--- B  stripped (raw system prompt)  (9.5s) ---
+# Korean Translation
+
+**죽은 말에 채찍질하기** (jugeun mare chaejjiljilhagi)
+
+or more naturally:
+
+**헛수고하다** (heotsugohada)
+
+**이미 끝난 일을 가지고 계속 따지다** (imi kkeutnan ireul gajigo gyesok ttajida)
+
+---
+
+## Most Natural Idiomatic Expression
+
+**"소 귀에 경 읽기"** (so gwie gyeong ilkgi) - "reading sutras to a cow's ear"
+
+or
+
+**"벽에 대고 말하기"** (byeoge daego malhagi) - "talking to a wall"
+
+These Korean idioms capture the futility and pointlessness implied in "beating a dead horse" - continuing an effort that cannot yield results or arguing about something already settled.
+
+The most contextually appropriate choice depends on usage:
+- For **futile effort**: 헛수고
+- For **rehashing settled matters**: 이미 끝난 일을 또 거론하다
+- For **arguing pointlessly**: 소 귀에 경 읽기
+
+--- C  direct (no AIL at all)  (8.0s) ---
+# Translation
+
+**쓸데없는 짓 하다** or **소 잃고 외양간 고치기**
+
+# Explanation
+
+For "beating a dead horse," the best Korean equivalent depends on which aspect you want to emphasize:
+
+1. **쓸데없는 짓 하다** (doing something useless) - This captures the futility aspect most directly and is the most natural match for the idiom's core meaning of wasting effort on something that won't yield results.
+
+2. **소 잃고 외양간 고치기** (literally: "fixing the barn after losing the cow") - This works when the context involves doing something after it's already too late.
+
+3. Other alternatives:
+   - **이미 엎질러진 물** (already spilled water) - emphasizes that it's too late
+   - **죽은 말에 채찍질하기** (whipping a dead horse) - a more literal translation, but less commonly used in natural Korean
+
+**Most recommended: 쓸데없는 짓 하다** for general use.
+
+
+========================================================================
+QUESTION: summarize_technical
+========================================================================
+Goal: summarize the given text in 2 sentences. Keep the sharpest technical claim.
+Input: HEAAL is a paradigm where safety constraints are part of the grammar. Where other teams build harnesses around Python (A
+
+--- A  wrapped (current AIL intent)  (3.3s) ---
+HEAAL embeds safety constraints directly into the grammar, making hazards like infinite loops structurally impossible by removing constructs like 'while' and enforcing error handling through Result types. Unlike external harnesses around languages like Python, AIL's approach provides static verification of properties such as side-effect freedom in pure functions at the language level.
+
+--- B  stripped (raw system prompt)  (3.2s) ---
+HEAAL is a programming paradigm that embeds safety constraints directly into the language grammar, making hazards like infinite loops structurally impossible by omitting constructs like `while` keywords, rather than relying on external tooling like linters or pre-commit hooks. The language enforces safety through built-in features including mandatory `Result` types for failable operations and static verification of side-effect freedom in `pure fn` functions.
+
+--- C  direct (no AIL at all)  (2.3s) ---
+HEAAL is a paradigm where safety constraints are embedded directly into the language grammar, rather than enforced through external tooling like linters or pre-commit hooks. The language structurally prevents infinite loops by omitting the while keyword, enforces error handling through Result types, and statically verifies side-effect freedom with pure function annotations.
+
+
+========================================================================
+QUESTION: short_reasoning
+========================================================================
+Goal: answer with a short explanation — why would removing the while keyword from a language make infinite loops impossible?
+Input: (no input)
+
+--- A  wrapped (current AIL intent)  (6.2s) ---
+Removing the `while` keyword alone wouldn't make infinite loops impossible—programmers could still create them using recursion or other looping constructs like `for` loops with conditions that never become false. However, if the language removed *all* traditional looping constructs and only provided bounded iteration (like iterating over finite collections) or recursion with enforced termination guarantees (such as structural recursion that requires operating on strictly smaller inputs), then infinite loops could theoretically be prevented. This is the approach taken by total functional languages like Coq or Agda, which ensure all programs terminate by construction, though this comes at the cost of being unable to express certain useful non-terminating programs like servers or operating systems.
+
+--- B  stripped (raw system prompt)  (8.5s) ---
+# Can Removing `while` Prevent Infinite Loops?
+
+No, removing the `while` keyword alone cannot prevent infinite loops in a programming language.
+
+The reason is that infinite loops are fundamentally about **unbounded recursion or iteration**, not about any specific keyword. Even without `while`, a language can still express infinite loops through:
+
+1. **Recursive functions** - A function that calls itself without a proper termination condition creates an infinite loop, regardless of whether `while` exists
+2. **Other looping constructs** - `for` loops can be infinite (e.g., `for(;;)` in C), and `goto` statements can create cycles
+3. **Higher-order functions** - Constructs like `recursion schemes` or custom iterators can encode infinite behavior
+
+In fact, according to the **Halting Problem** (proven by Alan Turing), any Turing-complete language—one powerful enough to perform general computation—cannot guarantee that all programs will terminate. The only way to truly prevent infinite loops is to restrict the language so severely that it loses Turing-completeness, typically by disallowing unbounded recursion entirely and only permitting loops with statically-determinable bounds (like primitive recursive functions). Simply removing `while` doesn't achieve this; you'd need to remove or restrict recursion and all other mechanisms for unbounded iteration.
+
+--- C  direct (no AIL at all)  (6.0s) ---
+Removing the `while` keyword alone wouldn't make infinite loops impossible—you can still create them with recursion or other looping constructs like `for` loops with conditions that never terminate. However, if you remove `while` *and* restrict the language so that all loops must iterate over finite data structures (like how `for-each` loops work in functional languages), you can guarantee termination. This is because such loops can only iterate a bounded number of times determined by the size of the collection. Languages designed for total correctness sometimes enforce this by only allowing primitive recursion or iteration over provably finite structures, ensuring that every program must eventually halt—a property useful in proof assistants and systems where non-termination would be catastrophic.
+
+
+========================================================================
+QUESTION: code_critique
+========================================================================
+Goal: identify the single biggest risk in the given Python snippet and say why
+Input: def process(items):
+    for item in items:
+        item.save()
+        notify(item)
+
+--- A  wrapped (current AIL intent)  (2.6s) ---
+No error handling or transaction management means a failure during notify() will leave the system in an inconsistent state where the item is saved but notification failed, with no rollback mechanism.
+
+--- B  stripped (raw system prompt)  (2.9s) ---
+The biggest risk is the lack of transactional atomicity—if `notify(item)` fails after `item.save()` succeeds, the item is persisted to the database but the notification is never sent, leading to inconsistent state between data and external systems.
+
+--- C  direct (no AIL at all)  (2.9s) ---
+The biggest risk is lack of transaction management, meaning if `notify(item)` fails after `item.save()` succeeds, the database will be in an inconsistent state with saved items that were never properly notified.
+
+
+========================================================================
+QUESTION: json_extraction
+========================================================================
+Goal: extract the repo name and star count from the given GitHub API JSON response
+Input: {"full_name": "hyun06000/AIL", "stargazers_count": 42, "description": "AI-Intent Language"}
+
+--- A  wrapped (current AIL intent)  (1.7s) ---
+repo name: hyun06000/AIL
+star count: 42
+
+--- B  stripped (raw system prompt)  (1.4s) ---
+```
+full_name: hyun06000/AIL
+stargazers_count: 42
+description: AI-Intent Language
+```
+
+--- C  direct (no AIL at all)  (1.4s) ---
+repo name: hyun06000/AIL
+star count: 42
+
+
+[wrote ab_results.jsonl]

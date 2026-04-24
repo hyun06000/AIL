@@ -1947,6 +1947,16 @@ class Executor:
         if name == "slice":
             if len(raw) >= 3:
                 return ConfidentValue(raw[0][int(raw[1]):int(raw[2])], conf)
+        if name == "index_of":
+            # index_of(text, sub) -> Number
+            # Returns the starting index of the first occurrence of sub
+            # in text, or -1 if absent. Mirrors Python str.find; added as
+            # a primitive so stdlib can build `contains`, `count_*`, and
+            # future `split_once` on top without re-scanning via the
+            # split-length trick.
+            if len(raw) >= 2 and isinstance(raw[0], str):
+                sub = str(raw[1])
+                return ConfidentValue(raw[0].find(sub), conf)
 
         # --- List operations ---
         if name == "get":

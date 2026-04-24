@@ -1,0 +1,513 @@
+Corpus: 50 prompts × 3 paths = 150 calls
+
+[1/50] A01 [A]: Calculate the factorial of 7
+  A_wrapped     2.2s  exact          5040
+  B_stripped    2.1s  miss           I'll calculate the factorial of 7.
+
+7! = 7 × 6 × 5 × 4 × 3 × 2 × 1
+
+Let me compu
+  C_direct      2.6s  miss           The factorial of 7 (written as 7!) is:
+
+7! = 7 × 6 × 5 × 4 × 3 × 2 × 1 = **5,040
+
+[2/50] A02 [A]: Reverse the string 'hello world'
+  A_wrapped     2.5s  exact          dlrow olleh
+  B_stripped    2.6s  substring      ```python
+s = 'hello world'
+reversed_s = s[::-1]
+print(reversed_s)
+```
+
+Output: 
+  C_direct      1.4s  substring      The reversed string is:
+
+**'dlrow olleh'**
+
+[3/50] A03 [A]: Count the vowels in 'Programming is fun'
+  A_wrapped     1.3s  miss           6
+  B_stripped    4.4s  substring      I'll count the vowels in "Programming is fun".
+
+Vowels are: a, e, i, o, u (and s
+  C_direct      3.2s  substring      I'll count the vowels (a, e, i, o, u) in 'Programming is fun':
+
+**P-r-o-g-r-a-m-
+
+[4/50] A04 [A]: Find the largest number in [34, 12, 89, 3, 56, 72]
+  A_wrapped     1.5s  exact          89
+  B_stripped    2.1s  substring      I need to find the largest number in the array [34, 12, 89, 3, 56, 72].
+
+Let me 
+  C_direct      2.2s  substring      The largest number in [34, 12, 89, 3, 56, 72] is **89**.
+
+[5/50] A05 [A]: Sort the words in 'banana cherry apple date' alphabetically
+  A_wrapped     1.8s  exact          apple banana cherry date
+  B_stripped    2.3s  substring      I need to sort the words in 'banana cherry apple date' alphabetically.
+
+The word
+  C_direct      1.9s  exact          apple banana cherry date
+
+[6/50] A06 [A]: Calculate the sum of all even numbers from 1 to 100
+  A_wrapped     1.9s  exact          2550
+  B_stripped    4.2s  substring      I need to calculate the sum of all even numbers from 1 to 100.
+
+The even numbers
+  C_direct      4.0s  substring      I need to find the sum of all even numbers from 1 to 100.
+
+The even numbers from
+
+[7/50] A07 [A]: Convert the temperature 98.6 Fahrenheit to Celsius
+  A_wrapped     3.0s  exact          37.0
+  B_stripped    2.5s  miss           I need to convert 98.6°F to Celsius using the formula:
+
+C = (F - 32) × 5/9
+
+Wher
+  C_direct      2.0s  miss           To convert 98.6°F to Celsius, I'll use the formula:
+
+°C = (°F - 32) × 5/9
+
+°C = 
+
+[8/50] A08 [A]: Count how many words in 'the quick brown fox jumps over the lazy dog' 
+  A_wrapped     1.2s  exact          5
+  B_stripped    3.0s  substring      I'll count the words in 'the quick brown fox jumps over the lazy dog' that are l
+  C_direct      2.7s  substring      I'll count the words longer than 3 characters in "the quick brown fox jumps over
+
+[9/50] A09 [A]: FizzBuzz from 1 to 20, return as a comma-separated string
+  A_wrapped     1.8s  exact          1, 2, Fizz, 4, Buzz, Fizz, 7, 8, Fizz, Buzz, 11, Fizz, 13, 14, FizzBuzz, 16, 17,
+  B_stripped    3.7s  substring      I'll solve the FizzBuzz problem from 1 to 20 and return it as a comma-separated 
+  C_direct      1.9s  miss           1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz,16,17,Fizz,19,Buzz
+
+[10/50] A10 [A]: Check if 'racecar' is a palindrome
+  A_wrapped     1.2s  exact          true
+  B_stripped    3.3s  substring      I'll check if 'racecar' is a palindrome by comparing it with its reverse.
+
+```py
+  C_direct      3.6s  miss           I'll check if 'racecar' is a palindrome by comparing it to its reverse.
+
+```pyth
+
+[11/50] A11 [A]: Calculate the average of [85, 92, 78, 95, 88]
+  A_wrapped     2.7s  exact          87.6
+  B_stripped    1.9s  substring      I'll calculate the average of the numbers [85, 92, 78, 95, 88].
+
+**Step 1: Add a
+  C_direct      2.2s  substring      To calculate the average of [85, 92, 78, 95, 88]:
+
+**Step 1:** Add all the numbe
+
+[12/50] A12 [A]: Remove duplicate values from [1, 3, 2, 3, 1, 4, 2, 5]
+  A_wrapped     2.1s  exact          [1, 3, 2, 4, 5]
+  B_stripped    6.1s  substring      I'll remove duplicate values from the list [1, 3, 2, 3, 1, 4, 2, 5].
+
+There are 
+  C_direct      4.6s  substring      # Method 1: Using set (doesn't preserve order)
+numbers = [1, 3, 2, 3, 1, 4, 2, 5
+
+[13/50] A13 [A]: Count the frequency of each character in 'mississippi'
+  A_wrapped     2.3s  miss           m: 1
+i: 4
+s: 4
+p: 2
+  B_stripped    4.4s  miss           I'll count the frequency of each character in the string 'mississippi'.
+
+Let me 
+  C_direct      2.2s  miss           Here's the frequency of each character in 'mississippi':
+
+| Character | Frequenc
+
+[14/50] A14 [A]: Generate the first 10 numbers of the Fibonacci sequence
+  A_wrapped     1.8s  miss           0, 1, 1, 2, 3, 5, 8, 13, 21, 34
+  B_stripped    5.0s  substring      I'll generate the first 10 numbers of the Fibonacci sequence, where each number 
+  C_direct      3.7s  miss           # First 10 Fibonacci Numbers
+
+The Fibonacci sequence starts with 0 and 1, and ea
+
+[15/50] A15 [A]: Find all numbers in [15, 23, 8, 42, 16, 4, 31] that are divisible by 4
+  A_wrapped     2.4s  miss           [16, 8, 4]
+  B_stripped    3.6s  miss           I need to find all numbers in the list [15, 23, 8, 42, 16, 4, 31] that are divis
+  C_direct      3.1s  substring      I need to find all numbers in the list [15, 23, 8, 42, 16, 4, 31] that are divis
+
+[16/50] B01 [B]: Classify the sentiment of 'I absolutely loved this movie, it was fanta
+  A_wrapped     2.4s  exact          positive
+  B_stripped    2.7s  substring      Looking at the text "I absolutely loved this movie, it was fantastic", I would c
+  C_direct      2.4s  substring      **Sentiment: Positive**
+
+This statement expresses strong positive sentiment thro
+
+[17/50] B02 [B]: Translate 'Good morning, how are you?' into Korean
+  A_wrapped     2.5s  no_ground_truth  좋은 아침입니다, 어떻게 지내세요?
+  B_stripped    5.2s  no_ground_truth  Good morning, how are you? in Korean:
+
+**좋은 아침이에요, 어떻게 지내세요?**
+(joeun achimieyo,
+  C_direct      6.3s  no_ground_truth  # Translation
+
+**Good morning, how are you?**
+
+Korean: **좋은 아침이에요, 어떻게 지내세요?** (
+
+[18/50] B03 [B]: Summarize in one sentence: 'The United Nations was founded in 1945 aft
+  A_wrapped     2.4s  no_ground_truth  The United Nations was established in 1945 to prevent international conflicts an
+  B_stripped    2.2s  no_ground_truth  The United Nations was established in 1945 to promote international peace and co
+  C_direct      3.1s  no_ground_truth  The United Nations was established in 1945 to prevent wars and facilitate intern
+
+[19/50] B04 [B]: Is the following text formal or informal: 'Hey dude, wanna grab some p
+  A_wrapped     1.8s  exact          informal
+  B_stripped    3.4s  substring      The text "Hey dude, wanna grab some pizza later?" is **informal**.
+
+Here's why:
+
+  C_direct      3.7s  substring      This text is **informal**.
+
+Here's why:
+- **"Hey dude"** - casual greeting and s
+
+[20/50] B05 [B]: Extract the person's name and age from: 'My name is Alice and I am 30 
+  A_wrapped     2.2s  no_ground_truth  Name: Alice, Age: 30
+  B_stripped    2.9s  no_ground_truth  I'll extract the name and age from the given text.
+
+From the text: "My name is A
+  C_direct      1.7s  no_ground_truth  **Name:** Alice  
+**Age:** 30
+
+[21/50] B06 [B]: Classify this email subject as spam or not spam: 'You have won $1,000,
+  A_wrapped     1.8s  exact          spam
+  B_stripped    9.2s  substring      **Classification: SPAM**
+
+This email subject exhibits several classic spam indic
+  C_direct      4.1s  substring      **Classification: SPAM**
+
+This email subject contains multiple classic spam indi
+
+[22/50] B07 [B]: Translate 'Thank you very much' into Japanese
+  A_wrapped     1.3s  no_ground_truth  ありがとうございます
+  B_stripped    4.1s  no_ground_truth  ありがとうございます (Arigatou gozaimasu)
+
+This is the polite way to say "Thank you very m
+  C_direct      3.1s  no_ground_truth  # Translation
+
+**ありがとうございます**
+(Arigatou gozaimasu)
+
+This is the polite, formal w
+
+[23/50] B08 [B]: Determine the topic of: 'The central bank raised interest rates by 25 
+  A_wrapped     1.8s  no_ground_truth  Monetary policy
+  B_stripped    2.7s  no_ground_truth  Topic: **Monetary Policy** (or Central Banking/Interest Rates)
+
+This statement d
+  C_direct      3.9s  no_ground_truth  The topic of this statement is **monetary policy** or **interest rate policy**.
+
+
+[24/50] B09 [B]: Rewrite this sentence in passive voice: 'The cat chased the mouse'
+  A_wrapped     3.5s  exact          The mouse was chased by the cat
+  B_stripped    5.0s  substring      The mouse was chased by the cat.
+  C_direct      2.5s  substring      # Passive Voice
+
+**The mouse was chased by the cat.**
+
+In this passive construct
+
+[25/50] B10 [B]: Is this product review positive or negative: 'Terrible quality, broke 
+  A_wrapped     1.0s  exact          negative
+  B_stripped    2.6s  substring      This product review is **negative**.
+
+The review contains clear negative indicat
+  C_direct      2.6s  substring      This product review is **negative**.
+
+The review uses the word "terrible" to des
+
+[26/50] B11 [B]: Classify the language of: 'Bonjour, comment allez-vous?'
+  A_wrapped     2.0s  exact          French
+  B_stripped    6.6s  substring      The language is **French**.
+
+The phrase "Bonjour, comment allez-vous?" translate
+  C_direct      2.0s  substring      The language is **French**.
+
+The phrase "Bonjour, comment allez-vous?" translate
+
+[27/50] B12 [B]: Generate a professional email subject line for a meeting about Q3 budg
+  A_wrapped     2.3s  no_ground_truth  Q3 Budget Review Meeting
+  B_stripped    3.2s  no_ground_truth  Subject: Q3 Budget Review Meeting - [Date] Agenda & Financial Performance Discus
+  C_direct      2.9s  no_ground_truth  Subject: Q3 Budget Review Meeting - [Date]
+
+Alternatively:
+
+- Q3 Budget Review: 
+
+[28/50] B13 [B]: Simplify this text for a 10-year-old: 'Photosynthesis is the process b
+  A_wrapped     1.7s  no_ground_truth  Plants use sunlight to make their own food, kind of like how a solar panel turns
+  B_stripped    3.8s  no_ground_truth  Here's a simplified version for a 10-year-old:
+
+"Photosynthesis is how plants us
+  C_direct      1.9s  no_ground_truth  Here's a simpler version:
+
+"Photosynthesis is how plants turn sunlight into food
+
+[29/50] B14 [B]: Determine if this statement is fact or opinion: 'Python is the best pr
+  A_wrapped     1.7s  exact          Opinion
+  B_stripped    6.7s  substring      This statement is an **opinion**.
+
+**Reasoning:**
+
+1. **Subjective language**: T
+  C_direct      5.8s  substring      This statement is an **opinion**.
+
+Here's why:
+
+**Subjective language**: The wor
+
+[30/50] B15 [B]: Extract key entities from: 'Apple CEO Tim Cook announced new products 
+  A_wrapped     1.8s  no_ground_truth  Entities:
+- Person: Tim Cook (CEO)
+- Organization: Apple
+- Location: Cupertino
+-
+  B_stripped    5.2s  no_ground_truth  # Entity Extraction
+
+Here are the key entities from the text:
+
+## Entities:
+
+1. 
+  C_direct      2.2s  no_ground_truth  Here are the key entities extracted from the text:
+
+**Person:**
+- Tim Cook
+
+**Or
+
+[31/50] C01 [C]: Parse 'Alice:85,Bob:92,Charlie:78' and classify who passed (score >= 8
+  A_wrapped     2.2s  miss           Alice:85 (passed), Bob:92 (passed), Charlie:78 (failed)
+  B_stripped    4.4s  miss           I'll parse the string and classify who passed based on a score of 80 or above.
+
+
+  C_direct      4.8s  miss           # Parsing and Classifying Scores
+
+```python
+data = 'Alice:85,Bob:92,Charlie:78'
+
+
+[32/50] C02 [C]: Count words in 'I love this product' and classify its sentiment
+  A_wrapped     2.0s  no_ground_truth  Word count: 4
+Sentiment: Positive
+  B_stripped    4.9s  no_ground_truth  I'll analyze the sentence "I love this product" by counting the words and classi
+  C_direct      3.0s  no_ground_truth  ## Word Count
+The phrase "I love this product" contains **4 words**.
+
+## Sentime
+
+[33/50] C03 [C]: Sort [banana, cherry, apple] alphabetically and translate the sorted l
+  A_wrapped     2.0s  no_ground_truth  사과, 바나나, 체리
+  B_stripped    2.3s  no_ground_truth  I'll sort the list alphabetically and then translate to Korean.
+
+**Sorted alphab
+  C_direct      2.8s  no_ground_truth  # Sorted list alphabetically:
+[apple, banana, cherry]
+
+# Translated to Korean:
+[
+
+[34/50] C04 [C]: Calculate the total of [10.5, 20.3, 15.7] and summarize what this spen
+  A_wrapped     4.0s  no_ground_truth  The total is 46.5. This spending pattern suggests moderate, relatively balanced 
+  B_stripped   10.2s  no_ground_truth  I'll analyze the spending data you've provided.
+
+## Analysis of Spending Data: [
+  C_direct      6.2s  no_ground_truth  # Calculation
+
+**Total: 46.5**
+
+(10.5 + 20.3 + 15.7 = 46.5)
+
+# Spending Pattern 
+
+[35/50] C05 [C]: Parse the CSV 'Product,Price\nWidget,9.99\nGadget,24.99\nTool,14.50' a
+  A_wrapped     4.7s  no_ground_truth  Based on the CSV data, I recommend buying the **Gadget** for $24.99.
+
+However, t
+  B_stripped    8.3s  no_ground_truth  I'll parse the CSV data and help you find the best products within your $20 budg
+  C_direct      6.3s  no_ground_truth  # Parsing CSV and Budget Analysis
+
+## Parsed Data:
+```
+Product  | Price
+--------
+
+[36/50] C06 [C]: Find the longest word in 'extraordinary programming capabilities' and 
+  A_wrapped     3.7s  no_ground_truth  The longest word is 'extraordinary' (13 letters).
+
+Extraordinary means: beyond w
+  B_stripped    7.3s  no_ground_truth  I'll analyze the phrase "extraordinary programming capabilities" to find the lon
+  C_direct      4.5s  no_ground_truth  # Longest Word
+
+The longest word in "extraordinary programming capabilities" is 
+
+[37/50] C07 [C]: Calculate BMI from height 175cm and weight 70kg, then provide a health
+  A_wrapped     6.4s  no_ground_truth  BMI Calculation and Health Assessment:
+
+Given:
+- Height: 175 cm (1.75 m)
+- Weigh
+  B_stripped    6.9s  no_ground_truth  I'll help you calculate BMI and provide a health assessment.
+
+**BMI Calculation:
+  C_direct      7.8s  no_ground_truth  # BMI Calculation
+
+**Given:**
+- Height: 175 cm = 1.75 m
+- Weight: 70 kg
+
+**Formu
+
+[38/50] C08 [C]: Parse dates from 'Meeting: 2024-01-15, Deadline: 2024-02-28' and calcu
+  A_wrapped     5.5s  no_ground_truth  Parsed dates:
+- Meeting: January 15, 2024
+- Deadline: February 28, 2024
+
+Days be
+  B_stripped    9.6s  no_ground_truth  I'll help you parse those dates and analyze the timeline. Let me extract and wor
+  C_direct     11.0s  no_ground_truth  # Date Parsing and Timeline Analysis
+
+## Parsed Dates
+- **Meeting Date:** Januar
+
+[39/50] C09 [C]: Count character frequencies in 'hello world', then describe the patter
+  A_wrapped     4.7s  no_ground_truth  The text 'hello world' contains 11 characters total (including the space). The c
+  B_stripped    7.5s  no_ground_truth  I'll count the character frequencies in "hello world" and describe the pattern.
+
+  C_direct      5.9s  no_ground_truth  # Character Frequencies in 'hello world'
+
+**Count:**
+- 'l': 3
+- 'o': 2
+- 'h': 1
+
+
+[40/50] C10 [C]: Sort the numbers [42, 17, 8, 93, 55] in descending order and explain w
+  A_wrapped     4.2s  no_ground_truth  Sorted in descending order: [93, 55, 42, 17, 8]
+
+The number 42 falls at the 40th
+  B_stripped    5.4s  no_ground_truth  I'll sort the numbers in descending order and determine what percentile 42 falls
+  C_direct      6.1s  no_ground_truth  # Sorting in Descending Order
+
+**[93, 55, 42, 17, 8]**
+
+# Percentile Calculation
+
+[41/50] C11 [C]: Parse 'John:A,Jane:B,Jim:C,Jill:A' into name-grade pairs, count how ma
+  A_wrapped    12.5s  no_ground_truth  Performance Summary:
+
+Parsed student grades from the input string 'John:A,Jane:B
+  B_stripped    6.1s  no_ground_truth  I'll parse the name-grade pairs, count the A grades, and provide a performance s
+  C_direct      4.9s  no_ground_truth  # Parsing and Analysis
+
+## Name-Grade Pairs:
+- John: A
+- Jane: B
+- Jim: C
+- Jill
+
+[42/50] C12 [C]: Calculate the standard deviation of [10, 12, 23, 23, 16, 23, 21, 16] a
+  A_wrapped     6.4s  no_ground_truth  The standard deviation of [10, 12, 23, 23, 16, 23, 21, 16] is approximately 5.24
+  B_stripped    8.7s  no_ground_truth  I'll calculate the standard deviation for the dataset [10, 12, 23, 23, 16, 23, 2
+  C_direct      9.0s  no_ground_truth  # Standard Deviation Calculation
+
+## Step 1: Find the mean
+Mean = (10 + 12 + 23 
+
+[43/50] C13 [C]: Reverse each word in 'hello world foo' and create a creative sentence 
+  A_wrapped     2.6s  no_ground_truth  The olleh wizard cast a spell over the dlrow, transforming every oof into golden
+  B_stripped    4.9s  no_ground_truth  I'll reverse each word in 'hello world foo' and then create a creative sentence.
+  C_direct      3.4s  no_ground_truth  # Reversed Words
+- hello → **olleh**
+- world → **dlrow**
+- foo → **oof**
+
+# Crea
+
+[44/50] C14 [C]: Find common elements in [1,2,3,4,5] and [3,4,5,6,7], then suggest a me
+  A_wrapped     4.8s  no_ground_truth  The common elements between [1,2,3,4,5] and [3,4,5,6,7] are [3,4,5].
+
+Metaphor: 
+  B_stripped    9.8s  no_ground_truth  # Finding Common Elements and Their Metaphorical Meaning
+
+## The Intersection
+
+*
+  C_direct      7.8s  no_ground_truth  # Common Elements
+
+The common elements are: **[3, 4, 5]**
+
+# Metaphor for Overla
+
+[45/50] C15 [C]: Parse email addresses from 'Contact alice@test.com or bob@test.com for
+  A_wrapped     3.7s  no_ground_truth  Email addresses found and validated:
+
+1. alice@test.com (Valid)
+   Greeting: Hel
+  B_stripped    6.9s  no_ground_truth  I'll parse the email addresses from the text, validate their format, and draft g
+  C_direct     15.5s  no_ground_truth  # Email Parsing and Greeting Generator
+
+Here's a solution to parse, validate, an
+
+[46/50] C16 [C]: Calculate compound interest on $1000 at 5% for 3 years, then explain t
+  A_wrapped     9.4s  no_ground_truth  Hey! So you know how when you put money in a savings account, the bank pays you 
+  B_stripped    8.9s  no_ground_truth  I'll help you calculate compound interest and then explain it in a teen-friendly
+  C_direct      8.6s  no_ground_truth  # Compound Interest Calculation
+
+**Initial amount:** $1,000  
+**Interest rate:**
+
+[47/50] C17 [C]: Count lines, words, and characters in the paragraph 'The sun was setti
+  A_wrapped     3.6s  no_ground_truth  Lines: 3
+Words: 11
+Characters (with spaces): 61
+Characters (without spaces): 51
+
+  B_stripped    7.9s  no_ground_truth  I'll analyze the paragraph "The sun was setting. Birds flew home. Silence fell."
+  C_direct      4.5s  no_ground_truth  # Analysis of the Paragraph
+
+**Text:** "The sun was setting. Birds flew home. Si
+
+[48/50] C18 [C]: Parse 'Tokyo:35.6,London:51.5,Sydney:-33.8' into city-latitude pairs, 
+  A_wrapped     6.5s  no_ground_truth  Parsing the city-latitude data:
+- Sydney: -33.8°
+- Tokyo: 35.6°
+- London: 51.5°
+
+  B_stripped   12.5s  no_ground_truth  I'll parse the city-latitude data, sort by latitude, and describe the geographic
+  C_direct      7.5s  no_ground_truth  # Parsing and Analyzing City-Latitude Data
+
+## Parsed City-Latitude Pairs
+- Toky
+
+[49/50] C19 [C]: Generate Fibonacci up to the 8th number, then explain why the golden r
+  A_wrapped     8.6s  no_ground_truth  Fibonacci Sequence up to 8th number:
+
+F(1) = 1
+F(2) = 1
+F(3) = 2
+F(4) = 3
+F(5) =
+  B_stripped   14.3s  no_ground_truth  # Fibonacci Sequence and the Golden Ratio
+
+## Generating Fibonacci Numbers (up t
+  C_direct      8.2s  no_ground_truth  # Fibonacci Sequence (first 8 numbers)
+
+```
+F(1) = 1
+F(2) = 1
+F(3) = 2
+F(4) = 3
+
+
+[50/50] C20 [C]: Remove stop words (the,a,an,is,in,on,at,to) from 'the cat is on the ma
+  A_wrapped     1.2s  no_ground_truth  cat mat room
+  B_stripped    3.2s  no_ground_truth  I'll remove the stop words from the sentence "the cat is on the mat in the room.
+  C_direct      2.5s  no_ground_truth  After removing stop words (the, a, an, is, in, on, at, to):
+
+**Remaining words:*
+
+[wrote ../ab_full_v2.jsonl]

@@ -102,11 +102,11 @@ pure fn take(items: [Any], n: Number) -> [Any] {
 
 pure fn contains(text: Text, sub: Text) -> Boolean {
     // Returns true iff `sub` appears anywhere in `text`.
-    // Implemented via split length — exact because split(t, s) always
-    // returns length(count + 1), so length > 1 means at least one match.
-    // When sub == "" split returns [t], giving length 1; guard it.
+    // Uses the index_of primitive (added v1.53); -1 means absent.
+    // When sub == "" index_of returns 0 ("" matches at the start),
+    // but that's a trivial yes we suppress.
     if length(sub) == 0 { return false }
-    return length(split(text, sub)) > 1
+    return index_of(text, sub) >= 0
 }
 
 pure fn count_occurrences(text: Text, sub: Text) -> Number {

@@ -102,6 +102,32 @@ def test_importing_stdlib_makes_intents_callable():
     assert "summarize" in adapter.calls
 
 
+def test_index_of_primitive_and_contains_on_top_of_it():
+    """v1.53: index_of runtime primitive, contains now uses it.
+    Verifies both the primitive and the helper compose correctly."""
+    from ail import compile_source, MockAdapter
+    from ail.runtime import Executor
+
+    src = """
+    import contains from "stdlib/utils"
+
+    entry main(input: Text) {
+        a = index_of("hello world", "world")
+        b = index_of("hello world", "xyz")
+        c = contains("hello world", "world")
+        d = contains("hello world", "xyz")
+        return join([to_text(a), to_text(b), to_text(c), to_text(d)], "|")
+    }
+    """
+    program = compile_source(src)
+    result = Executor(program, MockAdapter()).run_entry({"input": ""})
+    parts = str(result.value).split("|")
+    assert parts[0] == "6"       # "world" starts at index 6
+    assert parts[1] == "-1"      # absent → -1
+    assert parts[2] == "true"
+    assert parts[3] == "false"
+
+
 def test_stdlib_utils_new_helpers_execute_correctly():
     """v1.52 additions to stdlib/utils.ail. These are the fns authoring
     agents used to reinvent inline; each end-to-end call here is a

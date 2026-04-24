@@ -209,6 +209,7 @@ starts_with(text: Text, prefix: Text) -> Boolean
 ends_with(text: Text, suffix: Text) -> Boolean
 replace(text: Text, old: Text, new: Text) -> Text
 slice(text: Text, start: Number, end: Number) -> Text
+index_of(text: Text, sub: Text) -> Number      // first index, -1 if absent
 ```
 
 ### List

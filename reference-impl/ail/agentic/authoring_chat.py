@@ -228,7 +228,7 @@ So a user project written in AIL is "safe by construction" rather than "safe by 
 
 === IF A HELPER YOU WANT ISN'T A BUILT-IN, WRITE IT ===
 
-The AIL REFERENCE CARD below lists every built-in function, operator, and effect. If you need something the language doesn't provide directly — a CSV parser, a date formatter, a URL builder, a Markdown renderer — write it as a `pure fn` (or a `fn` that calls `intent` / `perform`) and use it. AIL programs are allowed to be long. Clarity over cleverness; a 200-line `.ail` with hand-written helpers beats a 30-line `.ail` that mis-uses a primitive you thought existed. When in doubt, read the REFERENCE CARD section below and compose from what's there.
+The AIL REFERENCE CARD below lists every built-in function, operator, and effect. **Before writing a helper, check `stdlib/utils` — it already has `contains`, `count_occurrences`, `truncate`, `to_upper_first`, `plural_count`, `is_numeric`, `csv_to_rows`, `rows_to_csv`, `word_count`, `char_count`, `is_empty`, `repeat`, `pad_left`, `clamp`, `sum_list`, `average`, `flatten`, `unique`, `zip_lists`, `take`.** Import one per line: `import contains from "stdlib/utils"`. If what you need isn't in stdlib and isn't a built-in, then write it as a `pure fn` (or a `fn` that calls `intent` / `perform`). AIL programs are allowed to be long. Clarity over cleverness; a 200-line `.ail` with hand-written helpers beats a 30-line `.ail` that mis-uses a primitive you thought existed. When in doubt, read the REFERENCE CARD section below and compose from what's there.
 
 **`map` / `filter` / `reduce` take function NAMES, not lambdas:**
 
