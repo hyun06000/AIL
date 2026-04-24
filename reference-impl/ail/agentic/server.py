@@ -265,9 +265,15 @@ def _strip_value_envelopes(value, _depth: int = 0):
 
 
 
-def _make_handler(project: Project):
+def _make_handler(project: Project, serve_only: bool = False):
     """Build a request handler closed over a specific Project. Done as
-    a factory so each project can have its own handler without globals."""
+    a factory so each project can have its own handler without globals.
+
+    When `serve_only` is True the chat UI and its POST endpoint are
+    disabled — `/` redirects to `/run`, and `/authoring-chat` returns
+    404. This is how `ail serve` realizes PRINCIPLES.md §5 Program
+    Independence at the process level.
+    """
 
     class _Handler(BaseHTTPRequestHandler):
         # Suppress default per-request stderr logging — we record to ledger.
@@ -465,6 +471,16 @@ def _make_handler(project: Project):
                 self.wfile.write(body)
                 return
             if self.path in ("/", ""):
+                if serve_only:
+                    # PRINCIPLES.md §5: independent execution mode.
+                    # Redirect the edit URL to the runtime URL so an
+                    # operator landing on the server's root sees the
+                    # running program, not a dead chat shell.
+                    self.send_response(302)
+                    self.send_header("Location", "/run")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 # Fresh project (no authored_at marker, no meaningful
                 # app.ail) → serve the authoring chat UI. Users describe
                 # what they want in plain language; the agent writes
@@ -569,6 +585,11 @@ def _make_handler(project: Project):
 
         def do_POST(self):  # noqa: N802 — stdlib name
             if self.path == "/authoring-chat":
+                if serve_only:
+                    self._send_text(404,
+                        "chat disabled in serve mode (ail serve). "
+                        "Author via `ail up` in a separate terminal.\n")
+                    return
                 length = int(self.headers.get("Content-Length", "0") or "0")
                 user_msg = self.rfile.read(length).decode("utf-8") if length else ""
                 if not user_msg.strip():
@@ -925,7 +946,7 @@ def _make_handler(project: Project):
 
 def serve_project(
     project: Project, *, port: int, host: str = "127.0.0.1",
-    watch: bool = True, logger=None,
+    watch: bool = True, logger=None, serve_only: bool = False,
 ) -> int:
     # Make `perform state.read/write/has/delete` resolve to this
     # project's .ail/state/keyval/ — outside an agentic context the
@@ -959,7 +980,7 @@ def serve_project(
     """
     from .ui import make_logger
     logger = logger or make_logger("friendly")
-    handler = _make_handler(project)
+    handler = _make_handler(project, serve_only=serve_only)
     try:
         server = ThreadingHTTPServer((host, port), handler)
     except OSError as e:

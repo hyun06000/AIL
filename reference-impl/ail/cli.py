@@ -142,6 +142,23 @@ def main(argv: list[str] | None = None) -> int:
              "`compact` is the original v1.9.0 dev-style one-liners "
              "useful for scripts and CI.")
 
+    p_serve = sub.add_parser("serve",
+        help="Run a project's programs WITHOUT the authoring chat. "
+             "This is the 'independent execution' mode per "
+             "PRINCIPLES.md §5 — the chat session can be closed; the "
+             "server keeps schedule.every ticks firing and the "
+             "view.html dashboard accessible at /run. Run in a "
+             "separate terminal (or tmux) from `ail up`; both can "
+             "coexist on different ports against the same project.")
+    p_serve.add_argument("path", nargs="?", default=".",
+        help="Project directory (default: current directory)")
+    p_serve.add_argument("--port", type=int, default=8090,
+        help="Port to serve on (default 8090, distinct from ail up's "
+             "default 8080 so both can run side-by-side).")
+    p_serve.add_argument("--host", default="127.0.0.1",
+        help="Host to bind (default 127.0.0.1). Use 0.0.0.0 to expose "
+             "on the LAN for field-testing.")
+
     p_chat = sub.add_parser("chat",
         help="Edit an agentic project in natural language. The AI updates "
              "INTENT.md and/or app.ail to match your request, then re-runs "
@@ -236,6 +253,22 @@ def main(argv: list[str] | None = None) -> int:
             watch=not args.no_watch,
             auto_fix_attempts=args.auto_fix,
             log_style=args.log,
+        )
+
+    if args.cmd == "serve":
+        from .agentic import Project
+        from .agentic.server import serve_project
+        try:
+            proj = Project.at(args.path)
+        except FileNotFoundError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        print(f"Serving {proj.root.name} on http://{args.host}:{args.port}/run")
+        print(f"  (chat UI disabled — independent execution mode)")
+        print(f"  (Ctrl+C to stop)\n")
+        return serve_project(
+            proj, port=args.port, host=args.host, watch=False,
+            serve_only=True,
         )
 
     if args.cmd == "chat":

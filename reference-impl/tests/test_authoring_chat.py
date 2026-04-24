@@ -629,6 +629,53 @@ def test_authored_project_serves_service_ui_on_get(tmp_path):
     assert "<textarea" in body
 
 
+def test_serve_only_mode_redirects_root_and_disables_chat(tmp_path):
+    """`ail serve` — PRINCIPLES.md §5 Program Independence at the
+    process level. The edit URL redirects to the runtime URL, and the
+    chat POST endpoint is 404. This proves the chat can be closed
+    without taking the program down."""
+    proj = Project.init(tmp_path / "indep")
+    proj.write_app_source("entry main(input: Text) { return input }")
+    (proj.root / "view.html").write_text(
+        "<!doctype html><body>RUNTIME_ONLY</body>", encoding="utf-8",
+    )
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False,
+                "serve_only": True},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    # GET / → 302 to /run (don't auto-follow so we can assert the
+    # redirect target).
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/")
+    class _NoRedirect(urllib.request.HTTPErrorProcessor):
+        def http_response(self, request, response):
+            return response
+        https_response = http_response
+    opener = urllib.request.build_opener(_NoRedirect)
+    with opener.open(req, timeout=2) as r:
+        assert r.status == 302
+        assert r.headers.get("Location") == "/run"
+
+    # GET /run serves the runtime view.
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/run", timeout=2) as r:
+        assert "RUNTIME_ONLY" in r.read().decode("utf-8")
+
+    # POST /authoring-chat → 404 (chat is off).
+    req_post = urllib.request.Request(
+        f"http://127.0.0.1:{port}/authoring-chat",
+        data=b"hello", method="POST")
+    try:
+        urllib.request.urlopen(req_post, timeout=2)
+        assert False, "expected 404"
+    except urllib.error.HTTPError as e:
+        assert e.code == 404
+
+
 def test_run_route_serves_runtime_ui_independent_of_authored_marker(tmp_path):
     """PRINCIPLES.md §5 Program Independence: /run is the runtime URL
     for a program, separate from the edit URL (/). It must serve the
