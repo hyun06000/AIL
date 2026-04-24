@@ -1372,26 +1372,64 @@ def render_authoring_page(
         const statusSpan = document.createElement('span');
         statusSpan.className = 'status';
         statusSpan.style.marginLeft = '8px';
-        // v1.58.7: unified feedback textarea. Always visible above
-        // the buttons. Content goes with either decision, so the
-        // agent sees WHY on a decline AND sees ADDITIONAL GUIDANCE
-        // on an approve ("승인, 다만 브랜치 이름은 X로").
+        // v1.58.11: the textarea is shown with an explicit label +
+        // a hint that spells out "Approve/Decline buttons below
+        // submit whatever is in this box together with the
+        // decision." Field test: user couldn't find a submit
+        // button because the Approve/Decline buttons read like
+        // standalone y/n — the comment felt stranded.
+        const feedbackLabel = document.createElement('div');
+        feedbackLabel.textContent = '💬 의견 (선택 / optional):';
+        feedbackLabel.style.cssText =
+          'margin-top:8px;font-size:12px;font-weight:500;color:#374151;';
+        box.appendChild(feedbackLabel);
         const feedback = document.createElement('textarea');
         feedback.placeholder =
-          '의견 (선택 / optional) — 예: "승인, 브랜치 이름만 X로" ' +
-          '또는 "URL이 틀렸어요". 에이전트가 이 의견을 읽고 다음 ' +
-          '단계를 조정합니다.';
+          '예: "승인, 다만 브랜치 이름은 X로" / "URL 틀렸어요, Y로 바꿔줘". ' +
+          '여기 쓴 내용은 아래 승인 또는 거절 버튼을 누를 때 함께 전달됩니다.';
         feedback.style.cssText =
           'width:100%;font-family:inherit;font-size:13px;padding:8px;' +
           'border:1px solid #e5e7eb;border-radius:6px;' +
-          'min-height:50px;resize:vertical;margin-top:6px;';
+          'min-height:50px;resize:vertical;margin-top:4px;box-sizing:border-box;';
         box.appendChild(feedback);
+        const submitHint = document.createElement('div');
+        submitHint.style.cssText =
+          'font-size:11px;color:#6b7280;margin-top:4px;';
+        submitHint.textContent =
+          '↓ 버튼을 누르면 위 의견과 함께 전송됩니다 / ' +
+          'Clicking below submits your decision along with the comment.';
+        box.appendChild(submitHint);
         btnRow.appendChild(approveBtn);
         btnRow.appendChild(declineBtn);
         btnRow.appendChild(statusSpan);
         box.appendChild(btnRow);
         thread.appendChild(box);
         scrollBottom();
+
+        // Dynamic label so the user can see the comment is
+        // attached: empty → plain "승인"; non-empty → "의견과 함께
+        // 승인". Feels like hitting a "submit with comment" button
+        // instead of a naked y/n.
+        const baseApprove = '✅ 승인 / Approve';
+        const baseDecline = '❌ 거절 / Decline';
+        const updateBtnLabels = () => {{
+          const has = feedback.value.trim().length > 0;
+          approveBtn.textContent = has
+            ? '✅ 의견과 함께 승인 / Approve with comment'
+            : baseApprove;
+          declineBtn.textContent = has
+            ? '❌ 의견과 함께 거절 / Decline with comment'
+            : baseDecline;
+        }};
+        feedback.addEventListener('input', updateBtnLabels);
+        // Ctrl/Cmd+Enter → submit as Approve (fastest path when
+        // user is typing a confirmation-with-guidance).
+        feedback.addEventListener('keydown', (e) => {{
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {{
+            e.preventDefault();
+            approveBtn.click();
+          }}
+        }});
 
         const decide = async (decision) => {{
           approveBtn.disabled = true;
