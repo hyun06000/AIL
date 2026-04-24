@@ -1042,8 +1042,11 @@ class Executor:
                 1.0, origin=origin)
 
         custom_headers: dict[str, str] = {}
-        if "headers" in kwargs:
-            raw_headers = kwargs["headers"].value
+        _headers_cv = kwargs.get("headers")
+        if _headers_cv is None and len(args) >= 3:
+            _headers_cv = args[2]
+        if _headers_cv is not None:
+            raw_headers = _headers_cv.value
             if isinstance(raw_headers, dict):
                 for hk, hv in raw_headers.items():
                     if hv is None:
@@ -1060,8 +1063,6 @@ class Executor:
             "User-Agent": "ail-http-effect/1.0",
             "Content-Type": "application/json",
         }
-        # Caller's Content-Type wins only if they explicitly set one —
-        # unusual but possible (e.g. application/vnd.github+json).
         merged_headers.update(custom_headers)
 
         try:

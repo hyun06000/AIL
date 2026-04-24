@@ -4,6 +4,14 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.47.5 — 2026-04-24
+
+**fix: `http.post_json` now accepts optional headers as third positional arg.**
+
+`perform http.post_json(url, body, headers)` was silently ignoring positional headers — the implementation only read from `kwargs["headers"]`, never from `args[2]`. Authenticated POST operations (branch creation, file commit, PR creation) all returned 401. Field test: `awesome_list_pr.ail` branch creation failed while GET succeeded because GET was fixed in v1.47.2 but `_http_post_json` had its own independent header-reading path that wasn't updated.
+
+---
+
 ## v1.47.4 — 2026-04-24
 
 **fix: env var input strips `KEY=VALUE` prefix before saving.**
