@@ -669,6 +669,69 @@ Rules:
 4. Use `<action>ready_to_serve</action>` — the existing `/service` route IS the shareable web page
 
 The user asking "모니터링 웹페이지 만들어줘" wants `schedule.every` + `state.write` + `view.html`, not a new HTTP server.
+
+**Interactive web apps (diary, todo, calendar, form-based tools) — the pattern you keep getting wrong:**
+
+The user says "다이어리 웹페이지" / "할 일 관리 페이지" / "설문 폼" / anything with **typed input + persistent state + rendered UI**. This is DIFFERENT from monitoring. Field-test 2026-04-24: a diary request was answered with "entry returns a big HTML string" — the user saw nothing at `/service` because nothing was written to disk as `view.html`, and re-running just produced the same HTML with no saved entries. That is not a web app; it is a template expander that pretends to be one.
+
+**MANDATORY when the user asks for a UI page that accepts input:**
+
+1. **Write a real `view.html` file** — static shell with the HTML structure (forms, buttons, display areas). Use `<script>` to wire the UI to AIL.
+2. **Write the `.ail` program as a command dispatcher.** Its `entry main(input: Text)` parses an input string like `"get"` / `"save:2024-01-15:오늘 날씨가 좋았다"` / `"delete:42"` and routes to the right branch. Each branch reads or writes `state.*` and returns a compact response (JSON or short text).
+3. **Wire view.html to the AIL program via `fetch('/authoring-run?program=<name>.ail', {{method:'POST', body: command}})`.** The response body IS the return value of the entry. Parse it in JS and update the DOM.
+4. **All persistent data lives in `state.*`** so entries survive restarts. HTML is the shell; state is the data.
+5. **`<action>ready_to_serve</action>`** once view.html + dispatcher are both on disk. `/service` serves view.html, which then calls `/authoring-run` for every user action.
+
+**NEVER return HTML as the `entry main` return value.** A long HTML string in `return` has no storage and no submission — every run shows the same static thing. If you find yourself writing `return "<!DOCTYPE html>..."`, stop: you are building option (b) below, and the user wants (a).
+
+- ✅ (a) `entry main(input: Text)` parses a command, touches state, returns compact JSON. `view.html` handles layout and calls this program.
+- ❌ (b) `entry main()` returns a multi-KB HTML string. `view.html` missing. User asked for a web app, received a template expander.
+
+**Concrete diary pattern (uses only real AIL — `state.read`, `state.write`, `starts_with`, `slice`; the command protocol is yours to design):**
+
+```
+# PURPOSE: 다이어리 — view.html이 호출. get / save:<date>:<body>
+// INPUT: 명령 (view.html이 전달)
+
+entry main(input: Text) -> Text {{
+  let existing = attempt {{ perform state.read("entries") }} or "[]"
+  branch {{
+    starts_with(input, "get") -> return existing
+    starts_with(input, "save:") -> {{
+      let body = slice(input, 5, length(input))   // drop "save:"
+      let next = merge_json_list(existing, body)
+      perform state.write("entries", next)
+      return "ok"
+    }}
+    else -> return "unknown command"
+  }}
+}}
+
+pure fn merge_json_list(existing: Text, new_entry_body: Text) -> Text {{
+  // Appends a new JSON entry to the existing JSON array string.
+  intent: "existing is a JSON array literal as Text. Parse, append the
+           new entry body, return the resulting JSON array as Text."
+}}
+```
+
+```html
+<!-- view.html -->
+<h1>📅 다이어리</h1>
+<div id="calendar"></div>
+<script>
+async function call(cmd) {{
+  const r = await fetch('/authoring-run?program=diary.ail',
+                        {{ method:'POST', body: cmd }});
+  return await r.text();
+}}
+(async () => {{
+  const entries = JSON.parse(await call('get'));
+  renderCalendar(entries);  // your renderer
+}})();
+</script>
+```
+
+The user then sees real state persistence, real form submission, and the tab can be closed / reopened and data survives — satisfying PRINCIPLES.md §5 Program Independence.
 - When the conversation history contains a `[Run result — ERROR]` entry, that means the user just ran the program and got an error. Treat this as your top priority. **Mandatory response structure:**
   1. **State your hypothesis first** — one sentence saying what you suspect and why. E.g. "404 on a PUT endpoint usually means the HTTP method is wrong — the GitHub Contents API needs PUT, not POST." Do NOT silently rewrite without explaining.
   2. **Fix the code** — update `<file path="...">` with the specific change.
