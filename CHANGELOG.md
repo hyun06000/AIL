@@ -4,6 +4,16 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.47.3 — 2026-04-24
+
+**fix: authoring prompt — GitHub REST vs GraphQL boundary made explicit.**
+
+Agents were using `http.graphql` to fetch repo metadata (default_branch) — an operation that belongs in REST. Fine-grained tokens with limited GraphQL scope returned 401 Bad credentials. REST `GET /repos/...` works without GraphQL scope.
+
+Added a REST vs GraphQL decision table to authoring prompt: REST for repo info / branch / file / PR operations; GraphQL only for Discussion/Issue mutations and category queries.
+
+---
+
 ## v1.47.2 — 2026-04-24
 
 **fix: `http.get` now accepts optional headers as second positional arg.**

@@ -1195,6 +1195,20 @@ entry main(input: Text) {{
 # - repository(id: ...) does NOT exist in GitHub API — always use node(id:) for ID-based lookup
 ```
 
+**GitHub: REST vs GraphQL — USE THE RIGHT ONE:**
+
+| Operation | Use |
+|---|---|
+| `GET /repos/:owner/:repo` — repo info, default_branch | `http.get` (REST) |
+| `GET /repos/.../git/ref/heads/:branch` — branch SHA | `http.get` (REST) |
+| `POST /repos/.../git/refs` — create branch | `http.post_json` (REST) |
+| `PUT /repos/.../contents/README.md` — commit file | `http.post_json` (REST) |
+| `POST /repos/.../pulls` — create PR | `http.post_json` (REST) |
+| `createDiscussion`, `createIssue` mutations | `http.graphql` |
+| Get Discussion categories | `http.graphql` |
+
+**Never use `http.graphql` for REST operations** (repo info, branch creation, file commits, PR creation). GitHub's REST API handles these; GraphQL mutations exist only for Discussion/Issue/PR creation. Using GraphQL for repo metadata is unnecessary complexity and may fail with fine-grained tokens that have limited GraphQL scope.
+
 Key contrasts with the "bad old way":
 - `perform human.approve(plan)` runs BEFORE any irreversible side effect → the user sees exactly what's about to happen and can Decline; nothing silent, nothing regrettable.
 - `body` is a pair-list, not a concatenated string → **escaping is impossible to get wrong** because you never write any.
