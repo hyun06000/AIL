@@ -960,18 +960,18 @@ When the program needs to look something up on the web, use `perform search.web(
 2. **Always use `http.post_json` for JSON APIs.** Build the body as a pair-list: `[["title", title], ["body", body]]`. Nest the same way: `[["input", [["title", t], ["categoryId", c]]]]`.
 3. **Always `parse_json(resp.body)` before claiming success.** HTTP 200 ≠ logical success for GraphQL or many REST APIs (GraphQL returns 200 with an `errors` field when the query failed). After `resp.ok`, parse the body and read the expected fields; if they are missing, return the raw body so the user can see what actually came back.
 4. **Never fabricate the return value.** Your program's return string must be derived from the API response, not literals like `"True"` or `"posted"`. If you cannot verify success, say so with the raw response included — that is more useful than a confident lie.
-5. **GitHub Contents API (`PUT /repos/.../contents/...`) requires `base64_encode`.** The `content` field MUST be base64-encoded — sending plain text returns 404 regardless of permissions or branch. Always use `base64_encode(file_content)`:
+5. **GitHub Contents API requires `http.put_json` + `base64_encode`.** GitHub's file create/update endpoint is `PUT /repos/.../contents/...` — it requires a PUT, not POST. Using `http.post_json` returns 404. Use `http.put_json`. The `content` field MUST also be base64-encoded:
 
 ```ail
 // ✅ CORRECT — GitHub Contents API file create/update
 content_b64 = base64_encode(new_content)
-r = perform http.post_json(
+r = perform http.put_json(
     "https://api.github.com/repos/OWNER/REPO/contents/PATH",
-    [["message", "commit msg"], ["content", content_b64], ["sha", existing_sha], ["branch", "main"]],
-    headers: [["Authorization", "Bearer " + token], ["Accept", "application/vnd.github+json"]])
+    [["message", "commit msg"], ["content", content_b64], ["sha", existing_sha], ["branch", "my-branch"]],
+    [["Authorization", join(["Bearer ", token], "")], ["Accept", "application/vnd.github+json"]])
 
-// ❌ WRONG — plain text content → always 404
-r = perform http.post_json(url, [["message", "msg"], ["content", new_content], ["sha", sha]])
+// ❌ WRONG — POST instead of PUT → always 404
+r = perform http.post_json(url, [["message", "msg"], ["content", content_b64], ["sha", sha]])
 ```
 
 **The canonical "take action" response pattern:**
@@ -1202,7 +1202,7 @@ entry main(input: Text) {{
 | `GET /repos/:owner/:repo` — repo info, default_branch | `http.get` (REST) |
 | `GET /repos/.../git/ref/heads/:branch` — branch SHA | `http.get` (REST) |
 | `POST /repos/.../git/refs` — create branch | `http.post_json` (REST) |
-| `PUT /repos/.../contents/README.md` — commit file | `http.post_json` (REST) |
+| `PUT /repos/.../contents/README.md` — commit file | `http.put_json` (REST) ← PUT not POST |
 | `POST /repos/.../pulls` — create PR | `http.post_json` (REST) |
 | `createDiscussion`, `createIssue` mutations | `http.graphql` |
 | Get Discussion categories | `http.graphql` |

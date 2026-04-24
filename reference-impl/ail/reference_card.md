@@ -557,10 +557,13 @@ Built-in effects:
     structured body. Refuses a pre-formatted string body; the
     runtime serializes via `encode_json` and sets
     `Content-Type: application/json` (caller can override). The
-    safe default for every JSON REST API. Closes a HEAAL gap where
-    agents hand-rolled JSON strings and shipped injection bugs —
-    with this effect the author writes the *value*, not the
-    encoding, and the runtime makes malformed JSON impossible.
+    safe default for every JSON REST API that uses POST.
+  - `http.put_json(url: Text, body: pair-list | Record,
+    headers?: [[Text, Text]] | Record) -> Record` — identical to
+    `http.post_json` but sends PUT. Required for APIs that use PUT
+    for create/update — most notably GitHub Contents API
+    (`PUT /repos/.../contents/...`). Using `http.post_json` on a
+    PUT-only endpoint returns 404.
   - `http.graphql(url: Text, query: Text,
     variables?: pair-list | Record,
     headers?: [[Text, Text]] | Record) -> Result[Any]` — POST a

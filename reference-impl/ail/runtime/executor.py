@@ -455,7 +455,9 @@ class Executor:
         if name == "http.post":
             return self._http_effect("POST", args, kwargs, origin)
         if name == "http.post_json":
-            return self._http_post_json(args, kwargs, origin)
+            return self._http_post_json(args, kwargs, origin, method="POST")
+        if name == "http.put_json":
+            return self._http_post_json(args, kwargs, origin, method="PUT")
         if name == "http.graphql":
             return self._http_graphql(args, kwargs, origin)
         if name == "file.read":
@@ -485,7 +487,7 @@ class Executor:
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
-            f"http.post_json, http.graphql, file.read, file.write, "
+            f"http.post_json, http.put_json, http.graphql, file.read, file.write, "
             f"clock.now, state.read, state.write, state.has, "
             f"state.delete, schedule.every, env.read, human.approve, "
             f"search.web, ail.run, or a declared effect)"
@@ -994,7 +996,7 @@ class Executor:
 
     def _http_post_json(self, args: list[ConfidentValue],
                         kwargs: dict[str, ConfidentValue],
-                        origin: Origin) -> ConfidentValue:
+                        origin: Origin, method: str = "POST") -> ConfidentValue:
         """HTTP POST with structural JSON body.
 
         HEAAL gap closer (2026-04-23 promo-bot field test): agents
@@ -1067,7 +1069,7 @@ class Executor:
 
         try:
             req = urllib.request.Request(
-                url, method="POST",
+                url, method=method,
                 data=body_text.encode("utf-8"),
                 headers=merged_headers,
             )
@@ -1080,7 +1082,7 @@ class Executor:
                 "ok": 200 <= status < 300,
             }
             self.trace.record(
-                "http_call", method="POST_JSON", url=url,
+                "http_call", method=f"{method}_JSON", url=url,
                 status=status, ok=result["ok"],
                 body_preview=content[:200] if not result["ok"] else None,
             )
@@ -1097,7 +1099,7 @@ class Executor:
                 "ok": False,
             }
             self.trace.record(
-                "http_call", method="POST_JSON", url=url,
+                "http_call", method=f"{method}_JSON", url=url,
                 status=status, ok=False,
                 reason=getattr(e, "reason", ""),
                 body_preview=content[:200],
@@ -1105,13 +1107,13 @@ class Executor:
             return ConfidentValue(result, 1.0, origin=origin)
         except urllib.error.URLError as e:
             self.trace.record(
-                "http_call", method="POST_JSON", url=url,
+                "http_call", method=f"{method}_JSON", url=url,
                 status=None, ok=False,
                 network_error=str(e),
             )
             return ConfidentValue(
                 {"_result": True, "ok": False,
-                 "error": f"http.post_json {url}: {e}"},
+                 "error": f"http.{method.lower()}_json {url}: {e}"},
                 0.0, origin=origin,
             )
 

@@ -4,6 +4,14 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.47.6 — 2026-04-24
+
+**feat: `http.put_json` effect — GitHub Contents API fix.**
+
+GitHub's file create/update endpoint is `PUT /repos/.../contents/...`. `http.post_json` was sending POST → 404. Added `http.put_json` as an alias that routes through the same `_http_post_json` handler with `method="PUT"`. Updated authoring prompt REST table, GitHub Contents API example code, and reference card.
+
+---
+
 ## v1.47.5 — 2026-04-24
 
 **fix: `http.post_json` now accepts optional headers as third positional arg.**
