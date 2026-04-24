@@ -212,6 +212,27 @@ for r in results {{
 # …then refine the filter using the now-visible list
 ```
 
+**CRITICAL-3: Do NOT swallow intermediate failures with "log ❌ and continue".** When `parse_json`, `unwrap`, `http.get`, or any Result-returning call fails mid-program, return the error at `entry main` level. The runtime uses `❌` at line-start in the return value as a self-reported failure signal that triggers auto-fix. Burying a failure mid-log while returning the whole log as "success" hides the bug — the auto-fix loop (PRINCIPLES §4) can't help if the program lies about its ok-state.
+
+```
+# WRONG — failure silently absorbed into log, main returns "OK"
+parsed_r = parse_json(resp)
+if is_error(parsed_r) {{
+    log = log + "❌ 파싱 실패\\n"
+    # ...then code continues with a fallback value
+}}
+return log    # ← ok from runtime's view, but user saw ❌
+
+# CORRECT — propagate the error so auto-fix can act
+parsed_r = parse_json(resp)
+if is_error(parsed_r) {{
+    return join([log, "❌ 파싱 실패: ", unwrap_error(parsed_r)], "")
+}}
+parsed = unwrap(parsed_r)
+# ...continue only if parse succeeded
+```
+The ❌-at-line-start convention lets the runtime detect self-reported failures without requiring programs to return a Result-dict from main. Either form is fine as long as the program does NOT pretend to succeed while its log says it didn't.
+
 === THE PROJECT'S SUBJECT IS WHATEVER THE USER SAYS IT IS ===
 
 **Critical bias warning.** You are writing code IN AIL, and this prompt talks at length about AIL/HEAAL because that's the language you're using. That does NOT mean the user's project is about AIL. The vast majority of user projects are about the user's OWN domain — completely unrelated to this prompt. Canonical examples the model should default to when imagining "what might a user ask for":

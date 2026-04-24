@@ -689,6 +689,23 @@ def test_authoring_tree_endpoint_lists_project_files_with_captions(tmp_path):
     assert entries["view.html"]["kind"] == "html"
 
 
+def test_looks_like_error_catches_self_reported_x_mark(tmp_path):
+    """hyun06000 field test 2026-04-24: a program caught an inner
+    parse_json failure, logged '❌ 가이드 분석 실패' and continued
+    happily. _looks_like_error missed it → ok=true → auto-fix never
+    fired. New signal: any line starting with ❌ in the return string
+    counts as self-reported error."""
+    from ail.agentic.agent import _looks_like_error
+    assert _looks_like_error(
+        "=== step log ===\n✓ A\n❌ B failed\n✓ C\n")
+    assert _looks_like_error("❌ only line")
+    # Plain success should NOT trip.
+    assert not _looks_like_error("✓ A\n✓ B\n✓ C\n")
+    # ❌ in the middle of a line (not at line start) is prose, not a
+    # status marker. Don't flag.
+    assert not _looks_like_error("failure rate is < 1% ❌ but manageable")
+
+
 def test_effects_emit_auto_log_markers_during_run(tmp_path):
     """hyun06000 2026-04-24: "로그가 스트리밍 안 돼서 답답함." The
     fix is runtime-level auto-emission of '→ perform X' markers for

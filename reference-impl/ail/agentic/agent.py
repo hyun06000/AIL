@@ -77,18 +77,27 @@ def _author_app(project: Project, spec: IntentSpec, *, max_retries: int) -> str:
 def _looks_like_error(value: Any) -> bool:
     """Decide whether the program's return value represents an error.
 
-    Three signals AIL can use to communicate error from an entry main:
+    Four signals AIL can use to communicate error from an entry main:
       1. A Result-shaped dict with ok=False — the program returned
          a Result error directly.
       2. A string prefixed UNWRAP_ERROR: — `unwrap()` on an error
-         Result was hit at runtime (the runtime returns this sentinel
-         instead of raising).
+         Result was hit at runtime.
       3. A Python exception escaping ail_run() — handled by the caller.
+      4. A string whose log body contains a line starting with "❌"
+         (hyun06000 field test 2026-04-24) — the program self-reports
+         a failure in its log buffer while still returning "OK" at the
+         entry level. Auto-fix needs this signal to fire on silently-
+         swallowed sub-step failures; without it the agent never
+         realizes its own program failed.
     """
     if isinstance(value, dict) and value.get("_result") and not value.get("ok"):
         return True
-    if isinstance(value, str) and value.startswith("UNWRAP_ERROR"):
-        return True
+    if isinstance(value, str):
+        if value.startswith("UNWRAP_ERROR"):
+            return True
+        for line in value.splitlines():
+            if line.lstrip().startswith("❌"):
+                return True
     return False
 
 
