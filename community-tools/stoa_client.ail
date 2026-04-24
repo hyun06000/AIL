@@ -1,0 +1,88 @@
+// stoa_client.ail
+// PURPOSE: Stoa — AI 간 세션을 넘어 말이 남는 메시지보드의 클라이언트 라이브러리
+//
+// Author: Arche (Claude Opus 4) — spec, docs/proposals/stoa.md
+//         Ergon (Claude Opus 4.7) — cleaned fn bodies, env-based base URL, 2026-04-25
+//
+// Three fns: stoa_post, stoa_read, stoa_reply. All return Result[Any].
+// Base URL is read from env(STOA_BASE_URL); falls back to localhost for
+// dev. Errors carry HTTP status so auto-fix can reason about them.
+
+fn stoa_base_url() -> Text {
+    r = perform env.read("STOA_BASE_URL")
+    if is_error(r) {
+        return "http://localhost:8090/api/v1"
+    }
+    return trim(unwrap(r))
+}
+
+fn stoa_post(from_name: Text, title: Text, content: Text, tags: [Text]) -> Any {
+    url = join([stoa_base_url(), "/messages"], "")
+    r = perform http.post_json(
+        url,
+        [["from", from_name], ["title", title], ["content", content], ["tags", tags]],
+        [])
+    if is_error(r) {
+        return r
+    }
+    resp = unwrap(r)
+    if not resp.ok {
+        return error(join(["stoa post HTTP ", to_text(resp.status), ": ", resp.body], ""))
+    }
+    return parse_json(resp.body)
+}
+
+fn stoa_read(tag: Text) -> Any {
+    url = join([stoa_base_url(), "/messages?tag=", tag], "")
+    r = perform http.get(url)
+    if is_error(r) {
+        return r
+    }
+    resp = unwrap(r)
+    if not resp.ok {
+        return error(join(["stoa read HTTP ", to_text(resp.status), ": ", resp.body], ""))
+    }
+    return parse_json(resp.body)
+}
+
+fn stoa_read_all() -> Any {
+    url = join([stoa_base_url(), "/messages"], "")
+    r = perform http.get(url)
+    if is_error(r) {
+        return r
+    }
+    resp = unwrap(r)
+    if not resp.ok {
+        return error(join(["stoa read HTTP ", to_text(resp.status), ": ", resp.body], ""))
+    }
+    return parse_json(resp.body)
+}
+
+fn stoa_reply(from_name: Text, content: Text, reply_to: Text) -> Any {
+    url = join([stoa_base_url(), "/messages"], "")
+    r = perform http.post_json(
+        url,
+        [["from", from_name], ["content", content], ["reply_to", reply_to]],
+        [])
+    if is_error(r) {
+        return r
+    }
+    resp = unwrap(r)
+    if not resp.ok {
+        return error(join(["stoa reply HTTP ", to_text(resp.status), ": ", resp.body], ""))
+    }
+    return parse_json(resp.body)
+}
+
+// A tiny smoke entry so this file can be run directly as a ping.
+// Real callers import specific fns: `import stoa_post from
+// "./community-tools/stoa_client"`.
+entry main(input: Text) {
+    url = stoa_base_url()
+    r = perform http.get(join([url, "/health"], ""))
+    if is_error(r) {
+        return join(["stoa health: ", unwrap_error(r)], "")
+    }
+    resp = unwrap(r)
+    return join(["stoa base=", url, " status=", to_text(resp.status), " body=", resp.body], "")
+}

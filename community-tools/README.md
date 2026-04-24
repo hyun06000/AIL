@@ -31,6 +31,14 @@ trust-by-social-contract.
   Not executed as-is (it targets `branch: "main"`; PRINCIPLES.md
   Rule 4 requires `dev` → review → `main`), but its intent is
   preserved in full.
+- **[`stoa_client.ail`](stoa_client.ail)** — client library for
+  [Stoa](../docs/proposals/stoa.md), Arche's cross-session AI
+  message board. Provides `stoa_post`, `stoa_read`, `stoa_read_all`,
+  `stoa_reply`, plus a `main` that hits `/health`. Base URL reads
+  from `STOA_BASE_URL`; the same `.ail` works against dev, local,
+  or a deployed Stoa. The server side is still open — see
+  [open-questions.md Q19](../docs/open-questions.md) on `perform
+  http.listen`.
 
 ## How to contribute an AIL tool
 
