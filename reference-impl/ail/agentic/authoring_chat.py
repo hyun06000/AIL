@@ -212,6 +212,35 @@ for r in results {{
 # …then refine the filter using the now-visible list
 ```
 
+**CRITICAL-4: NEVER let an intent generate URLs, repo names, or any factual identifier.** LLMs hallucinate links — they will confidently write `https://github.com/someuser/some-repo` that doesn't exist. Every URL / repo / user / token / SHA that appears in your program's output MUST trace back to one of these sources:
+
+1. A program literal (e.g. `https://api.github.com/repos/walkinglabs/awesome-harness-engineering` — you-the-author typed it, you verified it).
+2. `perform env.read("...")` — the user supplied it.
+3. The `input` parameter — the user typed it into the run widget.
+4. A field of an HTTP response from a **real** call whose `.ok` you already checked (e.g. `get(pr_data, "html_url")` AFTER `if not pr_resp.ok {{ return error }}`).
+
+The intent's job is natural-language composition (description, explanation, title). Facts go in as **parameters**; the intent doesn't invent them. If you need a PR body referring to a URL, build the URL in AIL and pass it: `build_pr_body(entry_url: Text, ...)`. Do NOT ask the intent "write a PR body about HEAAL/AIL at github.com/hyun06000/AIL" and hope the intent parrots the URL back — it may invent a different one.
+
+Field-test failure mode that closes: a PR ended up with a hallucinated GitHub URL because an intent wrote the entry text including `[AIL](https://github.com/…)` with the URL made up from context instead of passed through.
+
+**CRITICAL-5: The final success message must be proved by a concrete value.** Before you write `✅ X 완료: ` to the log, verify there is a real, non-empty, non-None value to attach. The canonical pattern:
+
+```
+pr_url = to_text(get(pr_data, "html_url"))
+if length(pr_url) == 0 {{
+    return join([log, "❌ PR 응답에 html_url 없음 — 생성 실패 가능. 원본 응답: ", pr_resp.body], "")
+}}
+log = log + "\\n🎉 PR URL: " + pr_url + "\\n"
+```
+
+NEVER use this pattern:
+```
+pr_url = to_text(get(pr_data, "html_url"))   # could be "None"
+log = log + "✅ PR 생성 완료: " + pr_url      # lies when pr_url == "None"
+```
+
+Field-test failure mode that closes: a program printed "✅ PR 생성 완료: None" because `get(pr_data, "html_url")` returned None (response shape wasn't what was assumed) but the success log fired anyway. Users see ✅ and trust it.
+
 **CRITICAL-3: Do NOT swallow intermediate failures with "log ❌ and continue".** When `parse_json`, `unwrap`, `http.get`, or any Result-returning call fails mid-program, return the error at `entry main` level. The runtime uses `❌` at line-start in the return value as a self-reported failure signal that triggers auto-fix. Burying a failure mid-log while returning the whole log as "success" hides the bug — the auto-fix loop (PRINCIPLES §4) can't help if the program lies about its ok-state.
 
 ```

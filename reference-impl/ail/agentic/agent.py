@@ -96,8 +96,22 @@ def _looks_like_error(value: Any) -> bool:
         if value.startswith("UNWRAP_ERROR"):
             return True
         for line in value.splitlines():
-            if line.lstrip().startswith("❌"):
+            stripped = line.lstrip()
+            if stripped.startswith("❌"):
                 return True
+            # hyun06000 field test 2026-04-24 evening: a program
+            # printed "✅ PR 생성 완료: None" because get(record, key)
+            # returned None when the key was missing but the program
+            # still hit its success branch. The user saw ✅ and
+            # assumed it worked. Detect "success marker followed by
+            # a None / empty payload" as self-reported failure.
+            if "✅" in stripped or "🎉" in stripped:
+                tail = stripped.rstrip()
+                if tail.endswith(": None") or tail.endswith(":None"):
+                    return True
+                if tail.endswith(": ") or tail.endswith(":"):
+                    # "✅ X 완료: " with empty tail is also a tell.
+                    return True
     return False
 
 

@@ -711,6 +711,26 @@ def test_github_api_hint_for_cross_repo_pr_failures(tmp_path):
                             "https://example.com/api", '{}') == ""
 
 
+def test_looks_like_error_catches_success_marker_with_none_payload(tmp_path):
+    """hyun06000 field test 2026-04-24 evening: '✅ PR 생성 완료: None'
+    — success marker followed by a None value because get(record,
+    missing_key) silently returned None but the program still took
+    its success branch. Must trip the error detector so auto-fix
+    kicks in rather than the user trusting the fake ✅."""
+    from ail.agentic.agent import _looks_like_error
+    assert _looks_like_error(
+        "log log log\n✅ PR 생성 완료: None")
+    assert _looks_like_error(
+        "some ok steps\n🎉 PR URL: None")
+    assert _looks_like_error(
+        "✅ Created: ")   # trailing empty payload
+    # Legitimate successes with real payloads should not trip.
+    assert not _looks_like_error(
+        "✅ PR 생성 완료: https://github.com/foo/bar/pull/42")
+    assert not _looks_like_error(
+        "✓ step one\n✓ step two\n✅ all done")
+
+
 def test_looks_like_error_catches_self_reported_x_mark(tmp_path):
     """hyun06000 field test 2026-04-24: a program caught an inner
     parse_json failure, logged '❌ 가이드 분석 실패' and continued
