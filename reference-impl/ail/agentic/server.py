@@ -265,6 +265,42 @@ def _strip_value_envelopes(value, _depth: int = 0):
 
 
 
+def _summarize_effects_for_agent(trace) -> str:
+    """Compact, agent-readable summary of effect I/O that would otherwise
+    disappear once the entry returns. Covers the I/O the authoring model
+    needs to debug without asking the user for a re-run:
+
+      * search_web  — query, backends, and up to 20 returned URLs
+      * http.*      — method / status / url preview
+
+    Result is a single string shaped like a labeled block the chat
+    history formatter already prints; empty if no interesting effects
+    occurred.
+    """
+    lines: list[str] = []
+    try:
+        entries = list(trace.entries) if trace else []
+    except Exception:
+        return ""
+    for e in entries:
+        if e.kind == "search_web":
+            p = e.payload
+            query = p.get("query", "?")
+            backend = p.get("backend", "?")
+            urls = p.get("urls") or []
+            lines.append(
+                f"[effect search.web] backend={backend} query={query!r} "
+                f"count={p.get('count', 0)}"
+            )
+            for u in urls[:20]:
+                lines.append(f"  - {u}")
+    if not lines:
+        return ""
+    header = ("[Effect I/O the agent can see on the next turn — use this "
+              "to debug filter/routing decisions instead of hardcoding.]")
+    return header + "\n" + "\n".join(lines)
+
+
 def _make_handler(project: Project, serve_only: bool = False):
     """Build a request handler closed over a specific Project. Done as
     a factory so each project can have its own handler without globals.
@@ -700,6 +736,15 @@ def _make_handler(project: Project, serve_only: bool = False):
                     is_err = _looks_like_error(value)
                     rendered = _render_value(value)
                     diagnostic = _diagnose_from_trace(trace) if is_err else ""
+                    # Surface effect I/O (search_web URLs, etc.) the
+                    # agent would otherwise be blind to on the next
+                    # turn. hyun06000 2026-04-24: the "5 results →
+                    # filter kills all → agent hardcodes" failure mode
+                    # persisted because the agent couldn't see the 5.
+                    effect_summary = _summarize_effects_for_agent(trace)
+                    if effect_summary:
+                        diagnostic = (diagnostic + "\n\n" if diagnostic
+                                      else "") + effect_summary
                     outcome = {
                         "ok": not is_err,
                         "value": str(rendered),

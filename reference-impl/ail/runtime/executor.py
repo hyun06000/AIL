@@ -1485,9 +1485,16 @@ class Executor:
                     for item in items
                 ]
                 if results:
+                    # Record URL list, not just count, so the authoring
+                    # agent can see what was returned and why its filter
+                    # rejected them. hyun06000 field-test 2026-04-24: a
+                    # "5 results found → 0 after filter → agent
+                    # hardcoded targets" loop was impossible to debug
+                    # until this payload got the urls.
                     self.trace.record(
                         "search_web", backend="google",
-                        query=query[:100], count=len(results))
+                        query=query[:100], count=len(results),
+                        urls=[r["url"] for r in results][:20])
                     return ConfidentValue(
                         {"_result": True, "ok": True, "value": results},
                         0.9, origin=origin)
@@ -1524,7 +1531,8 @@ class Executor:
                 if results:
                     self.trace.record(
                         "search_web", backend="searxng",
-                        query=query[:100], count=len(results))
+                        query=query[:100], count=len(results),
+                        urls=[r["url"] for r in results][:20])
                     return ConfidentValue(
                         {"_result": True, "ok": True, "value": results},
                         0.8, origin=origin)
@@ -1600,7 +1608,8 @@ class Executor:
             if results:
                 self.trace.record(
                     "search_web", backend="duckduckgo",
-                    query=query[:100], count=len(results))
+                    query=query[:100], count=len(results),
+                    urls=[r.get("url", "") for r in results][:20])
                 return ConfidentValue(
                     {"_result": True, "ok": True, "value": results},
                     0.7, origin=origin)

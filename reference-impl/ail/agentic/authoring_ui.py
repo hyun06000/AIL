@@ -453,6 +453,60 @@ def render_authoring_page(
     }}
     refreshDeployBar();
 
+    // v1.54: auto-fix on run error. All author models are agentic
+    // (PRINCIPLES.md §4 extension), so a failed run should trigger
+    // an automatic repair turn instead of requiring "click-click-
+    // click" from the user. One pass per Run click; user decides
+    // whether to re-run. Bounded by AUTO_FIX_MAX.
+    const AUTO_FIX_MAX = 1;
+    async function autoFixOnError(failed, attempt) {{
+      if (attempt >= AUTO_FIX_MAX) return;
+      const status = document.createElement('div');
+      status.className = 'turn agent';
+      const statusBubble = document.createElement('div');
+      statusBubble.className = 'bubble';
+      statusBubble.style.color = '#6b7280';
+      statusBubble.style.fontSize = '12px';
+      statusBubble.textContent =
+        '⚙ 에러 감지 — 자동 수정 시도 중 (' + (attempt + 1) +
+        '/' + AUTO_FIX_MAX + ')…';
+      status.appendChild(statusBubble);
+      thread.appendChild(status);
+      scrollBottom();
+
+      const errSummary =
+        '이전 실행이 에러로 끝났어. PRINCIPLES.md §4 — 저자 모델은 ' +
+        '에이전틱. 원인부터 한 줄로 진단한 뒤, `<file>`로 고쳐진 ' +
+        '전체 소스를 emit하고 `<action>ready_to_run</action>`을 달아. ' +
+        '하드코딩 우회 금지 (search + filter 결과가 0이면 필터 조건을 ' +
+        '고치거나 쿼리를 재설계하지, 결과를 상수로 박지 말 것). ' +
+        'Error: ' + (failed.value || '') + ' | ' +
+        'Diagnostic: ' + (failed.diagnostic || '');
+      try {{
+        const r = await fetch('/authoring-chat', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'text/plain; charset=utf-8' }},
+          body: errSummary,
+        }});
+        status.remove();
+        const text = await r.text();
+        if (!r.ok) {{ addError('자동 수정 실패: ' + text); return; }}
+        const data = JSON.parse(text);
+        if (typeof data.session_total_tokens === 'number') {{
+          sessionTotalTokens = data.session_total_tokens;
+          renderTokenWidget();
+        }}
+        if (Array.isArray(data.programs)) programsForNext = data.programs;
+        if (data.active_program) activeProgramForNext = data.active_program;
+        addAgent(data.reply || '(empty)', data.files || [], data.action || null);
+        appendTokenFooter(thread.lastElementChild,
+                          data.input_tokens, data.output_tokens);
+      }} catch (e) {{
+        status.remove();
+        addError('자동 수정 네트워크 오류: ' + e.message);
+      }}
+    }}
+
     function appendTokenFooter(turnEl, inputTokens, outputTokens) {{
       if (!turnEl) return;
       const inp = Number(inputTokens) || 0;
@@ -965,6 +1019,14 @@ def render_authoring_page(
           }}
           addRunResult(data);
           scrollBottom();
+          // PRINCIPLES.md §4 extension (user, 2026-04-24): the
+          // authoring agent is agentic too, so a failed run should
+          // trigger an automatic fix-attempt instead of making the
+          // user click-click-click. Bounded at 3 retries per Run
+          // click to prevent loops.
+          if (data && data.ok === false) {{
+            await autoFixOnError(data, 0);
+          }}
         }} catch (e) {{
           clearInterval(logTimer);
           placeholder.remove();

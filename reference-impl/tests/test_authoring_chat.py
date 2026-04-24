@@ -629,6 +629,33 @@ def test_authored_project_serves_service_ui_on_get(tmp_path):
     assert "<textarea" in body
 
 
+def test_authoring_prompt_carries_critical_errors_block_at_top(tmp_path):
+    """The two parse errors that recur in field tests (pure fn with
+    perform; hardcode after empty filter) must be in the prompt's
+    critical-errors block near the top, not buried mid-document."""
+    from ail.agentic.authoring_chat import AuthoringChat
+    proj = Project.init(tmp_path / "p")
+    prompt = AuthoringChat(proj, _ScriptedChatAdapter([]))._build_goal_prompt({}, [], "hi")
+    assert "TWO CRITICAL PARSE ERRORS" in prompt
+    assert "CRITICAL-1" in prompt and "CRITICAL-2" in prompt
+    # The critical block should appear before the "THE PROJECT'S
+    # SUBJECT" preamble the agent reads for domain framing.
+    assert prompt.index("TWO CRITICAL PARSE ERRORS") < prompt.index("THE PROJECT'S SUBJECT IS")
+
+
+def test_ui_has_auto_fix_handler_on_failed_run(tmp_path):
+    """PRINCIPLES.md §4 extension: a failed run auto-triggers a fix
+    turn. Checking the JS literal here rather than via a browser is
+    a weak but cheap regression: the important thing is that the
+    handler exists and is wired to ok===false."""
+    from ail.agentic.authoring_ui import render_authoring_page
+    html = render_authoring_page(
+        project_name="x", host="127.0.0.1", port=8080, history=[])
+    assert "autoFixOnError" in html
+    assert "ok === false" in html
+    assert "AUTO_FIX_MAX" in html
+
+
 def test_admin_stop_endpoint_only_in_serve_mode(tmp_path):
     """The /admin/stop endpoint is exposed only when serve_only=True.
     In edit mode it must return 404 so accidentally POSTing to it from

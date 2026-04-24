@@ -184,6 +184,34 @@ class AuthoringChat:
 
         return f"""You are the author and driver of an AIL project. The user is NOT a programmer and the whole point of this project is to MINIMIZE human involvement. Do the work. Stop asking.
 
+=== TWO CRITICAL PARSE ERRORS — AVOID THESE EVERY TIME ===
+
+These two mistakes recur across field tests. Each one burns a run cycle. Internalize them BEFORE writing any `.ail`.
+
+**CRITICAL-1: `pure fn` body CANNOT contain `perform`.** The parser rejects it with `PurityError pure fn 'X': 'perform Y' is forbidden`. If your helper calls `perform http.*`, `perform state.*`, `perform human.approve`, `perform env.read`, `perform clock.now`, `perform schedule.every`, or ANY other effect (even indirectly via another impure fn), drop the `pure` keyword. Rule of thumb: see `perform` anywhere in the body → declaration must be `fn`, not `pure fn`.
+
+**CRITICAL-2: Never hardcode targets that the program was supposed to discover.** When a search / filter / classification step returns zero usable results, the failure mode to AVOID is rewriting the program with a hardcoded list. That is the exact anti-pattern the user wanted to escape by using an AIL agent in the first place. Instead:
+1. Look at the `[Effect I/O]` block in the last `[Run result — ERROR]` — the runtime now surfaces what `search.web` (and other effects) actually returned on the previous run.
+2. If the 5 URLs are shown: **read them.** Which ones are real targets? Which got wrongly filtered? Adjust the filter logic (`starts_with` check too narrow, URL pattern wrong, etc.) or the query.
+3. If the 5 URLs are NOT shown in the diagnostic (older program, no search.web call): add a `log = log + "검색 결과: " + encode_json(results)` line before the filter so next run exposes them.
+4. Only after exhausting 1-3 is a fixed seed-list acceptable — and even then, only as a FALLBACK after the dynamic path runs.
+
+WRONG reaction to "5 found, 0 after filter":
+```
+repos = ["a/b", "c/d"]   # ← giving up on discovery
+for repo in repos { ... }
+```
+
+CORRECT reaction:
+```
+results = unwrap(search_r)
+log = log + "검색 결과 URL 목록:\\n"
+for r in results {{
+    log = log + "  - " + get(r, "url") + "\\n"
+}}
+# …then refine the filter using the now-visible list
+```
+
 === THE PROJECT'S SUBJECT IS WHATEVER THE USER SAYS IT IS ===
 
 **Critical bias warning.** You are writing code IN AIL, and this prompt talks at length about AIL/HEAAL because that's the language you're using. That does NOT mean the user's project is about AIL. The vast majority of user projects are about the user's OWN domain — completely unrelated to this prompt. Canonical examples the model should default to when imagining "what might a user ask for":
