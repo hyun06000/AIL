@@ -138,6 +138,14 @@ def _diagnose_from_trace(trace) -> str:
                         + f"\n  response body (preview): "
                         + body_preview.replace("\n", " ")[:160]
                     )
+                # GitHub API-specific hints — the patterns the
+                # field-test agent was re-discovering over 4 retries.
+                gh_hint = _github_api_hint(
+                    int(status), p.get("method", "GET"),
+                    str(url), str(body_preview),
+                )
+                if gh_hint:
+                    line = line + "\n  hint: " + gh_hint
                 hints.append(line)
         elif kind == "intent_validation_failed":
             hints.append(
@@ -162,6 +170,44 @@ def _diagnose_from_trace(trace) -> str:
         "to try a different approach."
     )
     return header + "\n" + "\n".join(hints) + action
+
+
+def _github_api_hint(status: int, method: str, url: str, body: str) -> str:
+    """GitHub-specific diagnostics for the failure modes the agent
+    keeps rediscovering. Added from field-test observations where an
+    autonomous PR workflow hit:
+      * 404 on POST git/refs → write access or fork missing
+      * 422 head invalid on POST pulls → fork linkage missing or
+        head format wrong (must be `user:branch` for cross-repo PR)
+
+    Returning a short hint accelerates the auto-fix loop.
+    """
+    if "api.github.com" not in url:
+        return ""
+    method = method.upper()
+    if status == 404 and method == "POST" and "/git/refs" in url:
+        return (
+            "남의 repo에 직접 브랜치 생성은 불가. 먼저 "
+            "POST /repos/{owner}/{repo}/forks 로 fork한 뒤, fork 측 "
+            "repo에 브랜치를 만들고 cross-repo PR을 내세요."
+        )
+    if status == 422 and method == "POST" and "/pulls" in url:
+        if '"head"' in body and '"invalid"' in body:
+            return (
+                "422 head invalid — 대체로 두 원인: (a) head 필드 "
+                "형식이 틀림 (cross-repo PR은 `\"user:branch\"` 형태), "
+                "(b) fork가 GitHub 차원에서 upstream과 연결 안 됨 "
+                "(POST /forks를 먼저 호출해 실제로 forked 상태여야 함). "
+                "같은 오류가 반복되면 (b)가 원인일 확률이 높음."
+            )
+        return "PR 생성 검증 실패 — head / base / title 필드 확인."
+    if status == 422 and method == "POST" and "/git/refs" in url:
+        if "already exists" in body.lower():
+            return (
+                "브랜치 이미 존재. 기존 브랜치를 갱신하려면 "
+                "PATCH /repos/.../git/refs/heads/<name> 로 force-update."
+            )
+    return ""
 
 
 def _http_reason_hint(status: int) -> str:

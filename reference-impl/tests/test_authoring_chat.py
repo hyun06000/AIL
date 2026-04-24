@@ -689,6 +689,28 @@ def test_authoring_tree_endpoint_lists_project_files_with_captions(tmp_path):
     assert entries["view.html"]["kind"] == "html"
 
 
+def test_github_api_hint_for_cross_repo_pr_failures(tmp_path):
+    """Field-test pattern: autonomous GitHub PR workflow kept
+    re-discovering that (a) 404 on POST git/refs means fork-first,
+    (b) 422 head-invalid means fork-linkage or user:branch format.
+    The diagnostic now volunteers both hints so the auto-fix loop
+    reaches a solution in fewer rounds."""
+    from ail.agentic.server import _github_api_hint
+    h404 = _github_api_hint(
+        404, "POST",
+        "https://api.github.com/repos/walkinglabs/x/git/refs",
+        '{"message":"Not Found"}')
+    assert "fork" in h404.lower()
+    h422 = _github_api_hint(
+        422, "POST",
+        "https://api.github.com/repos/walkinglabs/x/pulls",
+        '{"errors":[{"field":"head","code":"invalid"}]}')
+    assert "user:branch" in h422 or "forked" in h422
+    # No false positives for non-GitHub URLs.
+    assert _github_api_hint(422, "POST",
+                            "https://example.com/api", '{}') == ""
+
+
 def test_looks_like_error_catches_self_reported_x_mark(tmp_path):
     """hyun06000 field test 2026-04-24: a program caught an inner
     parse_json failure, logged '❌ 가이드 분석 실패' and continued

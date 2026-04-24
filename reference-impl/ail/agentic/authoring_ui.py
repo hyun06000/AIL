@@ -547,12 +547,16 @@ def render_authoring_page(
     }}
     refreshDeployBar();
 
-    // v1.54: auto-fix on run error. All author models are agentic
-    // (PRINCIPLES.md §4 extension), so a failed run should trigger
-    // an automatic repair turn instead of requiring "click-click-
-    // click" from the user. One pass per Run click; user decides
-    // whether to re-run. Bounded by AUTO_FIX_MAX.
-    const AUTO_FIX_MAX = 1;
+    // v1.54/v1.56: auto-fix + auto-re-run loop. All author models
+    // are agentic (PRINCIPLES.md §4 extension). Field test showed
+    // the agent genuinely progresses on each retry (fork pattern
+    // discovered, head format discovered, etc.), but requiring the
+    // user to click Run between each fix broke the flow. So after
+    // auto-fix emits ready_to_run, we also auto-trigger the run —
+    // capped at AUTO_CYCLE_MAX per chat turn to prevent runaway.
+    const AUTO_FIX_MAX = 1;          // fix attempts per failed run
+    const AUTO_CYCLE_MAX = 5;        // run→fix→run cycles per session
+    let autoCycleCount = 0;
     async function autoFixOnError(failed, attempt) {{
       if (attempt >= AUTO_FIX_MAX) return;
       // Fade out the stale Run widgets so the user's eye moves to
@@ -634,14 +638,37 @@ def render_authoring_page(
         ctaBubble.style.cssText =
           'background:#ecfdf5;border:1px solid #a7f3d0;' +
           'color:#065f46;font-size:12px;';
-        ctaBubble.innerHTML =
-          '✓ <b>자동 수정 완료.</b> ' +
-          '아래 새 Run 버튼으로 다시 실행해보세요. ' +
-          '(수정이 마음에 안 들면 채팅으로 수정 방향을 말씀해주세요.)';
+        const shouldAutoRun =
+          data.action === 'ready_to_run' &&
+          autoCycleCount < AUTO_CYCLE_MAX;
+        if (shouldAutoRun) {{
+          autoCycleCount += 1;
+          ctaBubble.innerHTML =
+            '🔄 <b>자동 재실행 중</b> (' + autoCycleCount + '/' +
+            AUTO_CYCLE_MAX + ') — 수정된 코드를 바로 돌려봐요…';
+        }} else {{
+          ctaBubble.innerHTML =
+            '✓ <b>자동 수정 완료.</b> ' +
+            (autoCycleCount >= AUTO_CYCLE_MAX
+              ? '자동 재실행 한도(' + AUTO_CYCLE_MAX + '회)에 도달했어요. ' +
+                '채팅으로 다른 접근을 제안해주세요.'
+              : '아래 새 Run 버튼으로 다시 실행해보세요.');
+        }}
         cta.appendChild(ctaBubble);
         thread.appendChild(cta);
         refreshFileTree();
         scrollBottom();
+        if (shouldAutoRun) {{
+          // Small delay so the user can see the fix reply + CTA
+          // scroll into view before the run fires. Then click the
+          // most recent Run button programmatically.
+          setTimeout(() => {{
+            const allRunBtns = document.querySelectorAll(
+              '.run-card:not([style*="opacity: 0.45"]) .run-inline');
+            const btn = allRunBtns[allRunBtns.length - 1];
+            if (btn && !btn.disabled) btn.click();
+          }}, 800);
+        }}
       }} catch (e) {{
         status.remove();
         addError('자동 수정 네트워크 오류: ' + e.message);
