@@ -834,7 +834,7 @@ class Executor:
                 return self._result_ok(
                     {"approved": True, "comment": comment}, origin)
             if status == "declined":
-                reason = current.get("reason") or "user declined"
+                raw_reason = current.get("reason") or ""
                 try:
                     pending_path.unlink()
                 except OSError:
@@ -842,9 +842,15 @@ class Executor:
                 self.trace.record(
                     "human_approve_decided",
                     id=approval_id, decision="declined",
-                    reason=reason)
-                return self._result_err(
-                    f"user declined: {reason}", origin)
+                    reason=raw_reason or "(no reason)")
+                # Field test 2026-04-24: when no reason was supplied,
+                # the old fallback ("user declined") got concatenated
+                # with the prefix producing "user declined: user
+                # declined". Fix: message is "user declined" alone if
+                # no reason; "user declined: <reason>" otherwise.
+                msg = (f"user declined: {raw_reason}"
+                       if raw_reason else "user declined")
+                return self._result_err(msg, origin)
             _time.sleep(0.25)
 
         # Timed out — remove the record so the next run starts clean.
@@ -1687,10 +1693,21 @@ class Executor:
     def _file_write(self, args: list[ConfidentValue],
                     kwargs: dict[str, ConfidentValue],
                     origin: Origin) -> ConfidentValue:
-        """Write text to a file. Returns Result-ok on success, Result-error on failure."""
+        """Write text to a file. Returns Result-ok on success,
+        Result-error on failure. Parent directories are created on
+        demand — hyun06000 field test 2026-04-24: an agent tried
+        `file.write("./subdir/x.txt", …)` and the whole program died
+        with 'No such file or directory' because the subdir didn't
+        exist. Silent auto-mkdir is safer than forcing the agent to
+        thread a perform fs.mkdir hop into every write.
+        """
+        from pathlib import Path as _Path
         path = str(args[0].value) if args else str(kwargs.get("path", ConfidentValue("", 1.0)).value)
         content = args[1].value if len(args) >= 2 else kwargs.get("content", ConfidentValue("", 1.0)).value
         try:
+            p = _Path(path)
+            if p.parent and str(p.parent) not in ("", "."):
+                p.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(str(content))
             return ConfidentValue(

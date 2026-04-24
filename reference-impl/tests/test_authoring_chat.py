@@ -176,6 +176,34 @@ def test_write_file_accepts_expanded_artifact_extensions(tmp_path):
         assert ok, f"{path} should be accepted: {detail}"
 
 
+def test_file_write_auto_creates_parent_dirs(tmp_path):
+    """Field test 2026-04-24 Turn 22: agent tried file.write to a
+    subpath (.ail/heaal_description.txt) and the runtime errored
+    with 'No such file or directory' because the parent dir didn't
+    exist. After v1.58.9 file.write mkdirs -p silently."""
+    from ail import compile_source, MockAdapter
+    from ail.runtime import Executor
+    import os as _os
+
+    cwd = _os.getcwd()
+    try:
+        _os.chdir(tmp_path)
+        src = (
+            'entry main(input: Text) {\n'
+            '  r = perform file.write("nested/dir/x.txt", "hi")\n'
+            '  if is_error(r) { return unwrap_error(r) }\n'
+            '  return "ok"\n'
+            '}\n'
+        )
+        program = compile_source(src)
+        result = Executor(program, MockAdapter()).run_entry({"input": ""})
+        assert str(result.value) == "ok"
+        assert (tmp_path / "nested" / "dir" / "x.txt").read_text(
+            encoding="utf-8") == "hi"
+    finally:
+        _os.chdir(cwd)
+
+
 def test_write_file_rejects_oversize(tmp_path):
     proj = Project.init(tmp_path / "p")
     chat = AuthoringChat(proj, adapter=_ScriptedChatAdapter([]))
@@ -732,6 +760,21 @@ def test_github_api_hint_for_cross_repo_pr_failures(tmp_path):
     # No false positives for non-GitHub URLs.
     assert _github_api_hint(422, "POST",
                             "https://example.com/api", '{}') == ""
+
+
+def test_looks_like_error_catches_warning_marker_with_declined(tmp_path):
+    """Field test Turn 4 of awesome_pr session: program printed
+    '⚠ 승인 거부됨: user declined' and returned OK. User saw Run OK
+    but nothing happened. The new ⚠-with-declined signal turns this
+    into a self-reported error so auto-fix fires."""
+    from ail.agentic.agent import _looks_like_error
+    assert _looks_like_error("log\n⚠ 승인 거부됨: user declined")
+    assert _looks_like_error("⚠ declined by user")
+    assert _looks_like_error("⚠ fork 생성 실패")
+    assert _looks_like_error("⚠ operation rejected")
+    # A plain warning that doesn't signal failure stays OK.
+    assert not _looks_like_error("⚠ branch already exists — using it")
+    assert not _looks_like_error("⚠ CONTRIBUTING.md not found, using defaults")
 
 
 def test_looks_like_error_catches_success_marker_with_none_payload(tmp_path):

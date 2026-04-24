@@ -117,6 +117,22 @@ def test_approve_without_comment_still_works(approval_dir):
     assert out == ""
 
 
+def test_decline_without_reason_no_longer_doubles_up(approval_dir):
+    """Field test 2026-04-24 Turn 2: decline without reason produced
+    'user declined: user declined' (fallback + prefix collided).
+    Fixed to 'user declined' alone when no reason given."""
+    _decide_after(approval_dir, "declined")
+    out = _run(
+        'entry main(input: Text) {\n'
+        '  r = perform human.approve("proceed?")\n'
+        '  if is_error(r) { return unwrap_error(r) }\n'
+        '  return "unreachable"\n'
+        '}\n'
+    )
+    assert out == "user declined"
+    assert "user declined: user declined" not in out
+
+
 def test_decline_surfaces_as_error_result(approval_dir):
     _decide_after(approval_dir, "declined", reason="not today")
     out = _run(

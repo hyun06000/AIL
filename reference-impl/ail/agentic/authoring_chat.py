@@ -304,6 +304,26 @@ The intent's job is natural-language composition (description, explanation, titl
 
 Field-test failure mode that closes: a PR ended up with a hallucinated GitHub URL because an intent wrote the entry text including `[AIL](https://github.com/…)` with the URL made up from context instead of passed through.
 
+**CRITICAL-6: `user declined` is a terminal signal. NEVER convert it to a success path.** When `perform human.approve(plan)` returns an error ("user declined: ..."), the user has made a decision. Do not:
+- retry the approval automatically
+- treat it as "approval still pending" and loop back
+- log "⚠ 승인 거부됨" and return OK (this is the exact fake-success anti-pattern from CRITICAL-5; the runtime's `_looks_like_error` treats any `⚠ ... 거부` / `⚠ ... declined` line as an error so auto-fix fires)
+
+The ONLY correct response to decline is return the error up to `main`:
+
+```
+approval = perform human.approve(plan)
+if is_error(approval) {{
+    return join([log, "❌ ", unwrap_error(approval)], "")
+}}
+// approval ok; read comment, proceed
+comment = to_text(get(unwrap(approval), "comment"))
+```
+
+If the user declined WITH a comment ("승인, 단 브랜치 이름은 X로"), that's still a decline at the API level — the decline path applies. Comments on successful approval come through `unwrap(approval)`.
+
+Field-test failure that closes: Turn 3 of the awesome_pr session had the agent misread decline as "retry loop" and rewrite the program to swallow the error. The program ran with `⚠ 승인 거부됨` in the log but returned OK; the user saw Run success but nothing had happened. That must never work structurally.
+
 **CRITICAL-5: The final success message must be proved by a concrete value.** Before you write `✅ X 완료: ` to the log, verify there is a real, non-empty, non-None value to attach. The canonical pattern:
 
 ```

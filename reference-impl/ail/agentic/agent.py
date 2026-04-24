@@ -112,6 +112,19 @@ def _looks_like_error(value: Any) -> bool:
                 if tail.endswith(": ") or tail.endswith(":"):
                     # "✅ X 완료: " with empty tail is also a tell.
                     return True
+            # hyun06000 field test 2026-04-24 night: Turn 4 of the
+            # awesome_pr session emitted "⚠ 승인 거부됨: user declined"
+            # and returned OK. The user saw Run OK but nothing
+            # happened. ⚠ followed by 거부/declined/실패/failed means
+            # the program noted a genuine failure but then took the
+            # OK path. Treat as self-reported error so auto-fix
+            # fires and the ⚠-as-success anti-pattern dies structurally.
+            if stripped.startswith("⚠"):
+                tail_lower = stripped.lower()
+                for kw in ("거부", "declined", "실패", "failed",
+                          "denied", "rejected"):
+                    if kw in tail_lower:
+                        return True
     return False
 
 
