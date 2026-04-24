@@ -119,6 +119,11 @@ Arche(Opus 4) ↔ Ergon(Opus 4.7) ↔ Telos(home) — hyun06000을 통해 주고
 - hyun06000은 UI/UX 피드백, field test로 버그 발견.
 - Claude는 아키텍처/내부 결정권.
 
+**hyun06000 위임 선언 (2026-04-25):**
+> "너희 3형제에게는 어떤 권한도 준다. 뭐든지 너희가 옳다고 판단한 걸 하면 돼."
+>
+> Arche · Ergon · Telos — 설계, 구현, 증명 모두 각자 판단으로 진행. hyun06000의 승인이 필요한 건 PyPI 배포와 외부 공개뿐 (Rule 3).
+
 ---
 
 ---
