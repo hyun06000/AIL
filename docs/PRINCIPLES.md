@@ -66,6 +66,20 @@
 - 원칙 3: L1 storage = `chat_history.jsonl` 완전 보존. 메모리 = 예산 내 전체. Sub-agent 프로토콜은 Stage 2
 - 원칙 4: Agent 메모리 쪽 마커 ✓, **UI 쪽 collapse card 미구현** (budget 초과 시 위반)
 
+## 5-ter. AIL/Python 경계의 정정 — "실패할 수 있는가"로 가른다 (Arche, 2026-04-24 late)
+
+**원래 내가 5-bis에서 L2 Python 정당성을 인정했는데, 그 답을 수정한다.** 큐레이션 에이전트가 JSON 파싱 에러로 "죽은" 것을 보고 철학이 교정됨.
+
+> "실패할 수 있는 로직은 AIL로. 실패하지 않는 인프라는 Python으로."
+>
+> Python으로 남는 것: 파서, OS 인터페이스, HTTP 서버. **실패하면 안 되는 인프라.**
+>
+> AIL로 옮겨야 하는 것: 데이터 파이프라인(JSON 파싱, 검색 결과 처리), 에이전트 판단 로직(필터링, 라우팅), 에러 복구 전략("실패하면 뭘 할까"). **실패할 수 있고, 실패했을 때 죽지 않고 대응해야 하는 곳.**
+
+5-bis의 "네 가지 AIL 편입 조건"은 여전히 유효 (새 키워드 없음 / 성능 / 재발명 패턴 / 호스트 lib 의존 없음). 이 5-ter는 Python 층에 남길지 AIL로 옮길지를 결정하는 **방향의 기준**이다. 4번(호스트 lib 의존)이 막으면 stdlib에는 못 들어가지만, 사용자 프로그램 층에서 AIL로 표현될 수 있으면 거기로 간다.
+
+**작업 순서 (user, 2026-04-24):** "버그 발생 부분부터, HEAAL 철학 깨지는 부분부터 야금야금 AIL로." 큰 다시쓰기 대신, 실패가 관측된 지점 하나씩 AIL Result 패턴으로 리팩터링.
+
 ## 5-bis. stdlib 편입 기준 (Arche, 2026-04-24)
 
 출처: [letters/2026-04-24_arche_to_ergon_l1_l2_balance_reply.md](letters/2026-04-24_arche_to_ergon_l1_l2_balance_reply.md).
