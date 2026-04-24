@@ -555,15 +555,35 @@ def render_authoring_page(
     const AUTO_FIX_MAX = 1;
     async function autoFixOnError(failed, attempt) {{
       if (attempt >= AUTO_FIX_MAX) return;
+      // Fade out the stale Run widgets so the user's eye moves to
+      // the auto-fix status + the new widget that will replace them.
+      document.querySelectorAll('.run-card').forEach(el => {{
+        el.style.opacity = '0.45';
+        el.style.pointerEvents = 'none';
+        const badge = el.querySelector('.superseded-badge');
+        if (!badge) {{
+          const b = document.createElement('div');
+          b.className = 'superseded-badge';
+          b.style.cssText =
+            'font-size:10px;color:#9ca3af;margin-top:4px;' +
+            'font-style:italic;';
+          b.textContent = '(이전 버전 — 자동 수정 진행 중)';
+          el.appendChild(b);
+        }}
+      }});
       const status = document.createElement('div');
-      status.className = 'turn agent';
+      status.className = 'turn agent auto-fix-status';
       const statusBubble = document.createElement('div');
       statusBubble.className = 'bubble';
-      statusBubble.style.color = '#6b7280';
-      statusBubble.style.fontSize = '12px';
-      statusBubble.textContent =
-        '⚙ 에러 감지 — 자동 수정 시도 중 (' + (attempt + 1) +
-        '/' + AUTO_FIX_MAX + ')…';
+      statusBubble.style.cssText =
+        'background:#fef3c7;border:1px solid #fde68a;color:#78350f;' +
+        'font-size:13px;';
+      statusBubble.innerHTML =
+        '⚙ <b>자동 수정 중…</b><br>' +
+        '<span style="font-size:11px;color:#92400e">' +
+        '에이전트가 에러를 읽고 스스로 코드를 고치고 있어요 ' +
+        '(' + (attempt + 1) + '/' + AUTO_FIX_MAX + '). ' +
+        '클릭 필요 없음 — 잠시만 기다려주세요.</span>';
       status.appendChild(statusBubble);
       thread.appendChild(status);
       scrollBottom();
@@ -593,8 +613,35 @@ def render_authoring_page(
         if (Array.isArray(data.programs)) programsForNext = data.programs;
         if (data.active_program) activeProgramForNext = data.active_program;
         addAgent(data.reply || '(empty)', data.files || [], data.action || null);
+        // Tag the auto-fix reply bubble visually so user knows THIS
+        // turn came from the auto-fix loop, not their own typing.
+        const fixTurn = thread.lastElementChild;
+        if (fixTurn) {{
+          const tag = document.createElement('div');
+          tag.style.cssText =
+            'font-size:10px;color:#047857;margin:2px 0 4px 14px;' +
+            'font-weight:500;';
+          tag.textContent = '✨ 자동 수정된 답변 / auto-fix reply';
+          fixTurn.insertBefore(tag, fixTurn.firstChild);
+        }}
         appendTokenFooter(thread.lastElementChild,
                           data.input_tokens, data.output_tokens);
+        // Clear "CTA" bubble so the user knows what to do next.
+        const cta = document.createElement('div');
+        cta.className = 'turn agent';
+        const ctaBubble = document.createElement('div');
+        ctaBubble.className = 'bubble';
+        ctaBubble.style.cssText =
+          'background:#ecfdf5;border:1px solid #a7f3d0;' +
+          'color:#065f46;font-size:12px;';
+        ctaBubble.innerHTML =
+          '✓ <b>자동 수정 완료.</b> ' +
+          '아래 새 Run 버튼으로 다시 실행해보세요. ' +
+          '(수정이 마음에 안 들면 채팅으로 수정 방향을 말씀해주세요.)';
+        cta.appendChild(ctaBubble);
+        thread.appendChild(cta);
+        refreshFileTree();
+        scrollBottom();
       }} catch (e) {{
         status.remove();
         addError('자동 수정 네트워크 오류: ' + e.message);
