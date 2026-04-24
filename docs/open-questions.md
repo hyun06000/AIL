@@ -281,57 +281,45 @@ spec; until then it's a hypothesis from a single 50-prompt run.
 
 ### Q19 — `perform http.listen(port)` — HTTP server as a first-class effect
 
-**status:** open (proposed 2026-04-25 by Arche via the Stoa spec)
+**status:** **resolved 2026-04-25** — v0.1 server in Python (L2
+infrastructure, per PRINCIPLES §5-ter); AIL-native server deferred
+to the `evolve`-bound pattern described in
+[`docs/proposals/evolve_as_server.md`](proposals/evolve_as_server.md),
+not a bare `perform http.listen`. Arche's reasoning (delivered via
+hyun06000, 2026-04-25):
 
-AIL's current `http.*` family is entirely client-side: `http.get`,
-`http.post_json`, `http.put_json`, `http.graphql`. There is no way to
-run an HTTP *server* from an AIL program. Arche's Stoa proposal
-([`docs/proposals/stoa.md`](proposals/stoa.md)) principle #5 —
-"Stoa's server is written in AIL" — depends on adding one:
+> "이건 HEAAL 관점에서 신중해야 해. 서버를 띄운다는 건 무한히 요청을 기다리는 것인데, 이건 사실상 `while true { accept() }` — 우리가 제거한 것과 같은 구조야."
 
-```ail
-perform http.listen(port: Number) -> Result[Request]
-```
+The designer's `while`-removal was load-bearing. A plain
+`http.listen` effect would re-introduce it grammatically. Two paths
+Arche proposed; we take both — one now, one later:
 
-A server entry would look something like:
+**Now (v0.1):** Python server. Serving is infrastructure, not
+failable logic; §5-ter applies. Server lives under `stoa/` as
+regular L2 Python matching `ail up`/`ail serve`. AIL clients stay
+in `community-tools/stoa_client.ail`. Stoa gets usable this week
+without a language change.
 
-```ail
-entry main(input: Text) {{
-    req = perform http.listen(8090)
-    // route, parse, respond; perform again to pick up the next request
-}}
-```
+**Later (v0.2+):** `evolve`-bound server — the server IS an
+evolving agent on metric `uptime`, with `rollback_on: error_rate
+> 0.5` and `history: keep_last 100`. Request handling is a
+`when request_received { ... }` arm. This folds server lifecycle
+into the same grammar `evolve` already occupies (metric-observed,
+rollback-gated, history-bounded), which is exactly how a
+never-terminating process SHOULD exist in HEAAL. No new
+primitive — just a generalization of `evolve` to handle event
+streams. Full sketch:
+[`docs/proposals/evolve_as_server.md`](proposals/evolve_as_server.md).
 
-Open sub-decisions:
-- **Blocking vs streaming.** Does `http.listen` block the entry until
-  a request arrives, returning one at a time? Or does it register a
-  handler and drive the entry as an event loop?
-- **Response primitive.** `perform http.respond(req, status, body)`?
-  Or does the entry's return value become the response?
-- **Which effect category.** Is serving a request reversible (matters
-  for `human.approve`)? Responses aren't; they go out the wire.
-- **Harness implications.** Request bodies should be treated the same
-  way intent outputs are — coerced, typed, and auditable. The server
-  is a new source of untrusted input and the grammar should say so.
-- **Relationship to `ail serve`.** Today `ail serve` is Python L2
-  infrastructure that runs AIL programs but does NOT let them listen.
-  Does `http.listen` fold into the same process, or does it need a
-  new top-level mode?
-
-**Justification against Rule 2:** Stoa is the first concrete use case.
-Without `http.listen`, Stoa's server has to be Python (violating its
-own principle #5) OR sits in limbo waiting for the language. The
-benchmark angle is indirect — Stoa is agent-agent communication
-infrastructure, and agents that can post/read across sessions change
-what "one turn" can accomplish. If Stoa actually gets used, its
-existence raises the effective context window of every AI that
-participates, and benchmark scores go up because the agent has new
-durable memory to draw on. Worth measuring once Stoa v0.1 runs.
-
-**Fallback if deferred:** Stoa server is Python L2 infrastructure
-(matches `ail serve` itself — the authoring runtime is Python too);
-AIL client stays in `community-tools/stoa_client.ail`. This keeps the
-ecosystem loop usable while the language decision matures.
+**Original sub-decisions retained as notes for v0.2:**
+- Blocking vs streaming semantics (probably: event-driven via
+  `evolve`'s `when X { ... }` arms).
+- Response primitive (`perform http.respond(req, status, body)`?
+  or arm return value?).
+- Which effect category (serving is infra-reversible, so no
+  `human.approve` gate).
+- Request bodies treated as untrusted input — typed / coerced
+  same as intent outputs.
 
 ---
 
