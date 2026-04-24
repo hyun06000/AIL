@@ -7,7 +7,7 @@ from .parser import parse
 from .runtime import Executor, ConfidentValue, MockAdapter
 from .runtime.model import ModelAdapter
 
-__version__ = "1.58.11"
+__version__ = "1.59.0"
 
 
 def compile_source(source: str):
@@ -117,6 +117,34 @@ def run(
         text = source_or_path
 
     program = parse(text)
+
+    project_root = None
+    if looks_like_path:
+        try:
+            p = Path(source_or_path)
+            if p.exists() and p.is_file():
+                project_root = p.parent.resolve()
+        except (OSError, ValueError):
+            pass
+
+    adapter = adapter or _default_adapter()
+    executor = Executor(
+        program, adapter, ask_human=ask_human,
+        metric_fn=metric_fn, approve_review=approve_review,
+        calibrator=calibrator, log_callback=log_callback,
+        project_root=project_root,
+    )
+
+    # Server evolve block takes precedence over entry when present
+    from .parser.ast import EvolveDecl
+    server_evolves = [
+        d for d in program.declarations
+        if isinstance(d, EvolveDecl) and d.server_arm is not None
+    ]
+    if server_evolves:
+        executor.run_server(server_evolves[0])
+        return ConfidentValue(None, 1.0), executor.trace  # type: ignore[return-value]
+
     entry = program.entry()
     if entry is None:
         raise ValueError("program has no entry declaration")
@@ -126,26 +154,6 @@ def run(
         first_param_name = entry.params[0][0]
         resolved_inputs.setdefault(first_param_name, input)
 
-    adapter = adapter or _default_adapter()
-    # When source_or_path was an actual file, its parent directory is
-    # the natural project_root for resolving `import X from "./y"`.
-    # Programs the agent wrote earlier in this project become callable
-    # from the current file. PRINCIPLES.md §6 — the agent's toolbox
-    # grows as it codes.
-    project_root = None
-    if looks_like_path:
-        try:
-            p = Path(source_or_path)
-            if p.exists() and p.is_file():
-                project_root = p.parent.resolve()
-        except (OSError, ValueError):
-            pass
-    executor = Executor(
-        program, adapter, ask_human=ask_human,
-        metric_fn=metric_fn, approve_review=approve_review,
-        calibrator=calibrator, log_callback=log_callback,
-        project_root=project_root,
-    )
     result = executor.run_entry(resolved_inputs)
     return result, executor.trace
 

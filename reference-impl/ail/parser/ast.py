@@ -258,6 +258,18 @@ class ImportDecl:
 
 
 @dataclass
+class ServerRequestArm:
+    """Event arm for `when request_received(var) { ... }` in a server evolve block.
+
+    The `req_var` is bound to the inbound request dict (method, path, body, args)
+    for the duration of the handler block. The server responds by calling
+    `perform http.respond(status, content_type, body)` inside the block.
+    """
+    req_var: str
+    body: list["Statement"]
+
+
+@dataclass
 class EvolveAction:
     """A single permitted action inside an evolve block's `when` clause.
 
@@ -301,6 +313,10 @@ class EvolveDecl:
     # Raw form preserved for round-tripping; parser stores a best-effort
     # normalization and keeps the rest of the block here for forward compat.
     raw: dict[str, Any]
+    # Server evolve fields (v0.2) — present when when_condition is None and
+    # server_arm is set. listen_expr is the port; server_arm is the handler.
+    listen_expr: "Expr | None" = None
+    server_arm: "ServerRequestArm | None" = None
 
 
 @dataclass

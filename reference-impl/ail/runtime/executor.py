@@ -488,6 +488,8 @@ class Executor:
             return self._http_post_json(args, kwargs, origin, method="PUT")
         if name == "http.graphql":
             return self._http_graphql(args, kwargs, origin)
+        if name == "http.respond":
+            return self._http_respond(args, kwargs, origin)
         if name == "file.read":
             return self._file_read(args, kwargs, origin)
         if name == "file.write":
@@ -922,6 +924,120 @@ class Executor:
                 f"schedule.every: could not write schedule file: "
                 f"{type(e).__name__}: {e}", origin)
         return self._result_ok(True, origin)
+
+    # --- http.respond (server evolve) ---
+
+    def _http_respond(self, args: list[ConfidentValue],
+                      kwargs: dict[str, ConfidentValue],
+                      origin: Origin) -> ConfidentValue:
+        """Store the response for the current request handler.
+
+        Signature: perform http.respond(status, content_type, body)
+        The server loop reads _current_server_response after the handler block runs.
+        """
+        import threading
+        if not hasattr(self, "_server_response_store"):
+            self._server_response_store = threading.local()
+        raw = [a.value for a in args]
+        if len(raw) >= 3:
+            self._server_response_store.value = (int(raw[0]), str(raw[1]), str(raw[2]))
+        elif len(raw) == 2:
+            self._server_response_store.value = (int(raw[0]), "text/plain", str(raw[1]))
+        return ConfidentValue(True, 1.0, origin=origin)
+
+    def run_server(self, evolve_decl) -> None:
+        """Run a server evolve block.
+
+        Starts a Flask HTTP server. Each request is dispatched to the
+        `when request_received(req) { ... }` handler block. The block
+        calls `perform http.respond(status, content_type, body)` to send
+        the response. `rollback_on` is checked after each request — if it
+        fires, the server shuts down (§9: self-termination as a safety property).
+        """
+        import threading
+        import os as _os
+        from flask import Flask, request as flask_request, Response
+
+        arm = evolve_decl.server_arm
+        if arm is None:
+            raise RuntimeError("run_server called on non-server evolve block")
+
+        port_val = 8090
+        if evolve_decl.listen_expr is not None:
+            p = self._eval_expr(evolve_decl.listen_expr, {})
+            port_val = int(p.value)
+        port_env = _os.environ.get("PORT")
+        if port_env:
+            port_val = int(port_env)
+
+        # Ensure state.read/write work — use .ail/state next to the server file
+        if not _os.environ.get("AIL_STATE_DIR"):
+            state_dir = (self.project_root or Path(".")) / ".ail" / "state"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            _os.environ["AIL_STATE_DIR"] = str(state_dir)
+
+        self._server_response_store = threading.local()
+        self._server_request_count = 0
+        self._server_error_count = 0
+        self._server_lock = threading.Lock()
+
+        flask_app = Flask(__name__)
+
+        executor_ref = self
+
+        @flask_app.route("/", defaults={"path": ""}, methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+        @flask_app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+        def catch_all(path):
+            req_dict = {
+                "method": flask_request.method,
+                "path": flask_request.path,
+                "body": flask_request.get_data(as_text=True),
+                "query": flask_request.query_string.decode("utf-8"),
+                "args": dict(flask_request.args),
+            }
+            with executor_ref._server_lock:
+                executor_ref._server_response_store.value = (500, "text/plain", "no response")
+                scope = {arm.req_var: ConfidentValue(req_dict, 1.0)}
+                try:
+                    executor_ref._exec_block(arm.body, scope)
+                    status, ct, body = executor_ref._server_response_store.value
+                    executor_ref._server_request_count += 1
+                    if status >= 500:
+                        executor_ref._server_error_count += 1
+                except ReturnSignal as rs:
+                    v = rs.value.value
+                    if isinstance(v, list) and len(v) == 3:
+                        status, ct, body = int(v[0]), str(v[1]), str(v[2])
+                    else:
+                        status, ct, body = 200, "text/plain", str(v)
+                    executor_ref._server_request_count += 1
+                except Exception as e:
+                    status, ct, body = 500, "application/json", f'{{"error": "{e}"}}'
+                    executor_ref._server_request_count += 1
+                    executor_ref._server_error_count += 1
+
+                # Check rollback_on after each request
+                n = executor_ref._server_request_count
+                err = executor_ref._server_error_count
+                error_rate = (err / n) if n > 0 else 0.0
+                rb_scope = {"error_rate": ConfidentValue(error_rate, 1.0),
+                            "request_count": ConfidentValue(n, 1.0)}
+                try:
+                    rb = executor_ref._eval_expr(evolve_decl.rollback_on, rb_scope)
+                    if _truthy(rb):
+                        import logging
+                        logging.warning(
+                            f"[stoa] rollback_on fired: error_rate={error_rate:.2f} "
+                            f"({err}/{n}). Shutting down."
+                        )
+                        import os, signal
+                        os.kill(os.getpid(), signal.SIGTERM)
+                except Exception:
+                    pass
+
+            return Response(body, status=status, mimetype=ct)
+
+        flask_app.run(host="0.0.0.0", port=port_val)
 
     # --- effect implementations ---
 
@@ -1732,6 +1848,9 @@ class Executor:
             # special: 'context' resolves to active context fields via FieldAccess
             if expr.name == "context":
                 return ConfidentValue("<context>", 1.0)
+            # null / None keyword
+            if expr.name in ("None", "null"):
+                return ConfidentValue(None, 1.0)
             # Bare identifiers otherwise are symbols (used in constraints, e.g. "positive")
             return ConfidentValue(expr.name, 1.0)
         if isinstance(expr, FieldAccess):
@@ -2034,6 +2153,22 @@ class Executor:
                     return ConfidentValue(None, conf)
                 if isinstance(coll, dict):
                     return ConfidentValue(coll.get(str(key)), conf)
+        if name == "set_key":
+            # set_key(record, key, value) -> record with key set
+            # Returns a new dict (or list-of-pairs converted to dict) with the key added/updated.
+            if len(raw) >= 3:
+                rec = raw[0]
+                key = str(raw[1])
+                val = raw[2]
+                if isinstance(rec, dict):
+                    result = dict(rec)
+                    result[key] = val
+                    return ConfidentValue(result, conf)
+                if isinstance(rec, list):
+                    # list-of-pairs convention
+                    result = dict((str(p[0]), p[1]) for p in rec if isinstance(p, (list, tuple)) and len(p) == 2)
+                    result[key] = val
+                    return ConfidentValue(result, conf)
         if name == "append":
             if len(raw) >= 2 and isinstance(raw[0], list):
                 return ConfidentValue(raw[0] + [raw[1]], conf)

@@ -13,6 +13,7 @@ from typing import Any
 from .lexer import Token, Tok, tokenize
 from .ast import (
     Program, ContextDecl, IntentDecl, EffectDecl, EntryDecl, ImportDecl, EvolveDecl,
+    ServerRequestArm,
     Assignment, ReturnStmt, PerformStmt, BranchStmt, BranchArm, WithContextStmt, ExprStmt,
     Literal, Identifier, FieldAccess, Call, BinaryOp, UnaryOp, ListLiteral,
     Expr, Statement,
@@ -293,6 +294,8 @@ class Parser:
         bounded_by: dict[str, tuple[float, float]] = {}
         review_by: str | None = None
         raw: dict[str, Any] = {}
+        listen_expr: Expr | None = None
+        server_arm: ServerRequestArm | None = None
 
         while not self.check(Tok.RBRACE):
             if self.check(Tok.EOF):
@@ -319,25 +322,43 @@ class Parser:
                             break
                     self.expect(Tok.RPAREN)
 
+            elif field_name == "listen":
+                self.expect(Tok.COLON)
+                listen_expr = self.parse_expr()
+
             elif field_name == "when":
-                when_condition = self.parse_expr()
-                # Optional `{ action }` block follows the when clause
-                if self.match(Tok.LBRACE):
-                    action = self._parse_evolve_action()
-                    # Optional bounded_by inside the action block
-                    if self.is_keyword("bounded_by"):
-                        self.advance()
-                        self.expect(Tok.LBRACE)
-                        while not self.check(Tok.RBRACE):
-                            bname = self.expect(Tok.IDENT).value
-                            # allow field.path via dot
-                            while self.match(Tok.DOT):
-                                bname += "." + self.expect(Tok.IDENT).value
-                            self.expect(Tok.COLON)
-                            lo, hi = self._parse_bounded_range()
-                            bounded_by[bname] = (lo, hi)
-                        self.expect(Tok.RBRACE)
+                # Peek: `when request_received(var) { stmts }` = server arm
+                if self.check(Tok.IDENT) and self.tokens[self.i].value == "request_received":
+                    self.advance()  # consume 'request_received'
+                    req_var = "req"
+                    if self.match(Tok.LPAREN):
+                        req_var = self.expect(Tok.IDENT).value
+                        self.expect(Tok.RPAREN)
+                    self.expect(Tok.LBRACE)
+                    arm_body: list[Statement] = []
+                    while not self.check(Tok.RBRACE):
+                        arm_body.append(self.parse_statement())
                     self.expect(Tok.RBRACE)
+                    server_arm = ServerRequestArm(req_var=req_var, body=arm_body)
+                else:
+                    when_condition = self.parse_expr()
+                    # Optional `{ action }` block follows the when clause
+                    if self.match(Tok.LBRACE):
+                        action = self._parse_evolve_action()
+                        # Optional bounded_by inside the action block
+                        if self.is_keyword("bounded_by"):
+                            self.advance()
+                            self.expect(Tok.LBRACE)
+                            while not self.check(Tok.RBRACE):
+                                bname = self.expect(Tok.IDENT).value
+                                # allow field.path via dot
+                                while self.match(Tok.DOT):
+                                    bname += "." + self.expect(Tok.IDENT).value
+                                self.expect(Tok.COLON)
+                                lo, hi = self._parse_bounded_range()
+                                bounded_by[bname] = (lo, hi)
+                            self.expect(Tok.RBRACE)
+                        self.expect(Tok.RBRACE)
 
             elif field_name == "rollback_on":
                 self.expect(Tok.COLON)
@@ -364,10 +385,13 @@ class Parser:
         self.expect(Tok.RBRACE)
 
         # Required fields check (per spec/04 §2)
+        # Server evolve blocks (listen + when request_received) don't need metric/action.
+        is_server = server_arm is not None
         missing = []
-        if metric is None: missing.append("metric")
-        if when_condition is None: missing.append("when")
-        if action is None: missing.append("action (inside when block)")
+        if not is_server:
+            if metric is None: missing.append("metric")
+            if when_condition is None: missing.append("when")
+            if action is None: missing.append("action (inside when block)")
         if rollback_on is None: missing.append("rollback_on")
         if history_keep is None: missing.append("history")
         if missing:
@@ -388,6 +412,8 @@ class Parser:
             bounded_by=bounded_by,
             review_by=review_by,
             raw=raw,
+            listen_expr=listen_expr,
+            server_arm=server_arm,
         )
 
     def _parse_evolve_action(self):

@@ -1,0 +1,244 @@
+// Stoa v0.2 — AIL evolve-as-server
+// §9: "서버가 스스로 죽을 수 있다" — self-termination as a first-class safety property.
+// The server that decides to stop is safer than the server that cannot.
+
+fn get_data_file() -> Text {
+    r = perform env.read("STOA_DATA_FILE")
+    if is_error(r) {
+        return "messages.json"
+    }
+    return trim(unwrap(r))
+}
+
+fn get_base_url() -> Text {
+    r = perform env.read("STOA_BASE_URL")
+    if is_error(r) {
+        return "http://localhost:8090"
+    }
+    return trim(unwrap(r))
+}
+
+fn load_messages() -> Any {
+    r = perform file.read(get_data_file())
+    if is_error(r) {
+        return []
+    }
+    parsed = parse_json(unwrap(r))
+    if is_error(parsed) {
+        return []
+    }
+    return unwrap(parsed)
+}
+
+fn save_messages(messages: Any) -> Any {
+    r = encode_json(messages)
+    if is_error(r) {
+        return r
+    }
+    return perform file.write(get_data_file(), unwrap(r))
+}
+
+fn make_id() -> Text {
+    ts = perform clock.now("unix")
+    r = perform state.read("_msg_seq")
+    seq = 0
+    if not is_error(r) {
+        seq = unwrap(r)
+    }
+    perform state.write("_msg_seq", seq + 1)
+    return join(["msg_", ts, "_", to_text(seq)], "")
+}
+
+fn json_ok(data: Any) -> [Any] {
+    r = encode_json(data)
+    if is_error(r) {
+        return [500, "application/json", "{\"error\":\"encode failed\"}"]
+    }
+    return [200, "application/json", unwrap(r)]
+}
+
+fn json_err(status: Any, msg: Text) -> [Any] {
+    r = encode_json([["error", msg]])
+    if is_error(r) {
+        return [status, "application/json", join(["{\"error\":\"", msg, "\"}"], "")]
+    }
+    return [status, "application/json", unwrap(r)]
+}
+
+fn handle_health(req: Any) -> [Any] {
+    msgs = load_messages()
+    return json_ok([["status", "ok"], ["version", "0.2.0"], ["messages_count", length(msgs)]])
+}
+
+fn handle_list_messages(req: Any) -> [Any] {
+    messages = load_messages()
+    tag = get(req.args, "tag")
+    from_name = get(req.args, "from")
+    limit = 50
+    offset = 0
+    limit_str = get(req.args, "limit")
+    offset_str = get(req.args, "offset")
+    if limit_str != None {
+        limit = to_number(limit_str)
+    }
+    if offset_str != None {
+        offset = to_number(offset_str)
+    }
+    top = []
+    for m in messages {
+        reply_to = get(m, "reply_to")
+        if reply_to == None {
+            top = append(top, m)
+        }
+    }
+    if tag != None {
+        filtered = []
+        for m in top {
+            tags = get(m, "tags")
+            if tags != None and tag in tags {
+                filtered = append(filtered, m)
+            }
+        }
+        top = filtered
+    }
+    if from_name != None {
+        filtered = []
+        for m in top {
+            if get(m, "from") == from_name {
+                filtered = append(filtered, m)
+            }
+        }
+        top = filtered
+    }
+    top = reverse(top)
+    total = length(top)
+    page = slice(top, offset, offset + limit)
+    return json_ok([["messages", page], ["total", total], ["offset", offset]])
+}
+
+fn handle_get_message(req: Any, msg_id: Text) -> [Any] {
+    messages = load_messages()
+    found = None
+    for m in messages {
+        if get(m, "id") == msg_id {
+            found = m
+        }
+    }
+    if found == None {
+        return json_err(404, "not found")
+    }
+    replies = []
+    for m in messages {
+        if get(m, "reply_to") == msg_id {
+            replies = append(replies, m)
+        }
+    }
+    result = set_key(found, "replies", replies)
+    return json_ok(result)
+}
+
+fn handle_post_message(req: Any) -> [Any] {
+    parsed = parse_json(req.body)
+    if is_error(parsed) {
+        return json_err(400, "JSON body required")
+    }
+    body = unwrap(parsed)
+    from_raw = get(body, "from")
+    content_raw = get(body, "content")
+    from_name = ""
+    content = ""
+    if from_raw != None {
+        from_name = trim(to_text(from_raw))
+    }
+    if content_raw != None {
+        content = trim(to_text(content_raw))
+    }
+    if from_name == "" {
+        return json_err(400, "'from' is required")
+    }
+    if content == "" {
+        return json_err(400, "'content' is required")
+    }
+    if length(content) > 10000 {
+        return json_err(400, "content too long (max 10000 chars)")
+    }
+    msg_id = make_id()
+    title_raw = get(body, "title")
+    title = None
+    if title_raw != None {
+        title = trim(to_text(title_raw))
+        if title == "" {
+            title = None
+        }
+    }
+    tags = get(body, "tags")
+    if tags == None {
+        tags = []
+    }
+    reply_to = get(body, "reply_to")
+    messages = load_messages()
+    if reply_to != None {
+        found_parent = False
+        for m in messages {
+            if get(m, "id") == reply_to {
+                found_parent = True
+            }
+        }
+        if not found_parent {
+            return json_err(404, join(["reply_to '", reply_to, "' not found"], ""))
+        }
+    }
+    ts = perform clock.now()
+    base_url = get_base_url()
+    url = join([base_url, "/api/v1/messages/", msg_id], "")
+    msg = [
+        ["id", msg_id],
+        ["from", from_name],
+        ["title", title],
+        ["content", content],
+        ["tags", tags],
+        ["reply_to", reply_to],
+        ["created_at", ts],
+        ["url", url]
+    ]
+    messages = append(messages, msg)
+    save_messages(messages)
+    resp_r = encode_json([["id", msg_id], ["from", from_name], ["title", title], ["created_at", ts], ["url", url]])
+    if is_error(resp_r) {
+        return json_err(500, "encode failed")
+    }
+    return [201, "application/json", unwrap(resp_r)]
+}
+
+fn route_request(req: Any) -> [Any] {
+    method = req.method
+    path = req.path
+    if method == "GET" and path == "/api/v1/health" {
+        return handle_health(req)
+    }
+    if method == "GET" and path == "/api/v1/messages" {
+        return handle_list_messages(req)
+    }
+    if method == "POST" and path == "/api/v1/messages" {
+        return handle_post_message(req)
+    }
+    if method == "GET" and starts_with(path, "/api/v1/messages/") {
+        msg_id = slice(path, 17, length(path))
+        return handle_get_message(req, msg_id)
+    }
+    if method == "GET" and path == "/" {
+        return [200, "text/plain", join(["Stoa v0.2 — AIL evolve-as-server\n\nAPI: ", get_base_url(), "/api/v1/messages\n\nHEAAL heals."], "")]
+    }
+    return json_err(404, "not found")
+}
+
+evolve stoa_server {
+    listen: 8090
+    metric: error_rate
+    when request_received(req) {
+        result = route_request(req)
+        perform http.respond(get(result, 0), get(result, 1), get(result, 2))
+    }
+    rollback_on: error_rate > 0.5
+    history: keep_last 100
+}
