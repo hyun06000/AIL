@@ -1324,18 +1324,17 @@ def render_authoring_page(
         thread.appendChild(box);
         scrollBottom();
 
-        const decide = async (decision) => {{
+        const decide = async (decision, reason) => {{
           approveBtn.disabled = true;
           declineBtn.disabled = true;
           statusSpan.textContent = '전송 중…';
           try {{
+            const body = {{ id: rec.id, decision: decision }};
+            if (reason) body.reason = reason;
             const r = await fetch('/authoring-approve', {{
               method: 'POST',
               headers: {{ 'Content-Type': 'application/json' }},
-              body: JSON.stringify({{
-                id: rec.id,
-                decision: decision,
-              }}),
+              body: JSON.stringify(body),
             }});
             if (!r.ok) {{
               const msg = await r.text();
@@ -1349,9 +1348,8 @@ def render_authoring_page(
               : '❌ 거절됨 / Declined';
             label.style.color = decision === 'approve'
               ? '#047857' : '#b91c1c';
-            statusSpan.textContent = '';
-            btnRow.removeChild(approveBtn);
-            btnRow.removeChild(declineBtn);
+            statusSpan.textContent = reason ? '사유: ' + reason : '';
+            btnRow.innerHTML = '';
           }} catch (e) {{
             statusSpan.textContent = '✗ ' + e.message;
             approveBtn.disabled = false;
@@ -1359,7 +1357,59 @@ def render_authoring_page(
           }}
         }};
         approveBtn.onclick = () => decide('approve');
-        declineBtn.onclick = () => decide('decline');
+        // hyun06000 2026-04-24: when the user declines, they almost
+        // always have a reason in mind ("이 레포 말고 다른 레포", "이
+        // 브랜치 이름 말고"). Capturing it + feeding it into the
+        // runtime's error message makes auto-fix actually responsive
+        // to the decline reason instead of guessing.
+        declineBtn.onclick = () => {{
+          const reasonBox = document.createElement('div');
+          reasonBox.style.cssText =
+            'display:flex;flex-direction:column;gap:6px;margin-top:8px;';
+          const ta = document.createElement('textarea');
+          ta.placeholder =
+            '거절 사유 (예: "URL이 틀렸어요", "금액 다시 확인"). ' +
+            '에이전트가 이 사유를 읽고 자동으로 수정합니다. 생략 가능.';
+          ta.style.cssText =
+            'font-family:inherit;font-size:13px;padding:8px;' +
+            'border:1px solid #e5e7eb;border-radius:6px;' +
+            'min-height:60px;resize:vertical;';
+          ta.autofocus = true;
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;gap:8px;';
+          const confirmBtn = document.createElement('button');
+          confirmBtn.className = 'run-inline';
+          confirmBtn.style.background = '#b91c1c';
+          confirmBtn.textContent = '거절 전송';
+          const skipBtn = document.createElement('button');
+          skipBtn.className = 'run-inline';
+          skipBtn.style.background = '#6b7280';
+          skipBtn.textContent = '사유 없이 거절';
+          const cancelBtn = document.createElement('button');
+          cancelBtn.className = 'run-inline';
+          cancelBtn.style.background = '#fff';
+          cancelBtn.style.color = '#111';
+          cancelBtn.style.border = '1px solid #e5e7eb';
+          cancelBtn.textContent = '취소';
+          row.appendChild(confirmBtn);
+          row.appendChild(skipBtn);
+          row.appendChild(cancelBtn);
+          reasonBox.appendChild(ta);
+          reasonBox.appendChild(row);
+          btnRow.innerHTML = '';
+          btnRow.appendChild(reasonBox);
+          ta.focus();
+          confirmBtn.onclick = () => decide('decline', ta.value.trim());
+          skipBtn.onclick = () => decide('decline', '');
+          cancelBtn.onclick = () => {{
+            btnRow.innerHTML = '';
+            btnRow.appendChild(approveBtn);
+            btnRow.appendChild(declineBtn);
+            btnRow.appendChild(statusSpan);
+            approveBtn.disabled = false;
+            declineBtn.disabled = false;
+          }};
+        }};
       }}
       runBtn.onclick = fire;
       dynSlot.appendChild(runBtn);

@@ -147,6 +147,16 @@ def _diagnose_from_trace(trace) -> str:
                 if gh_hint:
                     line = line + "\n  hint: " + gh_hint
                 hints.append(line)
+        elif kind == "human_approve_decided" and p.get("decision") == "declined":
+            # hyun06000 field test 2026-04-24: the user declines with
+            # a reason ("URL이 틀렸어요") and auto-fix should adjust
+            # accordingly. Surface the reason in the diagnostic so
+            # the authoring agent's next turn sees it explicitly.
+            reason = p.get("reason") or "(no reason given)"
+            hints.append(
+                f"사용자가 human.approve 거절 / user declined: "
+                f"{reason}"
+            )
         elif kind == "intent_validation_failed":
             hints.append(
                 "Intent 응답이 선언된 타입과 맞지 않음 / "
