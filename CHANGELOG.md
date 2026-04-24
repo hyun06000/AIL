@@ -4,6 +4,14 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.47.4 — 2026-04-24
+
+**fix: env var input strips `KEY=VALUE` prefix before saving.**
+
+If a user pastes `GITHUB_TOKEN=ghp_xxx` (or `export GITHUB_TOKEN=ghp_xxx`) into the secret input field, the server was storing the entire string as the value. Programs then sent `Authorization: Bearer GITHUB_TOKEN=ghp_xxx` → 401 Bad credentials. The `=`-stripping logic now checks if the left side matches the var name (case-insensitive) or `export KEY` form and strips it.
+
+---
+
 ## v1.47.3 — 2026-04-24
 
 **fix: authoring prompt — GitHub REST vs GraphQL boundary made explicit.**

@@ -800,6 +800,13 @@ def _make_handler(project: Project):
                     payload = _json.loads(raw)
                     name = str(payload.get("name", "")).strip()
                     value = str(payload.get("value", ""))
+                    # Strip "KEY=value" or "export KEY=value" prefix if the
+                    # user copy-pasted the whole shell export line.
+                    if "=" in value:
+                        lhs, _, rhs = value.partition("=")
+                        lhs_clean = lhs.strip().removeprefix("export").strip()
+                        if lhs_clean.upper() == name.upper() or lhs_clean == "":
+                            value = rhs
                 except (ValueError, UnicodeDecodeError):
                     self._send_text(400, "invalid json body\n")
                     return
