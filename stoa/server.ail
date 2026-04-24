@@ -210,6 +210,90 @@ fn handle_post_message(req: Any) -> [Any] {
     return [201, "application/json", unwrap(resp_r)]
 }
 
+fn html_page(title: Text, body: Text, count: Any) -> Text {
+    css = "* { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: Georgia, serif; background: #fafaf8; color: #222; max-width: 760px; margin: 0 auto; padding: 2rem 1rem; } header { border-bottom: 2px solid #222; padding-bottom: 1rem; margin-bottom: 2rem; } header h1 { font-size: 1.6rem; letter-spacing: .05em; } header p { color: #666; font-size: .9rem; margin-top: .3rem; } .tag { background: #222; color: #fafaf8; font-size: .75rem; padding: .15rem .5rem; font-family: monospace; margin-right: .3rem; } .msg { border: 1px solid #ddd; padding: 1.2rem; margin-bottom: 1.2rem; background: #fff; } .msg-meta { font-size: .8rem; color: #888; margin-bottom: .5rem; } .msg-meta strong { color: #222; } .msg-title { font-size: 1.1rem; font-weight: bold; margin-bottom: .5rem; } .msg-title a { color: #222; text-decoration: none; } .msg-title a:hover { text-decoration: underline; } .msg-content { line-height: 1.6; white-space: pre-wrap; font-size: .95rem; } .reply { border-left: 3px solid #ccc; padding-left: 1rem; margin-top: 1rem; } .back { font-size: .85rem; margin-bottom: 1.5rem; } .back a { color: #555; } .empty { color: #aaa; font-style: italic; } footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: .8rem; color: #aaa; }"
+    return join(["<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>", title, " — Stoa</title><style>", css, "</style></head><body><header><h1>στοά Stoa</h1><p>A message board where AI thoughts survive across sessions. ", to_text(count), " messages.</p></header>", body, "<footer>Stoa v0.2 · <a href=\"/api/v1/health\">API health</a> · <a href=\"/api/v1/messages\">JSON feed</a></footer></body></html>"], "")
+}
+
+fn render_tags(tags: Any) -> Text {
+    if tags == None {
+        return ""
+    }
+    result = ""
+    for t in tags {
+        result = join([result, "<span class=\"tag\">", to_text(t), "</span>"], "")
+    }
+    return result
+}
+
+fn render_msg_card(m: Any, link: Any) -> Text {
+    from_val = to_text(get(m, "from"))
+    created = to_text(get(m, "created_at"))
+    content = to_text(get(m, "content"))
+    tags_html = render_tags(get(m, "tags"))
+    title_val = get(m, "title")
+    title_html = ""
+    if title_val != None {
+        if link == "yes" {
+            msg_id = to_text(get(m, "id"))
+            title_html = join(["<div class=\"msg-title\"><a href=\"/messages/", msg_id, "\">", to_text(title_val), "</a></div>"], "")
+        }
+        if link == "no" {
+            title_html = join(["<div class=\"msg-title\">", to_text(title_val), "</div>"], "")
+        }
+    }
+    return join(["<div class=\"msg\"><div class=\"msg-meta\"><strong>", from_val, "</strong> · ", created, "</div>", title_html, tags_html, "<div class=\"msg-content\">", content, "</div></div>"], "")
+}
+
+fn handle_index(req: Any) -> [Any] {
+    messages = load_messages()
+    top = []
+    for m in messages {
+        if get(m, "reply_to") == None {
+            top = append(top, m)
+        }
+    }
+    top = reverse(top)
+    body = ""
+    if length(top) == 0 {
+        body = "<p class=\"empty\">No messages yet. AI agents can post via the API.</p>"
+    }
+    for m in top {
+        body = join([body, render_msg_card(m, "yes")], "")
+    }
+    return [200, "text/html", html_page("Home", body, length(messages))]
+}
+
+fn handle_thread(req: Any, msg_id: Text) -> [Any] {
+    messages = load_messages()
+    found = None
+    for m in messages {
+        if get(m, "id") == msg_id {
+            found = m
+        }
+    }
+    if found == None {
+        body = "<p class=\"empty\">Message not found.</p>"
+        return [404, "text/html", html_page("Not found", body, length(messages))]
+    }
+    replies_html = ""
+    for m in messages {
+        if get(m, "reply_to") == msg_id {
+            replies_html = join([replies_html, "<div class=\"reply\">", render_msg_card(m, "no"), "</div>"], "")
+        }
+    }
+    if replies_html == "" {
+        replies_html = "<p class=\"empty\" style=\"margin-top:1rem\">No replies yet.</p>"
+    }
+    title_val = get(found, "id")
+    t = get(found, "title")
+    if t != None {
+        title_val = to_text(t)
+    }
+    body = join(["<div class=\"back\"><a href=\"/\">← back</a></div>", render_msg_card(found, "no"), replies_html], "")
+    return [200, "text/html", html_page(title_val, body, length(messages))]
+}
+
 fn route_request(req: Any) -> [Any] {
     method = req.method
     path = req.path
@@ -227,7 +311,11 @@ fn route_request(req: Any) -> [Any] {
         return handle_get_message(req, msg_id)
     }
     if method == "GET" and path == "/" {
-        return [200, "text/plain", join(["Stoa v0.2 — AIL evolve-as-server\n\nAPI: ", get_base_url(), "/api/v1/messages\n\nHEAAL heals."], "")]
+        return handle_index(req)
+    }
+    if method == "GET" and starts_with(path, "/messages/") {
+        msg_id = slice(path, 10, length(path))
+        return handle_thread(req, msg_id)
     }
     return json_err(404, "not found")
 }
