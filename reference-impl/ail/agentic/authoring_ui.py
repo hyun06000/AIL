@@ -448,6 +448,50 @@ def render_authoring_page(
           if (f.skipped) {{
             tag.textContent = '✗ ' + f.path + ' — ' + f.skipped;
             tag.style.color = '#b91c1c';
+          }} else if (f.path === 'view.html') {{
+            // The user's "어디에 뭐가 뜨는지" problem: a written
+            // view.html has no visible artifact in the chat. Give it
+            // a direct "preview in new window" action so the user
+            // can see the rendered page the moment it is written.
+            const arrow = document.createElement('span');
+            arrow.className = 'toggle-arrow';
+            arrow.textContent = '▶';
+            tag.appendChild(arrow);
+            tag.appendChild(document.createTextNode('✓ ' + f.path + ' (' + f.bytes + ' bytes)'));
+
+            const preview = document.createElement('div');
+            preview.className = 'file-preview';
+            const pre = document.createElement('pre');
+            preview.appendChild(pre);
+            wrapper.appendChild(preview);
+
+            let loaded = false;
+            tag.addEventListener('click', async () => {{
+              const isOpen = preview.classList.toggle('open');
+              arrow.textContent = isOpen ? '▼' : '▶';
+              if (isOpen && !loaded) {{
+                pre.textContent = '로딩 중…';
+                try {{
+                  const r = await fetch('/authoring-file?path=' + encodeURIComponent(f.path));
+                  const d = await r.json();
+                  pre.textContent = d.content;
+                }} catch(e) {{
+                  pre.textContent = '(읽기 실패)';
+                }}
+                loaded = true;
+              }}
+            }});
+
+            const openBtn = document.createElement('a');
+            openBtn.href = '/service';
+            openBtn.target = '_blank';
+            openBtn.rel = 'noopener';
+            openBtn.textContent = '👁 새 창으로 열기';
+            openBtn.style.cssText =
+              'margin-left:8px;font-size:11px;padding:2px 8px;' +
+              'background:#047857;color:#fff;border-radius:4px;' +
+              'text-decoration:none;display:inline-block;';
+            wrapper.appendChild(openBtn);
           }} else {{
             const arrow = document.createElement('span');
             arrow.className = 'toggle-arrow';

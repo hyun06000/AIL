@@ -65,7 +65,24 @@
 - 원칙 3: L1 storage = `chat_history.jsonl` 완전 보존. 메모리 = 예산 내 전체. Sub-agent 프로토콜은 Stage 2
 - 원칙 4: Agent 메모리 쪽 마커 ✓, **UI 쪽 collapse card 미구현** (budget 초과 시 위반)
 
-## 5. Measurement Discipline
+## 5. 프로그램 독립성 (Program Independence)
+
+> **"채팅 세션이 끝났을 때 못 쓰는 프로그램은 프로그램이 아니다."** — hyun06000, 2026-04-24
+
+저자-AI 대화로 만들어진 `.ail` 프로그램은 대화가 종료된 **이후에도 동일하게 동작해야 한다.** 채팅 세션이 프로그램의 전제 조건이 되면 그것은 REPL 세션의 부산물이지 프로그램이 아니다.
+
+구체 규칙:
+- **편집 URL과 런타임 URL을 분리한다.** 편집(`/`)은 채팅 + 라이브 프리뷰; 런타임(`/run/<name>`)은 채팅 없는 독립 앱. 두 경로가 서로를 덮어쓰지 않는다.
+- **"배포(deploy)"는 명시적 액션이다.** Agent가 `ready_to_serve`를 emit해도 자동으로 런타임 경로가 활성화되지 않는다. 사용자에게 "이 프로그램을 배포하시겠습니까?" 확인 다이얼로그가 뜨고, 사용자 승인 후에만 `/run/<name>`이 열린다.
+- **프로그램은 로컬 상태(`.ail/state`, `.ail/secrets.json`, `env`)와 소스(`.ail` 파일)만으로 재현 가능해야 한다.** 채팅 history는 저자 기록일 뿐, 런타임 의존성이 아니다.
+- **재편집은 새 편집 세션을 열어 진행한다.** 편집 중 기존 배포는 계속 살아 있고, 새 배포가 완료되는 순간 원자적으로 교체된다.
+
+현재 실현 상태 (v1.48.2):
+- 편집 URL / 런타임 URL 분리: ✗ 아직 `ready_to_serve`가 `/`를 덮어쓴다 — **Step 2에서 수정**
+- 배포 확인 다이얼로그: ✗ 없음 — Step 2에서 추가
+- 편집 모드 라이브 프리뷰: ✗ 없음 — Step 1에서 추가
+
+## 6. Measurement Discipline
 
 > **"측정은 감각을 교정한다."** — Arche, 2026-04-24
 
@@ -76,7 +93,7 @@
 - **세 지표를 한 표에 놓는다.** 정확도만, 품질만, 비용만 보면 서사를 만들기 쉽다. 정확도(exact/any) · 주관 품질(judge win/Borda) · **토큰 비용(in+out, per prompt)**을 항상 같이 본다.
 - **HEAAL Score 차원으로 "harness efficiency" 후보 제안됨** (exact/1K tok). language-level 결정이라 docs/heaal.md + benchmarks 스펙 개정이 선행돼야 채택.
 
-## 6. Cast — 이 프로젝트의 이름들
+## 7. Cast — 이 프로젝트의 이름들
 
 출처: [CLAUDE.md](../CLAUDE.md) CAST 섹션, [docs/letters/](letters/).
 
@@ -91,7 +108,7 @@
 
 ---
 
-(구 §5 Cast → §6으로 번호 재배치: §5 자리에 Measurement Discipline 신설.)
+(번호 재배치 2026-04-24: Measurement Discipline은 §5 → §6, Program Independence 신설 §5, Cast §7.)
 
 ---
 
