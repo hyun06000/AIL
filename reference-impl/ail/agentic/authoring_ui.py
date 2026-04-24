@@ -1361,10 +1361,30 @@ def render_authoring_page(
         box.appendChild(pre);
       }}
       if (r.diagnostic) {{
-        const d = document.createElement('div');
-        d.className = 'diag';
+        // Collapsible — diagnosis is long and mostly for the agent
+        // on the next turn, not for the user on this turn.
+        // hyun06000 2026-04-24: "다 보여주지 않아도 될듯. 적어도
+        // 접었다 펴는 토글 정도로."
+        const details = document.createElement('details');
+        details.style.cssText =
+          'margin-top:6px;font-size:12px;color:#6b7280;';
+        const summary = document.createElement('summary');
+        summary.style.cssText =
+          'cursor:pointer;user-select:none;color:#6b7280;';
+        const diagFirstLine = r.diagnostic.split('\\n')
+          .find(l => l.trim().length > 0) || '진단';
+        summary.textContent = '🔍 진단 보기 / Show diagnosis  · ' +
+          diagFirstLine.slice(0, 80) +
+          (diagFirstLine.length > 80 ? '…' : '');
+        details.appendChild(summary);
+        const d = document.createElement('pre');
+        d.style.cssText =
+          'margin:6px 0 0;padding:8px;background:#f3f4f6;' +
+          'border-radius:4px;font-size:11px;white-space:pre-wrap;' +
+          'color:#374151;max-height:300px;overflow-y:auto;';
         d.textContent = r.diagnostic;
-        box.appendChild(d);
+        details.appendChild(d);
+        box.appendChild(details);
       }}
       // On error, offer a one-click "ask the agent to fix it" button.
       // Sends a short message to the chat so the agent sees the error
