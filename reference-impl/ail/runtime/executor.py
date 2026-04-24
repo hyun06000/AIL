@@ -2476,7 +2476,14 @@ class Executor:
                               value=_truncate(response.value),
                               confidence=response.confidence,
                               prompt_tokens=raw.get("prompt_tokens") or raw.get("input_tokens") or 0,
-                              completion_tokens=raw.get("completion_tokens") or raw.get("output_tokens") or 0)
+                              completion_tokens=raw.get("completion_tokens") or raw.get("output_tokens") or 0,
+                              # Opus-4-commissioned instrumentation: record the
+                              # exact bytes the model received, so we can A/B
+                              # compare AIL-wrapped vs direct-API responses and
+                              # locate where the harness is over-tight.
+                              system_prompt=raw.get("system_prompt"),
+                              user_prompt=raw.get("user_prompt"),
+                              raw_response_text=raw.get("raw_response_text"))
 
             # Validation outcome is recorded even on success so the
             # trace shows the harness is live (not silently skipped).

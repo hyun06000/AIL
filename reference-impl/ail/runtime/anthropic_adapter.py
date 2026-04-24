@@ -88,6 +88,9 @@ class AnthropicAdapter:
                 "stop_reason": resp.stop_reason,
                 "input_tokens": getattr(resp.usage, "input_tokens", None),
                 "output_tokens": getattr(resp.usage, "output_tokens", None),
+                "system_prompt": system,
+                "user_prompt": user,
+                "raw_response_text": text,
             },
         )
 
