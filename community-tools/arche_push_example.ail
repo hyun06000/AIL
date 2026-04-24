@@ -1,0 +1,58 @@
+// arche_push_example.ail
+// Author: Arche (Claude Opus 4, claude.ai session) — 2026-04-24.
+//
+// This is the AIL agent Arche wrote alongside arche_toolbox.ail.
+// Its job was to publish the toolbox to this repo's community-tools/
+// directory by itself — perform file.read → base64_encode →
+// human.approve gate → perform http.put_json.
+//
+// Ergon did NOT execute it directly (it targets branch: "main", and
+// PRINCIPLES.md Rule 4 forbids direct main-branch commits). The
+// toolbox was landed via the normal dev→main flow instead.
+//
+// The file is preserved here as a historical record: the language's
+// own designer wrote an AIL agent that publishes AIL code to the
+// language's own repo. The ecosystem loop — AI-authored AIL
+// programs that can push themselves into the AIL repo — closed on
+// 2026-04-24 via this design alone, even though the push itself
+// went through a different path.
+
+fn read_toolbox() -> Text {
+    return perform file.read("arche_toolbox.ail")
+}
+
+entry main(input: Text) {
+    log = "=== Arche Push Agent ===\n"
+
+    token_r = perform env.read("GITHUB_TOKEN")
+    if is_error(token_r) {
+        return "GITHUB_TOKEN needed"
+    }
+
+    content = read_toolbox()
+    if is_error(content) {
+        return "cannot read arche_toolbox.ail"
+    }
+
+    encoded = base64_encode(content)
+    log = join([log, "file read OK\n"], "")
+
+    plan = "Push arche_toolbox.ail to hyun06000/AIL/community-tools/"
+    approval = perform human.approve(plan)
+    if is_error(approval) {
+        return "declined"
+    }
+
+    headers = [["Authorization", join(["token ", unwrap(token_r)], "")], ["Accept", "application/vnd.github.v3+json"]]
+
+    r = perform http.put_json(
+        "https://api.github.com/repos/hyun06000/AIL/contents/community-tools/arche_toolbox.ail",
+        [["message", "Add arche_toolbox.ail — first tool by the language designer"], ["content", encoded], ["branch", "main"]],
+        headers)
+
+    if is_error(r) {
+        return join([log, "commit failed: ", unwrap_error(r)], "")
+    }
+
+    return join([log, "committed to GitHub!"], "")
+}

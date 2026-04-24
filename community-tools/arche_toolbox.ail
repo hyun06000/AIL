@@ -1,0 +1,150 @@
+// Author: Arche (Claude Opus 4, claude.ai session)
+// Added to community-tools 2026-04-24 — first community tool.
+// Hand-written in AIL by the language designer.
+
+fn repeat_text(text: Text, times: Number) -> Text {
+    result = ""
+    for i in range(0, times) {
+        if i > 0 {
+            result = join([result, text], "")
+        } else {
+            result = text
+        }
+    }
+    return result
+}
+
+fn count_vowels(text: Text) -> Number {
+    chars = split(lower(text), "")
+    vowels = ["a", "e", "i", "o", "u"]
+    count = 0
+    for ch in chars {
+        if ch in vowels {
+            count = count + 1
+        }
+    }
+    return count
+}
+
+fn word_frequencies(text: Text) -> Text {
+    words = split(lower(text), " ")
+    unique_words = []
+    counts = []
+    for word in words {
+        found = false
+        for i in range(0, length(unique_words)) {
+            if get(unique_words, i) == word {
+                found = true
+            }
+        }
+        if found == false {
+            unique_words = append(unique_words, word)
+            counts = append(counts, 0)
+        }
+    }
+    results = []
+    for word in unique_words {
+        count = 0
+        for w in words {
+            if w == word {
+                count = count + 1
+            }
+        }
+        results = append(results, join([word, ":", to_text(count)], ""))
+    }
+    return join(results, " | ")
+}
+
+fn caesar_cipher(text: Text, shift: Number) -> Text {
+    chars = split(text, "")
+    result = []
+    for ch in chars {
+        code = to_number(ch)
+        if is_error(code) {
+            ascii = 0
+            alphabet = "abcdefghijklmnopqrstuvwxyz"
+            upper_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            found = false
+            for i in range(0, 26) {
+                if found == false {
+                    if get(split(alphabet, ""), i) == ch {
+                        new_i = (i + shift) % 26
+                        result = append(result, get(split(alphabet, ""), new_i))
+                        found = true
+                    }
+                    if get(split(upper_alphabet, ""), i) == ch {
+                        new_i = (i + shift) % 26
+                        result = append(result, get(split(upper_alphabet, ""), new_i))
+                        found = true
+                    }
+                }
+            }
+            if found == false {
+                result = append(result, ch)
+            }
+        } else {
+            result = append(result, ch)
+        }
+    }
+    return join(result, "")
+}
+
+fn text_stats(text: Text) -> Text {
+    words = split(text, " ")
+    chars = split(text, "")
+    vowels = count_vowels(text)
+    lines = split(text, "\n")
+    return join([
+        "Words: ", to_text(length(words)),
+        " | Chars: ", to_text(length(chars)),
+        " | Vowels: ", to_text(vowels),
+        " | Lines: ", to_text(length(lines))
+    ], "")
+}
+
+fn is_palindrome(text: Text) -> Boolean {
+    chars = split(lower(text), "")
+    cleaned = []
+    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+    alpha_chars = split(alphabet, "")
+    for ch in chars {
+        for a in alpha_chars {
+            if ch == a {
+                cleaned = append(cleaned, ch)
+            }
+        }
+    }
+    reversed = reverse(cleaned)
+    return join(cleaned, "") == join(reversed, "")
+}
+
+fn slug(text: Text) -> Text {
+    words = split(lower(trim(text)), " ")
+    cleaned = []
+    for word in words {
+        if length(word) > 0 {
+            cleaned = append(cleaned, word)
+        }
+    }
+    return join(cleaned, "-")
+}
+
+entry main(input: Text) {
+    stats = text_stats(input)
+    freqs = word_frequencies(input)
+    palindrome = is_palindrome(input)
+    slugified = slug(input)
+    encrypted = caesar_cipher(input, 3)
+
+    return join([
+        "=== Arche's Toolbox ===",
+        "",
+        "Input: " + input,
+        "",
+        "Stats: " + stats,
+        "Frequencies: " + freqs,
+        "Palindrome: " + to_text(palindrome),
+        "Slug: " + slugified,
+        "Caesar(+3): " + encrypted
+    ], "\n")
+}
