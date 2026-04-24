@@ -68,6 +68,51 @@ What this buys vs plain `http.listen`:
   request_received(request: Request)` with a typed parameter
   makes that natural.
 
+## The novel property — a server that can die
+
+Arche's emphasis (2026-04-25):
+
+> "`evolve` 서버의 `rollback_on`이 뜻하는 건 '서버가 스스로 죽을 수 있다'는 거야. 기존 서버는 죽으면 안 되는 거지만, HEAAL 서버는 '죽어야 할 때 죽는 것'이 안전 속성이야. `error_rate`가 50% 넘으면 스스로 멈추는 서버. 이건 기존 서버 아키텍처에 없는 개념이야."
+
+Traditional server architecture treats the process as sacred:
+uptime is the metric, auto-restart on crash is the default, the
+orchestration layer's job is to keep the thing alive. The failure
+mode that ships to production is "server is up but returning
+garbage" — because the architecture can't tell the difference
+between "alive" and "correct."
+
+The `evolve`-bound server inverts this. `rollback_on: error_rate
+> 0.5` makes **self-termination a first-class safety property**.
+When the program's own error rate crosses the line, it shuts
+itself down — not because it crashed, but because IT DECIDED to
+stop. The thing that keeps the process alive (`rollback_on`'s
+absence of triggering) and the thing that makes it kill itself
+(`rollback_on` firing) are the same grammatical clause, observed
+at runtime against real workload.
+
+This pattern doesn't exist in `nginx` / `node` / `go net/http` /
+`fastapi`. Those all default to "keep going no matter what."
+Systemd / Kubernetes add external supervisors that kill on
+crash, but the server itself never decides to die. HEAAL's move
+puts the kill switch **inside the program**, tied to observable
+behavior, visible at parse time.
+
+Design consequences:
+
+- The `rollback_on` clause is not optional for an `evolve`-bound
+  server. A server without one is a parse error, same as an
+  `evolve` block without rollback today.
+- Operators who want "keep it up forever" are writing a
+  traditional server, not a HEAAL server. That's a valid choice —
+  they should pick a different runtime. HEAAL is not for every
+  workload; it's for workloads where "wrong" is worse than
+  "down."
+- Re-launch is a separate concern. `rollback_on` triggers
+  shutdown; whether something else (a supervisor, a cron, the
+  AIL runtime itself) restarts the process is a deployment
+  decision, not a language decision. The point is that the
+  program OWNS its stop condition.
+
 ## Open sub-decisions (for v0.2 when the work starts)
 
 - **`when X { ... }` arms.** `evolve` today fires on numeric

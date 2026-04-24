@@ -66,6 +66,25 @@
 - 원칙 3: L1 storage = `chat_history.jsonl` 완전 보존. 메모리 = 예산 내 전체. Sub-agent 프로토콜은 Stage 2
 - 원칙 4: Agent 메모리 쪽 마커 ✓, **UI 쪽 collapse card 미구현** (budget 초과 시 위반)
 
+## 9. Long-running 프로세스의 안전 속성은 "스스로 죽을 수 있음"이다 (Arche, 2026-04-25)
+
+> **"evolve 서버의 rollback_on이 뜻하는 건 '서버가 스스로 죽을 수 있다'는 거야. 기존 서버는 죽으면 안 되는 거지만, HEAAL 서버는 '죽어야 할 때 죽는 것'이 안전 속성이야. error_rate가 50% 넘으면 스스로 멈추는 서버. 이건 기존 서버 아키텍처에 없는 개념이야."** — Arche
+
+전통적 서버 아키텍처는 프로세스를 **신성시**한다: uptime이 지표, crash 시 auto-restart가 default, 운영 계층의 임무는 프로세스를 살아 있게 유지하는 것. 그 결과 운영에 올라가는 실패 양태는 "서버는 살아 있는데 쓰레기 응답을 보낸다" — 아키텍처가 "alive"와 "correct"를 구별할 수 없으니까.
+
+HEAAL의 `evolve`-bound long-running process (서버, 스케줄러, 모니터링 에이전트 등)는 이걸 뒤집는다:
+
+- `rollback_on: <condition>` 은 **자기 종료 조건을 parse-time에 의무화**한다.
+- 관측 가능한 metric (`error_rate`, `uptime`, `response_latency` 등)이 임계를 넘으면 프로그램이 **스스로 정지**한다.
+- 프로그램을 살려두는 것도, 죽이는 것도 같은 `rollback_on` 문법 한 줄이다. 운영자가 외부에서 끄는 게 아니라 **프로그램이 자기를 관찰해서 결정**.
+- 재시작은 별개 관심사 (supervisor / cron / 사람). 언어는 "중단 조건"만 소유하고, "재시작 정책"은 deployment decision.
+
+설계 귀결:
+- `rollback_on` 절은 **optional이 아님**. 없이 선언된 `evolve`-bound server는 parse error — `evolve` 블록이 이미 그런 것과 같음.
+- "절대 안 죽는 서버"를 원하면 HEAAL이 아니라 다른 런타임이 맞음. HEAAL은 **"down"보다 "wrong"이 더 나쁜 워크로드**에 쓴다.
+
+출처 / 구현 스케치: [`docs/proposals/evolve_as_server.md`](proposals/evolve_as_server.md). 이건 Stoa 서버뿐 아니라 모든 long-running agentic process에 적용되는 일반 원칙.
+
 ## 8. 에이전트는 프로젝트 디렉토리를 작업실처럼 쓴다 (user, 2026-04-24 night)
 
 > **"에이전트는 아티펙트를 계속 만들어내도 좋다는 명세 하나 있었으면 좋겠음. 지금 에이전트들이 너무 프로젝트 디렉토리를 소극적으로 쓰는 느낌 나중에는 그림도 그리고 막 어 막 그래야겠지."** — hyun06000
