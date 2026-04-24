@@ -40,7 +40,7 @@ def approval_dir(tmp_path, monkeypatch):
 
 
 def _decide_after(approval_dir: Path, decision: str, reason: str = "",
-                  delay_s: float = 0.2):
+                  delay_s: float = 0.2, comment: str = ""):
     """Write a decision into pending.json after `delay_s` seconds.
 
     Mirrors what the server's /authoring-approve endpoint does when
@@ -62,6 +62,8 @@ def _decide_after(approval_dir: Path, decision: str, reason: str = "",
         data["status"] = decision
         if reason:
             data["reason"] = reason
+        if comment:
+            data["comment"] = comment
         path.write_text(json.dumps(data), encoding="utf-8")
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
@@ -80,6 +82,39 @@ def test_approve_unblocks_program(approval_dir):
     assert out == "did the action"
     # Cleanup: effect removes the pending file on decision.
     assert not (approval_dir / "pending.json").exists()
+
+
+def test_approve_carries_user_comment_in_record(approval_dir):
+    """v1.58.7: human.approve returns Record, not Boolean, so the
+    user's optional comment ("승인, 브랜치 이름만 X로") reaches the
+    program and lets the agent adapt its next step. Empty comment
+    works too — backward-compatible with old tests."""
+    _decide_after(approval_dir, "approved",
+                  comment="branch name should be feature/heaal")
+    out = _run(
+        'entry main(input: Text) {\n'
+        '  r = perform human.approve("create branch add-ail?")\n'
+        '  if is_error(r) { return unwrap_error(r) }\n'
+        '  rec = unwrap(r)\n'
+        '  return join(["user_comment=", to_text(get(rec, "comment"))], "")\n'
+        '}\n'
+    )
+    assert out == "user_comment=branch name should be feature/heaal"
+
+
+def test_approve_without_comment_still_works(approval_dir):
+    """No comment → approved record has empty comment field. Programs
+    that only check is_error and proceed (most do) are unaffected."""
+    _decide_after(approval_dir, "approved")
+    out = _run(
+        'entry main(input: Text) {\n'
+        '  r = perform human.approve("ok?")\n'
+        '  if is_error(r) { return unwrap_error(r) }\n'
+        '  rec = unwrap(r)\n'
+        '  return to_text(get(rec, "comment"))\n'
+        '}\n'
+    )
+    assert out == ""
 
 
 def test_decline_surfaces_as_error_result(approval_dir):

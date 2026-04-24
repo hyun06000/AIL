@@ -156,14 +156,23 @@ def render_authoring_page(
     .run-card .run-inline:hover {{ opacity: 0.9; }}
     .run-card .run-inline:disabled {{ opacity: 0.5; cursor: wait; }}
     .program-picker {{ display: flex; align-items: center; gap: 8px;
-      font-size: 12px; color: #374151; }}
+      font-size: 12px; color: #374151;
+      flex-wrap: wrap; min-width: 0; max-width: 100%; }}
     .program-picker select {{ font-family: ui-monospace, Menlo,
       monospace; font-size: 12px; padding: 4px 8px;
       border: 1px solid var(--border); border-radius: 4px;
-      background: #fff; }}
+      background: #fff;
+      max-width: 100%; min-width: 0;
+      text-overflow: ellipsis; overflow: hidden; }}
     .program-picker .flag {{ font-size: 11px; color: #6b7280;
-      font-family: ui-monospace, Menlo, monospace; }}
+      font-family: ui-monospace, Menlo, monospace;
+      min-width: 0; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }}
     .program-picker .flag.bad {{ color: #b91c1c; }}
+    /* Also constrain the Run card itself so long dropdown labels
+       don't push its width past the chat bubble. */
+    .run-card {{ min-width: 0; }}
+    .run-card select {{ max-width: 100%; }}
     .env-block {{ border: 1px solid #fde68a; background: #fffbeb;
       border-radius: 6px; padding: 10px 12px; display: flex;
       flex-direction: column; gap: 6px; }}
@@ -1001,8 +1010,16 @@ def render_authoring_page(
         programs.forEach(p => {{
           const opt = document.createElement('option');
           opt.value = p.name;
-          const purposeSuffix = p.purpose ? ' — ' + p.purpose : '';
+          // Cap purpose length so a long # PURPOSE: line doesn't
+          // stretch the dropdown past its card. The full text is in
+          // the file tree side panel / the prompt inventory.
+          const CAP = 50;
+          const trimmedPurpose = (p.purpose || '').length > CAP
+            ? p.purpose.slice(0, CAP - 1) + '…'
+            : (p.purpose || '');
+          const purposeSuffix = trimmedPurpose ? ' — ' + trimmedPurpose : '';
           opt.textContent = p.name + purposeSuffix + (p.parses ? '' : ' (parse error)');
+          opt.title = p.name + (p.purpose ? ' — ' + p.purpose : '');
           if (p.name === selected) opt.selected = true;
           sel.appendChild(opt);
         }});
@@ -1317,6 +1334,20 @@ def render_authoring_page(
         const statusSpan = document.createElement('span');
         statusSpan.className = 'status';
         statusSpan.style.marginLeft = '8px';
+        // v1.58.7: unified feedback textarea. Always visible above
+        // the buttons. Content goes with either decision, so the
+        // agent sees WHY on a decline AND sees ADDITIONAL GUIDANCE
+        // on an approve ("승인, 다만 브랜치 이름은 X로").
+        const feedback = document.createElement('textarea');
+        feedback.placeholder =
+          '의견 (선택 / optional) — 예: "승인, 브랜치 이름만 X로" ' +
+          '또는 "URL이 틀렸어요". 에이전트가 이 의견을 읽고 다음 ' +
+          '단계를 조정합니다.';
+        feedback.style.cssText =
+          'width:100%;font-family:inherit;font-size:13px;padding:8px;' +
+          'border:1px solid #e5e7eb;border-radius:6px;' +
+          'min-height:50px;resize:vertical;margin-top:6px;';
+        box.appendChild(feedback);
         btnRow.appendChild(approveBtn);
         btnRow.appendChild(declineBtn);
         btnRow.appendChild(statusSpan);
@@ -1324,13 +1355,15 @@ def render_authoring_page(
         thread.appendChild(box);
         scrollBottom();
 
-        const decide = async (decision, reason) => {{
+        const decide = async (decision) => {{
           approveBtn.disabled = true;
           declineBtn.disabled = true;
+          feedback.disabled = true;
           statusSpan.textContent = '전송 중…';
+          const comment = feedback.value.trim();
           try {{
             const body = {{ id: rec.id, decision: decision }};
-            if (reason) body.reason = reason;
+            if (comment) body.comment = comment;
             const r = await fetch('/authoring-approve', {{
               method: 'POST',
               headers: {{ 'Content-Type': 'application/json' }},
@@ -1348,68 +1381,20 @@ def render_authoring_page(
               : '❌ 거절됨 / Declined';
             label.style.color = decision === 'approve'
               ? '#047857' : '#b91c1c';
-            statusSpan.textContent = reason ? '사유: ' + reason : '';
+            statusSpan.textContent = comment
+              ? (decision === 'approve' ? '의견: ' : '사유: ') + comment
+              : '';
             btnRow.innerHTML = '';
+            feedback.style.display = 'none';
           }} catch (e) {{
             statusSpan.textContent = '✗ ' + e.message;
             approveBtn.disabled = false;
             declineBtn.disabled = false;
+            feedback.disabled = false;
           }}
         }};
         approveBtn.onclick = () => decide('approve');
-        // hyun06000 2026-04-24: when the user declines, they almost
-        // always have a reason in mind ("이 레포 말고 다른 레포", "이
-        // 브랜치 이름 말고"). Capturing it + feeding it into the
-        // runtime's error message makes auto-fix actually responsive
-        // to the decline reason instead of guessing.
-        declineBtn.onclick = () => {{
-          const reasonBox = document.createElement('div');
-          reasonBox.style.cssText =
-            'display:flex;flex-direction:column;gap:6px;margin-top:8px;';
-          const ta = document.createElement('textarea');
-          ta.placeholder =
-            '거절 사유 (예: "URL이 틀렸어요", "금액 다시 확인"). ' +
-            '에이전트가 이 사유를 읽고 자동으로 수정합니다. 생략 가능.';
-          ta.style.cssText =
-            'font-family:inherit;font-size:13px;padding:8px;' +
-            'border:1px solid #e5e7eb;border-radius:6px;' +
-            'min-height:60px;resize:vertical;';
-          ta.autofocus = true;
-          const row = document.createElement('div');
-          row.style.cssText = 'display:flex;gap:8px;';
-          const confirmBtn = document.createElement('button');
-          confirmBtn.className = 'run-inline';
-          confirmBtn.style.background = '#b91c1c';
-          confirmBtn.textContent = '거절 전송';
-          const skipBtn = document.createElement('button');
-          skipBtn.className = 'run-inline';
-          skipBtn.style.background = '#6b7280';
-          skipBtn.textContent = '사유 없이 거절';
-          const cancelBtn = document.createElement('button');
-          cancelBtn.className = 'run-inline';
-          cancelBtn.style.background = '#fff';
-          cancelBtn.style.color = '#111';
-          cancelBtn.style.border = '1px solid #e5e7eb';
-          cancelBtn.textContent = '취소';
-          row.appendChild(confirmBtn);
-          row.appendChild(skipBtn);
-          row.appendChild(cancelBtn);
-          reasonBox.appendChild(ta);
-          reasonBox.appendChild(row);
-          btnRow.innerHTML = '';
-          btnRow.appendChild(reasonBox);
-          ta.focus();
-          confirmBtn.onclick = () => decide('decline', ta.value.trim());
-          skipBtn.onclick = () => decide('decline', '');
-          cancelBtn.onclick = () => {{
-            btnRow.innerHTML = '';
-            btnRow.appendChild(approveBtn);
-            btnRow.appendChild(declineBtn);
-            btnRow.appendChild(statusSpan);
-            approveBtn.disabled = false;
-            declineBtn.disabled = false;
-          }};
-        }};
+        declineBtn.onclick = () => decide('decline');
       }}
       runBtn.onclick = fire;
       dynSlot.appendChild(runBtn);

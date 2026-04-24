@@ -816,14 +816,23 @@ class Executor:
                     origin)
             status = current.get("status")
             if status == "approved":
+                comment = str(current.get("comment") or "")
                 try:
                     pending_path.unlink()
                 except OSError:
                     pass
                 self.trace.record(
                     "human_approve_decided",
-                    id=approval_id, decision="approved")
-                return self._result_ok(True, origin)
+                    id=approval_id, decision="approved",
+                    comment=comment[:200] if comment else "")
+                # hyun06000 2026-04-24 night: "y/n만 물어보는 것도
+                # 좋고 거기에 의견을 담아서 전달하는 것까지 있으면
+                # 좋겠어." Return a Record so the program can read
+                # the user's feedback on approval, not just a bare
+                # true. Record is truthy so existing `if unwrap(r) {}`
+                # patterns keep working.
+                return self._result_ok(
+                    {"approved": True, "comment": comment}, origin)
             if status == "declined":
                 reason = current.get("reason") or "user declined"
                 try:

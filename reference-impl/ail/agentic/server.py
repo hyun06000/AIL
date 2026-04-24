@@ -1035,8 +1035,18 @@ def _make_handler(project: Project, serve_only: bool = False):
                     return
                 current["status"] = (
                     "approved" if decision == "approve" else "declined")
+                # v1.58.7: unified feedback field. On approve it's
+                # stored as `comment`; on decline it's stored as
+                # `reason` (runtime still expects that field name in
+                # the decline error message). Client may send either
+                # field; we normalize based on decision.
+                comment = str(payload.get("comment", "")).strip()
+                if decision == "approve" and comment:
+                    current["comment"] = comment
                 if reason:
                     current["reason"] = reason
+                elif decision == "decline" and comment:
+                    current["reason"] = comment
                 import os as _os
                 try:
                     tmp = pending_path.with_suffix(".tmp")

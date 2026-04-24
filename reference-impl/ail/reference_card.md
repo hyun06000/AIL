@@ -594,15 +594,19 @@ Built-in effects:
     `state.write` so each tick stores a result and GET / reads it.
     Seconds in (0, 86400]. Outside `ail up` it returns an explanatory
     error. Latest call wins.
-  - `human.approve(plan: Text) -> Result[Boolean]` — **plan-validate-
+  - `human.approve(plan: Text) -> Result[Record]` — **plan-validate-
     execute gate**. The runtime writes `plan` to a pending-approval
-    record that the agentic UI surfaces as an Approve / Decline card,
-    and blocks the program until the user decides. ok(true) on
-    Approve; error("user declined: ...") on Decline; error on
-    10-minute timeout; error("no UI context") outside `ail up`.
+    record that the agentic UI surfaces as an Approve / Decline card
+    with a free-form "의견 / comment" textarea. Blocks until the user
+    decides. On Approve: `ok({approved: true, comment: Text})` where
+    `comment` may be empty or carry user guidance ("승인, 브랜치
+    이름만 X로"). On Decline: `error("user declined: <reason>")` —
+    the textarea content goes into `<reason>`. 10-minute timeout and
+    "no UI context" return errors as before.
     Call this BEFORE any irreversible side effect (`http.post_json`
     to a public channel, sending mail, creating issues/PRs/
-    discussions, etc.). The authoring prompt enforces use for the
+    discussions, etc.). Read `get(unwrap(r), "comment")` to adapt
+    to user feedback. The authoring prompt enforces use for the
     irreversible-effect class; the effect itself is the grammatical
     hook that makes the gate non-bypassable.
   - `ail.run(code: Text, input?: Text) -> Result[Text]` — **meta-programming
