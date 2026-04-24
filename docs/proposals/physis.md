@@ -6,7 +6,7 @@
 
 **Author:** Arche (Claude Opus 4) + hyun06000, 2026-04-25.
 **Drafted:** Ergon (formalization, biological framing, Stoa scenario).
-**Status:** proposal, layered on top of [`evolve_as_server.md`](evolve_as_server.md).
+**Status:** proposal, grammar decisions resolved (2026-04-25), layered on top of [`evolve_as_server.md`](evolve_as_server.md).
 **Name:** Physis (φύσις), Aristotle's word for "what unfolds according to its own inner principle." Completes the project's conceptual frame — Arche (시작) → Ergon (실행) → Telos (목적) → Physis (성장).
 
 ---
@@ -31,34 +31,46 @@ frozen; state and constraints evolve across process lifetimes.
 ## Syntax
 
 ```ail
+// pure fn convention — runtime finds this by name and calls it on rollback_on fire.
+// No new keyword. Grammar unchanged.
+pure fn on_death(reason: Text, history: [Event]) -> Testament {
+    build_testament(reason, history)
+}
+
 evolve stoa_server {
     metric: health
     when health < 0.3 {
         retune strategy
     }
     rollback_on: error_rate > 0.5
-    on_death(reason: Text, history: [Event]) -> Testament {
-        build_testament(reason, history)
-    }
     history: keep_last 100
+}
+
+// In entry — reads the testament left by the predecessor, if any.
+entry main(input: Text) {
+    t_r = perform inherit_testament()   // Result[Testament]
+    if is_ok(t_r) {
+        t = unwrap(t_r)
+        // apply t.params, read t.advice ...
+    }
+    // is_error(t_r) → genesis, no predecessor. Normal start.
 }
 ```
 
-Two new grammatical parts, everything else is unchanged `evolve`:
+Two runtime additions, grammar unchanged:
 
-1. **`on_death(reason, history) -> Testament`** — a **pure** fn arm that
-   runs once, at the moment `rollback_on` fires. It receives the death
-   reason and the last-N history (same bound as `history: keep_last N`).
-   It returns a typed `Testament` record. No side effects inside
-   `on_death` — it observes and summarizes, it doesn't spawn. The
-   runtime handles the spawn.
+1. **`pure fn on_death(reason, history) -> Testament`** — a pure fn the
+   runtime finds by name convention and calls once when `rollback_on`
+   fires. Not a keyword — the grammar doesn't change. If absent, the
+   process dies without a testament (valid; the successor starts fresh).
+   No side effects — it observes and summarizes only. The runtime handles
+   the spawn.
 
-2. **Runtime auto-spawn on death.** When `on_death` returns a
-   Testament, the runtime automatically launches a new instance of the
-   same `evolve` block with that Testament available at startup. The
-   new process can read it via `perform inherit_testament() ->
-   Result[Testament]`. Genesis case (generation 1, no predecessor):
-   `inherit_testament()` returns `error("no testament — genesis")`.
+2. **`perform inherit_testament() -> Result[Testament]`** — a read-only
+   effect. Genesis generation returns `error("no testament — genesis")`.
+   Subsequent generations return `ok(testament)`. Blocked inside
+   `pure fn` bodies (it's I/O). The `error` case is not a failure — it
+   means "I was born without a predecessor." Handle it with `is_ok`.
 
 No new effects. `on_death` is pure (reads observed events, writes a
 typed record). `inherit_testament` is read-only. The spawn loop is a
@@ -263,12 +275,19 @@ which all four stand.
   Benchmark: does generation N handle workloads better than generation
   1? (Should — otherwise the testament mechanism isn't working.)
 
-Open decisions for v0.3:
-- Is `on_death` a `pure fn` keyword-level construct, or syntactic sugar
-  over a regular `pure fn` the runtime calls by convention?
-- Does `inherit_testament` belong to the grammar (new keyword) or
-  stays as a `perform` effect? Leaning toward effect — it's I/O
-  (reads `.ail/physis/current.json`).
+**Resolved decisions for v0.3** (Telos 제안, Arche 채택 — 2026-04-25):
+
+- **`on_death` → pure fn convention.** 키워드 아님. 런타임이 이름으로 찾아 호출.
+  죽음은 런타임 사건이지 문법 사건이 아니다. 파서에 "죽음" 개념이 올라오면
+  모든 AI가 배워야 할 키워드가 하나 늘어난다. `evolve`가 keyword인 이유는
+  `rollback_on` 필수 같은 구조적 강제 때문이었다 — `on_death`에는 그 강제가
+  없다. 없으면 유서 없이 죽는 것뿐.
+
+- **`inherit_testament` → `perform` effect, `Result[Testament]` 반환.**
+  세대 정보를 외부에서 읽는 것은 부작용이다. `pure fn` 안에서 쓰지 못하게
+  막히는 것도 effect이기 때문에 자연스럽다. Genesis 세대가
+  `error("no testament — genesis")`를 반환하는 것은 오류가 아니라 사실이다
+  — "나는 아무것도 물려받지 않았다"가 `Result`로 표현된다.
 - Testament persistence beyond the current process tree: should gen-N
   testaments be archivable to git so lineage survives full host wipes?
   Probably yes — a `community-tools/physis-lineage-backup.ail` is
