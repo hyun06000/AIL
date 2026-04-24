@@ -278,6 +278,10 @@ def render_authoring_page(
       </div>
     </header>
 
+    <div id="deploy-bar" style="display:flex;align-items:center;gap:10px;
+         padding:8px 12px;margin-bottom:8px;border:1px solid #e5e7eb;
+         border-radius:8px;background:#fff;font-size:13px;"></div>
+
     <div class="settings-overlay" id="settings-overlay"></div>
     <div class="settings-panel" id="settings-panel">
       <div class="settings-hdr">
@@ -365,6 +369,89 @@ def render_authoring_page(
     }}
     renderTokenWidget();
     document.body.appendChild(tokenWidget);
+
+    // Deploy bar — PRINCIPLES.md §5. Chat-side button for background
+    // "ail serve" subprocess management. Poll status on load, refresh
+    // after deploy/stop actions. The UI mirrors what a non-developer
+    // expects: no terminal, just two buttons that flip state.
+    const deployBar = document.getElementById('deploy-bar');
+    async function refreshDeployBar() {{
+      deployBar.innerHTML = '';
+      let rec = null;
+      try {{
+        const r = await fetch('/authoring-deploy/status');
+        if (r.ok) rec = await r.json();
+      }} catch (e) {{ /* ignore */ }}
+      if (rec) {{
+        const badge = document.createElement('span');
+        badge.textContent = '🟢 배포 중';
+        badge.style.color = '#047857';
+        badge.style.fontWeight = '600';
+        deployBar.appendChild(badge);
+        const info = document.createElement('span');
+        info.textContent = 'port ' + rec.port + ' · pid ' + rec.pid;
+        info.style.color = '#6b7280';
+        info.style.fontFamily = 'ui-monospace,Menlo,monospace';
+        info.style.fontSize = '11px';
+        deployBar.appendChild(info);
+        const openBtn = document.createElement('a');
+        openBtn.href = rec.url;
+        openBtn.target = '_blank';
+        openBtn.rel = 'noopener';
+        openBtn.textContent = '🔗 열기';
+        openBtn.style.cssText =
+          'margin-left:auto;padding:4px 10px;background:#047857;' +
+          'color:#fff;border-radius:4px;text-decoration:none;' +
+          'font-size:12px;';
+        deployBar.appendChild(openBtn);
+        const stopBtn = document.createElement('button');
+        stopBtn.textContent = '⏹ 중단';
+        stopBtn.style.cssText =
+          'padding:4px 10px;background:#fff;color:#b91c1c;' +
+          'border:1px solid #fecaca;border-radius:4px;cursor:pointer;' +
+          'font-size:12px;font-family:inherit;';
+        stopBtn.onclick = async () => {{
+          if (!confirm('배포된 프로세스를 종료할까요?')) return;
+          stopBtn.disabled = true;
+          try {{
+            await fetch('/authoring-deploy?stop=1', {{method:'POST'}});
+          }} catch (e) {{}}
+          await refreshDeployBar();
+        }};
+        deployBar.appendChild(stopBtn);
+      }} else {{
+        const label = document.createElement('span');
+        label.textContent = '⚫ 배포 안 됨';
+        label.style.color = '#6b7280';
+        deployBar.appendChild(label);
+        const hint = document.createElement('span');
+        hint.textContent = '채팅을 닫아도 앱이 계속 돌게 하려면 배포하세요';
+        hint.style.color = '#9ca3af';
+        hint.style.fontSize = '11px';
+        deployBar.appendChild(hint);
+        const deployBtn = document.createElement('button');
+        deployBtn.textContent = '🚀 배포하기';
+        deployBtn.style.cssText =
+          'margin-left:auto;padding:4px 12px;background:#047857;' +
+          'color:#fff;border:0;border-radius:4px;cursor:pointer;' +
+          'font-size:12px;font-family:inherit;';
+        deployBtn.onclick = async () => {{
+          deployBtn.disabled = true;
+          deployBtn.textContent = '배포 중…';
+          try {{
+            const r = await fetch('/authoring-deploy', {{method:'POST'}});
+            if (!r.ok) {{
+              alert('배포 실패: ' + await r.text());
+            }}
+          }} catch (e) {{
+            alert('배포 실패: ' + e.message);
+          }}
+          await refreshDeployBar();
+        }};
+        deployBar.appendChild(deployBtn);
+      }}
+    }}
+    refreshDeployBar();
 
     function appendTokenFooter(turnEl, inputTokens, outputTokens) {{
       if (!turnEl) return;

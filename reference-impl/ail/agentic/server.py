@@ -328,6 +328,32 @@ def _make_handler(project: Project, serve_only: bool = False):
                 self.wfile.write(body)
                 return
 
+            if self.path in ("/authoring-deploy/status",
+                             "/authoring-deploy-status"):
+                # UI polls this on page load to restore the deployed
+                # state (so the deploy card shows "배포됨" + stop
+                # button instead of the "배포하기" button when the
+                # subprocess is already running).
+                import json as _json, os as _os
+                dep_path = project.state_dir / "deployment.json"
+                if not dep_path.is_file():
+                    self._send_text(404, "no deployment\n")
+                    return
+                try:
+                    rec = _json.loads(dep_path.read_text())
+                    _os.kill(int(rec["pid"]), 0)
+                except (ProcessLookupError, ValueError, OSError, KeyError):
+                    dep_path.unlink(missing_ok=True)
+                    self._send_text(404, "stale\n")
+                    return
+                payload = _json.dumps(rec).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
             if self.path.startswith("/authoring-file"):
                 from urllib.parse import urlparse, parse_qs
                 qs = parse_qs(urlparse(self.path).query)
@@ -426,6 +452,29 @@ def _make_handler(project: Project, serve_only: bool = False):
             # chat session at "/" keeps working regardless.
             # "/service" is kept as a backward-compatible alias.
             if self.path in ("/run", "/run/", "/service", "/service/"):
+                # Under `ail serve` (serve_only), inject a small
+                # floating control overlay with "편집으로 돌아가기"
+                # and "⏹ 종료" so the user can stop the independent
+                # process without a terminal.
+                _overlay = b""
+                if serve_only:
+                    _overlay = (
+                        b"<div id='ail-overlay' style='position:fixed;"
+                        b"bottom:8px;left:8px;z-index:99999;"
+                        b"font:11px ui-monospace,monospace;"
+                        b"background:rgba(255,255,255,0.92);"
+                        b"border:1px solid #e5e7eb;border-radius:6px;"
+                        b"padding:6px 10px;display:flex;gap:10px;"
+                        b"align-items:center'>"
+                        b"<span style='color:#6b7280'>independent mode</span>"
+                        b"<a href='http://127.0.0.1:8080/' target='_blank' "
+                        b"style='color:#2563eb;text-decoration:none'>"
+                        b"\xe2\x86\x90 \xed\x8e\xb8\xec\xa7\x91\xec\x9c\xbc\xeb\xa1\x9c</a>"
+                        b"<a href='#' onclick=\"if(confirm('\xec\x84\x9c\xeb\xb2\x84\xeb\xa5\xbc \xec\xa2\x85\xeb\xa3\x8c\xed\x95\xa0\xea\xb9\x8c\xec\x9a\x94?')){fetch('/admin/stop',{method:'POST'}).then(()=>document.body.innerHTML='<h2 style=\\'text-align:center;margin-top:40vh;color:#6b7280\\'>\xec\x84\x9c\xeb\xb2\x84 \xec\xa2\x85\xeb\xa3\x8c\xeb\x90\xa8</h2>');}return false;\" "
+                        b"style='color:#b91c1c;text-decoration:none'>"
+                        b"\xe2\x8f\xb9 \xec\xa2\x85\xeb\xa3\x8c</a>"
+                        b"</div>"
+                    )
                 view_path = project.root / "view.html"
                 if view_path.is_file():
                     try:
@@ -434,6 +483,8 @@ def _make_handler(project: Project, serve_only: bool = False):
                         self._send_text(500,
                             f"could not read view.html: {e}\n")
                         return
+                    if _overlay:
+                        body = body + _overlay
                     self.send_response(200)
                     self.send_header(
                         "Content-Type", "text/html; charset=utf-8")
@@ -584,6 +635,27 @@ def _make_handler(project: Project, serve_only: bool = False):
                                  "or open / in a browser.\n")
 
         def do_POST(self):  # noqa: N802 — stdlib name
+            if self.path in ("/admin/stop", "/admin/stop/"):
+                if not serve_only:
+                    self._send_text(404,
+                        "stop endpoint is serve-mode only\n")
+                    return
+                # Schedule a clean shutdown after the response flushes.
+                import threading as _threading, os as _os, signal as _signal
+                self._send_text(200, "shutting down\n")
+                dep_path = project.state_dir / "deployment.json"
+                try:
+                    dep_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                project.append_ledger({"event": "admin_stop"})
+                def _suicide():
+                    import time as _t
+                    _t.sleep(0.2)
+                    _os.kill(_os.getpid(), _signal.SIGTERM)
+                _threading.Thread(target=_suicide, daemon=True).start()
+                return
+
             if self.path == "/authoring-chat":
                 if serve_only:
                     self._send_text(404,
@@ -718,6 +790,104 @@ def _make_handler(project: Project, serve_only: bool = False):
                 payload = _json.dumps(outcome, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
+            if self.path in ("/authoring-deploy", "/authoring-deploy/"):
+                # PRINCIPLES.md §5: click-to-deploy. Spawns an `ail
+                # serve` subprocess in the background, records its pid
+                # + port to .ail/deployment.json, returns that info
+                # to the chat UI. The chat process can die and the
+                # deployed process keeps running; stopping happens via
+                # POST /authoring-deploy?stop=1.
+                import subprocess, sys as _sys, socket as _socket, json as _json, time as _time, os as _os, signal as _signal
+                from urllib.parse import urlparse, parse_qs
+                qs = parse_qs(urlparse(self.path).query)
+                dep_path = project.state_dir / "deployment.json"
+                stop_requested = (qs.get("stop", ["0"])[0] == "1")
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                if length:
+                    self.rfile.read(length)  # drain
+
+                if stop_requested:
+                    if not dep_path.is_file():
+                        self._send_text(404, "no active deployment\n")
+                        return
+                    try:
+                        rec = _json.loads(dep_path.read_text())
+                        pid = int(rec["pid"])
+                        try:
+                            _os.kill(pid, _signal.SIGTERM)
+                        except ProcessLookupError:
+                            pass
+                        dep_path.unlink(missing_ok=True)
+                    except Exception as e:
+                        self._send_text(500, f"stop failed: {e}\n")
+                        return
+                    project.append_ledger({"event": "deployment_stop", "pid": pid})
+                    self._send_text(200, "stopped\n")
+                    return
+
+                # Already deployed + process alive? Return that record.
+                if dep_path.is_file():
+                    try:
+                        rec = _json.loads(dep_path.read_text())
+                        pid = int(rec["pid"])
+                        _os.kill(pid, 0)  # probe
+                        payload = _json.dumps(rec).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(payload)))
+                        self.end_headers()
+                        self.wfile.write(payload)
+                        return
+                    except (ProcessLookupError, ValueError, OSError, KeyError):
+                        # Stale record — fall through to redeploy.
+                        dep_path.unlink(missing_ok=True)
+
+                # Pick a free port near 8090.
+                def _pick_port():
+                    for p in range(8090, 8200):
+                        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+                        try:
+                            s.bind(("127.0.0.1", p))
+                            s.close()
+                            return p
+                        except OSError:
+                            s.close()
+                    return 0
+                free_port = _pick_port()
+                if not free_port:
+                    self._send_text(500, "no free port in 8090-8199\n")
+                    return
+
+                log_path = project.state_dir / "deployment.log"
+                log_fh = open(log_path, "a", encoding="utf-8")
+                log_fh.write(f"\n=== ail serve start {_time.strftime('%Y-%m-%dT%H:%M:%S')} port={free_port} ===\n")
+                log_fh.flush()
+                proc = subprocess.Popen(
+                    [_sys.executable, "-m", "ail", "serve",
+                     str(project.root), "--port", str(free_port),
+                     "--host", "127.0.0.1"],
+                    stdout=log_fh, stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,  # survive parent exit
+                )
+                record = {
+                    "pid": proc.pid,
+                    "port": free_port,
+                    "url": f"http://127.0.0.1:{free_port}/run",
+                    "started_at": _time.time(),
+                    "log": str(log_path),
+                }
+                dep_path.write_text(_json.dumps(record, ensure_ascii=False))
+                project.append_ledger({"event": "deployment_start",
+                                        "pid": proc.pid, "port": free_port})
+                payload = _json.dumps(record).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
                 self.wfile.write(payload)

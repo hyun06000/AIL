@@ -629,6 +629,54 @@ def test_authored_project_serves_service_ui_on_get(tmp_path):
     assert "<textarea" in body
 
 
+def test_admin_stop_endpoint_only_in_serve_mode(tmp_path):
+    """The /admin/stop endpoint is exposed only when serve_only=True.
+    In edit mode it must return 404 so accidentally POSTing to it from
+    the chat UI can't kill the authoring server."""
+    proj = Project.init(tmp_path / "p")
+    proj.write_app_source("entry main(input: Text) { return input }")
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/admin/stop",
+        data=b"", method="POST")
+    try:
+        urllib.request.urlopen(req, timeout=2)
+        assert False, "expected 404"
+    except urllib.error.HTTPError as e:
+        assert e.code == 404
+
+
+def test_deploy_status_endpoint_returns_404_when_no_deployment(tmp_path):
+    """GET /authoring-deploy/status returns 404 if no deployment.json
+    exists yet. The UI relies on this to flip to the 'not deployed'
+    state on page load."""
+    proj = Project.init(tmp_path / "p")
+    proj.write_app_source("entry main(input: Text) { return input }")
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    try:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/authoring-deploy/status", timeout=2)
+        assert False, "expected 404"
+    except urllib.error.HTTPError as e:
+        assert e.code == 404
+
+
 def test_serve_only_mode_redirects_root_and_disables_chat(tmp_path):
     """`ail serve` — PRINCIPLES.md §5 Program Independence at the
     process level. The edit URL redirects to the runtime URL, and the
