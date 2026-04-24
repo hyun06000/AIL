@@ -362,6 +362,94 @@ def test_prompt_includes_heaal_identity_and_research_guidance(tmp_path):
     assert "perform http.get" in prompt
 
 
+def test_agent_sees_all_turns_by_default(tmp_path):
+    """UI ≤ agent memory. The prior 12-turn hard cap violated this;
+    agent forgot turn 3 of a 20-turn chat while the UI showed all 20."""
+    from ail.agentic.authoring_chat import AuthoringChat
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    for i in range(20):
+        chat._append_history(f"user says {i}", f"agent reply {i}", [], None)
+    history = chat._load_history()
+    assert len(history) == 20, "load_history must not silently cap"
+    formatted = chat._format_history(history)
+    for i in range(20):
+        assert f"user says {i}" in formatted, f"turn {i} missing from prompt"
+
+
+def test_file_content_is_retained_in_history(tmp_path):
+    """Previously only {path, bytes} was stored — agent saw a filename
+    it could no longer read. Now content is inlined in the fence."""
+    from ail.agentic.authoring_chat import AuthoringChat
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(
+        proj,
+        _ScriptedChatAdapter([
+            '<reply>ok</reply>\n'
+            '<file path="greeter.ail">\nentry main() { return "hi" }\n</file>'
+        ]),
+    )
+    chat.turn("make a greeter")
+    history = chat._load_history()
+    file_entry = history[0]["files"][0]
+    assert "content" in file_entry
+    assert 'return "hi"' in file_entry["content"]
+    formatted = chat._format_history(history)
+    assert "<<<FILE greeter.ail" in formatted
+    assert 'return "hi"' in formatted
+
+
+def test_history_budget_elides_with_visible_boundary(tmp_path):
+    """When char budget is exceeded, oldest turns drop out — but with
+    a loud boundary marker, not silently."""
+    from ail.agentic.authoring_chat import AuthoringChat
+    from ail.agentic import authoring_chat as ac_mod
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    # Each entry ~1.2KB; with a tight budget we must elide.
+    filler = "x" * 1000
+    for i in range(20):
+        chat._append_history(f"turn {i} message", f"turn {i} {filler}", [], None)
+    history = chat._load_history()
+    # Force elision by shrinking budget for this test.
+    original = ac_mod._HISTORY_CHAR_BUDGET
+    try:
+        ac_mod._HISTORY_CHAR_BUDGET = 5000
+        formatted = chat._format_history(history)
+    finally:
+        ac_mod._HISTORY_CHAR_BUDGET = original
+    assert "압축됨" in formatted, "budget overflow must leave explicit boundary"
+    assert "chat_history.jsonl" in formatted, "boundary must point at storage"
+    # Most recent must survive.
+    assert "turn 19" in formatted
+
+
+def test_run_result_is_not_double_truncated(tmp_path):
+    """Storage truncates at 4KB; format step no longer re-truncates
+    to 500 chars (that clobbered error diagnostics the agent needed)."""
+    from ail.agentic.authoring_chat import AuthoringChat
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    long_value = "A" * 3000
+    chat._append_run_result("input", {"ok": True, "value": long_value})
+    history = chat._load_history()
+    formatted = chat._format_history(history)
+    # Count A's — if double-truncation returned, we'd see ~500.
+    assert formatted.count("A") >= 3000
+
+
+def test_prompt_no_longer_claims_full_log_unconditionally(tmp_path):
+    """Old prompt said 'On every turn you get the full log' — a lie
+    under the 12-turn cap. New prompt is truthful and explains the
+    boundary marker."""
+    from ail.agentic.authoring_chat import AuthoringChat
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    prompt = chat._build_goal_prompt({}, [], "hi")
+    assert "boundary marker" in prompt or "압축됨" in prompt
+    assert "<<<FILE" in prompt, "prompt must teach the file-fence convention"
+
+
 def test_history_persists_across_instances(tmp_path):
     proj = Project.init(tmp_path / "demo")
     c1 = AuthoringChat(

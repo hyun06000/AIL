@@ -37,7 +37,23 @@ from ..runtime.model import ModelAdapter
 
 _ALLOWED_EXTENSIONS = {".md", ".ail", ".html", ".json", ".txt"}
 _MAX_FILE_BYTES = 64 * 1024  # 64 KB per file write
-_RECENT_HISTORY_TURNS = 12
+# History inclusion policy (see docs/letters/2026-04-24_ergon_to_arche_ab50.md
+# and the "UI ≤ agent memory" principle).
+#
+# Agent sees the full chat_history by default. Older turns are only
+# elided when the budget is exceeded, and elision leaves a visible
+# boundary marker that points at the storage file — never a silent cut.
+#
+# _HISTORY_CHAR_BUDGET: soft cap on history block size (char count).
+#   ~400K chars ≈ 130K tokens, leaves room in a 200K-token context
+#   for the system prompt, reference card, user turn, and reply.
+# _FILE_CONTENT_CAP: per-file content cap stored in a history entry.
+#   The previous schema stored only {path, bytes}, so "improve the code
+#   we wrote 3 turns ago" gave the agent a filename it could no longer
+#   remember. 8KB covers typical .ail programs; larger files record a
+#   truncation marker and the agent reads from disk.
+_HISTORY_CHAR_BUDGET = 400_000
+_FILE_CONTENT_CAP = 8_192
 
 
 class AuthoringChat:
@@ -51,7 +67,7 @@ class AuthoringChat:
 
     def turn(self, user_message: str) -> dict:
         """Process one user message; return structured response for UI."""
-        history = self._load_history(limit=_RECENT_HISTORY_TURNS)
+        history = self._load_history()
         project_state = self._read_project_state()
 
         goal_text = self._build_goal_prompt(project_state, history, user_message)
@@ -79,7 +95,16 @@ class AuthoringChat:
         for path, content in file_writes:
             ok, summary = self._write_file(path, content)
             if ok:
-                applied_writes.append({"path": path, "bytes": len(content.encode("utf-8"))})
+                entry = {
+                    "path": path,
+                    "bytes": len(content.encode("utf-8")),
+                }
+                if len(content) <= _FILE_CONTENT_CAP:
+                    entry["content"] = content
+                else:
+                    entry["content"] = content[:_FILE_CONTENT_CAP]
+                    entry["content_truncated"] = True
+                applied_writes.append(entry)
                 if path.endswith(".ail"):
                     try:
                         (self.project.state_dir / "active_program").write_text(
@@ -236,7 +261,11 @@ full new contents of this program
 
 === YOUR MEMORY IS THE CHAT HISTORY ===
 
-chat_history.jsonl (visible as CONVERSATION HISTORY below) is the single source of truth for this project. Every user message, every file you have written, every run result is there. On every turn you get the full log. That IS your memory.
+chat_history.jsonl (visible as CONVERSATION HISTORY below) is the single source of truth for this project. Every user message, every file you have written, every run result is there. On every turn you get the entire log — the same turns the user sees in their UI, in the same order.
+
+**When the log is very long** (many turns, large files), the oldest turns may be elided with an explicit `[--- 턴 1–N 압축됨 ... ---]` boundary marker. Everything above that marker is NOT in your prompt; storage (`.ail/chat_history.jsonl`) still holds it. If the user references something from that range, ask them what they want to recall — do not guess.
+
+**File contents in history.** When you wrote a file in an earlier turn, the history shows it inside `<<<FILE path ... FILE path>>>` fences. That is the content you wrote at that turn. If the user says "아까 짠 그 구조 유지해줘", scroll the fences — don't reinvent.
 
 **The first user message usually states the project purpose.** Anchor to it. If turn 1 is "매일 아침 서울 날씨 알려주는 봇 만들자" and turn 5 asks for "경고 기능", you're adding weather-warning logic to THAT weather bot — not inventing a generic utility. Read the project subject out of the history; do not invent one from this prompt.
 
@@ -1305,6 +1334,49 @@ If the answer to any checkbox is NO and the task required it — go back and add
             lines.append("")
         return "\n".join(lines)
 
+    def _render_entry(self, entry: dict) -> list[str]:
+        """Render one history entry to its prompt lines.
+
+        run_result entries include the full stored value / error /
+        diagnostic. The storage layer already caps these at append time;
+        re-truncating at format time hid information the agent needed
+        to diagnose its own errors.
+        """
+        kind = entry.get("kind")
+        if kind == "run_result":
+            if entry.get("ok"):
+                return [f"[Run result — OK] {entry.get('value', '')}"]
+            lines = []
+            err = entry.get("error") or entry.get("value") or ""
+            lines.append(f"[Run result — ERROR] {err}")
+            diag = entry.get("diagnostic") or ""
+            if diag:
+                lines.append(f"[Diagnostic] {diag}")
+            return lines
+        lines = [
+            f"User: {entry.get('user', '')}",
+            f"Agent: {entry.get('reply', '')}",
+        ]
+        files = entry.get("files") or []
+        for f in files:
+            if not isinstance(f, dict):
+                continue
+            if "skipped" in f:
+                lines.append(f"(file skipped: {f.get('path', '?')} — {f['skipped']})")
+                continue
+            path = f.get("path", "?")
+            content = f.get("content")
+            if content is None:
+                lines.append(f"(file written: {path}, {f.get('bytes', 0)} bytes; "
+                             "content not retained — read from disk if needed)")
+                continue
+            marker = " [truncated, full content on disk]" if f.get("content_truncated") else ""
+            lines.append(f"(file written: {path}{marker})")
+            lines.append(f"<<<FILE {path}")
+            lines.append(content)
+            lines.append(f"FILE {path}>>>")
+        return lines
+
     def _format_history(self, history: list[dict]) -> str:
         if not history:
             return (
@@ -1322,6 +1394,18 @@ If the answer to any checkbox is NO and the task required it — go back and add
                 first_user_msg = entry.get("user")
                 break
 
+        # Render each entry, then trim the oldest while the total
+        # exceeds the char budget. Elision leaves an explicit boundary
+        # marker so the agent knows exactly what is missing and can
+        # point the user at storage.
+        rendered = [self._render_entry(e) for e in history]
+        sizes = [sum(len(s) + 1 for s in lines) for lines in rendered]
+        total = sum(sizes)
+        drop = 0
+        while total > _HISTORY_CHAR_BUDGET and drop < len(rendered) - 1:
+            total -= sizes[drop]
+            drop += 1
+
         parts: list[str] = []
         if first_user_msg:
             parts.append(
@@ -1333,30 +1417,22 @@ If the answer to any checkbox is NO and the task required it — go back and add
                 "unless the user explicitly pivots.]"
             )
             parts.append("")
-            parts.append("[Full conversation log — most recent last]")
+
+        if drop > 0:
+            parts.append(
+                f"[--- 턴 1–{drop} 압축됨: 토큰 예산 초과로 생략. "
+                f"원문은 .ail/chat_history.jsonl 참조. "
+                f"사용자에게 이 구간 내용이 필요하면 무엇을 알고 싶은지 물을 것. ---]"
+            )
             parts.append("")
 
-        for entry in history:
-            kind = entry.get("kind")
-            if kind == "run_result":
-                if entry.get("ok"):
-                    parts.append(
-                        f"[Run result — OK] {entry.get('value', '')[:500]}")
-                else:
-                    err = entry.get("error") or entry.get("value") or ""
-                    parts.append(f"[Run result — ERROR] {str(err)[:500]}")
-                    diag = entry.get("diagnostic") or ""
-                    if diag:
-                        parts.append(f"[Diagnostic] {str(diag)[:500]}")
+        parts.append("[Full conversation log — most recent last]")
+        parts.append("")
+
+        for i, lines in enumerate(rendered):
+            if i < drop:
                 continue
-            parts.append(f"User: {entry.get('user', '')}")
-            parts.append(f"Agent: {entry.get('reply', '')}")
-            files = entry.get("files") or []
-            if files:
-                file_names = ", ".join(
-                    f.get("path", "?") for f in files if isinstance(f, dict))
-                if file_names:
-                    parts.append(f"(files written: {file_names})")
+            parts.extend(lines)
         return "\n".join(parts)
 
     def _load_reference_card(self) -> str:
@@ -1526,7 +1602,9 @@ If the answer to any checkbox is NO and the task required it — go back and add
     def _append_run_result(self, run_input: str, outcome: dict) -> None:
         """Record a run-in-chat outcome to history so the next agent
         turn sees what happened. The UI also renders this as a
-        result bubble."""
+        result bubble. Single truncation at storage; the format step
+        never re-truncates, so the agent sees the same text the user
+        sees in the run-result bubble."""
         p = self._history_path()
         p.parent.mkdir(parents=True, exist_ok=True)
         entry = {
@@ -1534,9 +1612,9 @@ If the answer to any checkbox is NO and the task required it — go back and add
             "kind": "run_result",
             "input": run_input,
             "ok": outcome.get("ok", False),
-            "value": str(outcome.get("value", ""))[:2000],
-            "error": str(outcome.get("error", ""))[:1000],
-            "diagnostic": str(outcome.get("diagnostic", ""))[:2000],
+            "value": str(outcome.get("value", ""))[:4000],
+            "error": str(outcome.get("error", ""))[:2000],
+            "diagnostic": str(outcome.get("diagnostic", ""))[:4000],
         }
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
