@@ -4,6 +4,14 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.47.7 — 2026-04-24
+
+**fix: authoring agent must state diagnosis hypothesis before rewriting on error.**
+
+When a `[Run result — ERROR]` appeared, the agent silently rewrote the code without explaining what it suspected. Added mandatory 3-step error response structure: (1) state hypothesis, (2) fix code, (3) re-emit ready_to_run. Added HTTP error quick-diagnosis table (401/404/422/409 → likely causes) so the agent can form a specific hypothesis instead of guessing.
+
+---
+
 ## v1.47.6 — 2026-04-24
 
 **feat: `http.put_json` effect — GitHub Contents API fix.**
