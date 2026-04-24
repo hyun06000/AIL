@@ -1,0 +1,164 @@
+"""Subprocess-based deployment management — **scaffolding, build to delete**.
+
+PRINCIPLES.md §5-bis (Arche, 2026-04-24): OS primitives (subprocess,
+pid, SIGTERM) are not HEAAL-native. A proper lifecycle for an AIL
+agent is expressed in the grammar — e.g. ``evolve my_agent { metric:
+health; when health < 0.1 { shutdown } }`` — and handled by L3
+HEAAOS. Until L3 exists, we spawn independent server processes with
+``python -m ail serve`` and track them via a pidfile. This module is
+that scaffolding, deliberately isolated so L3 can replace it in one
+swap.
+
+What lives here:
+- ``.ail/deployment.json`` read/write (pid, port, url, started_at, log)
+- Port allocation (scan 8090..8199 for a free TCP port)
+- Subprocess spawn via ``python -m ail serve`` with ``start_new_session``
+  so the child survives the parent exit
+- Signal-based stop (SIGTERM)
+- Liveness probe (``os.kill(pid, 0)``) with stale-record cleanup
+
+What must NOT leak in here:
+- HTTP handler code (that stays in server.py and calls into these fns)
+- Anything tied to the chat UI or the editing loop
+
+When L3 arrives, this file should be deletable. The callers in
+server.py should retarget to a ``perform agent.spawn`` / ``perform
+agent.stop`` equivalent and the OS plumbing disappears.
+"""
+from __future__ import annotations
+
+import json
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Optional
+
+
+_PORT_SCAN_START = 8090
+_PORT_SCAN_END = 8200
+
+
+def _deployment_path(project) -> Path:
+    return project.state_dir / "deployment.json"
+
+
+def _log_path(project) -> Path:
+    return project.state_dir / "deployment.log"
+
+
+def _pick_free_port() -> int:
+    for p in range(_PORT_SCAN_START, _PORT_SCAN_END):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", p))
+            s.close()
+            return p
+        except OSError:
+            s.close()
+    return 0
+
+
+def read_deployment(project) -> Optional[dict]:
+    """Return the current deployment record, or None if no live
+    deployment exists. A record whose pid is no longer alive is
+    treated as stale — we clean up the file and return None so the
+    caller sees the system in its true state."""
+    path = _deployment_path(project)
+    if not path.is_file():
+        return None
+    try:
+        rec = json.loads(path.read_text())
+        os.kill(int(rec["pid"]), 0)
+        return rec
+    except (ProcessLookupError, ValueError, OSError, KeyError):
+        path.unlink(missing_ok=True)
+        return None
+
+
+def start_deployment(project) -> dict:
+    """Spawn `python -m ail serve <project>` on a free port and
+    record the resulting {pid, port, url, started_at, log}. Returns
+    the existing record unchanged if a live deployment already exists.
+    Raises RuntimeError if no port is available."""
+    existing = read_deployment(project)
+    if existing is not None:
+        return existing
+    port = _pick_free_port()
+    if not port:
+        raise RuntimeError(
+            f"no free port in {_PORT_SCAN_START}-{_PORT_SCAN_END - 1}")
+    log_path = _log_path(project)
+    log_fh = open(log_path, "a", encoding="utf-8")
+    log_fh.write(
+        f"\n=== ail serve start {time.strftime('%Y-%m-%dT%H:%M:%S')} "
+        f"port={port} ===\n")
+    log_fh.flush()
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "ail", "serve",
+         str(project.root), "--port", str(port), "--host", "127.0.0.1"],
+        stdout=log_fh, stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    record = {
+        "pid": proc.pid,
+        "port": port,
+        "url": f"http://127.0.0.1:{port}/run",
+        "started_at": time.time(),
+        "log": str(log_path),
+    }
+    _deployment_path(project).write_text(
+        json.dumps(record, ensure_ascii=False))
+    project.append_ledger({
+        "event": "deployment_start",
+        "pid": proc.pid,
+        "port": port,
+    })
+    return record
+
+
+def stop_deployment(project) -> bool:
+    """Send SIGTERM to the deployed process and clear the record.
+    Returns True if something was stopped, False if there was no
+    record to stop. ``ProcessLookupError`` (already dead) counts as
+    True — the record is still cleaned."""
+    path = _deployment_path(project)
+    if not path.is_file():
+        return False
+    try:
+        rec = json.loads(path.read_text())
+        pid = int(rec["pid"])
+    except (ValueError, OSError, KeyError):
+        path.unlink(missing_ok=True)
+        return False
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    path.unlink(missing_ok=True)
+    project.append_ledger({"event": "deployment_stop", "pid": pid})
+    return True
+
+
+def self_terminate(project, delay_s: float = 0.2) -> None:
+    """Schedule a SIGTERM on the current process (used by `/admin/stop`
+    inside an `ail serve` instance). Runs in a daemon thread so the
+    HTTP response can flush first. Also clears any local deployment
+    record — relevant for the edge case where the serve process knows
+    about its own deployment.json and wants to leave the system
+    consistent on exit."""
+    import threading
+    path = _deployment_path(project)
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    project.append_ledger({"event": "admin_stop"})
+    def _suicide():
+        time.sleep(delay_s)
+        os.kill(os.getpid(), signal.SIGTERM)
+    threading.Thread(target=_suicide, daemon=True).start()

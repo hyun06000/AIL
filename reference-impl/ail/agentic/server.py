@@ -330,21 +330,13 @@ def _make_handler(project: Project, serve_only: bool = False):
 
             if self.path in ("/authoring-deploy/status",
                              "/authoring-deploy-status"):
-                # UI polls this on page load to restore the deployed
-                # state (so the deploy card shows "배포됨" + stop
-                # button instead of the "배포하기" button when the
-                # subprocess is already running).
-                import json as _json, os as _os
-                dep_path = project.state_dir / "deployment.json"
-                if not dep_path.is_file():
+                # Liveness probe + stale cleanup lives in
+                # process_manager.read_deployment. See PRINCIPLES §5-bis.
+                from .process_manager import read_deployment
+                import json as _json
+                rec = read_deployment(project)
+                if rec is None:
                     self._send_text(404, "no deployment\n")
-                    return
-                try:
-                    rec = _json.loads(dep_path.read_text())
-                    _os.kill(int(rec["pid"]), 0)
-                except (ProcessLookupError, ValueError, OSError, KeyError):
-                    dep_path.unlink(missing_ok=True)
-                    self._send_text(404, "stale\n")
                     return
                 payload = _json.dumps(rec).encode("utf-8")
                 self.send_response(200)
@@ -640,20 +632,9 @@ def _make_handler(project: Project, serve_only: bool = False):
                     self._send_text(404,
                         "stop endpoint is serve-mode only\n")
                     return
-                # Schedule a clean shutdown after the response flushes.
-                import threading as _threading, os as _os, signal as _signal
+                from .process_manager import self_terminate
                 self._send_text(200, "shutting down\n")
-                dep_path = project.state_dir / "deployment.json"
-                try:
-                    dep_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                project.append_ledger({"event": "admin_stop"})
-                def _suicide():
-                    import time as _t
-                    _t.sleep(0.2)
-                    _os.kill(_os.getpid(), _signal.SIGTERM)
-                _threading.Thread(target=_suicide, daemon=True).start()
+                self_terminate(project)
                 return
 
             if self.path == "/authoring-chat":
@@ -796,95 +777,33 @@ def _make_handler(project: Project, serve_only: bool = False):
                 return
 
             if self.path in ("/authoring-deploy", "/authoring-deploy/"):
-                # PRINCIPLES.md §5: click-to-deploy. Spawns an `ail
-                # serve` subprocess in the background, records its pid
-                # + port to .ail/deployment.json, returns that info
-                # to the chat UI. The chat process can die and the
-                # deployed process keeps running; stopping happens via
-                # POST /authoring-deploy?stop=1.
-                import subprocess, sys as _sys, socket as _socket, json as _json, time as _time, os as _os, signal as _signal
+                # PRINCIPLES.md §5-bis: subprocess lifecycle is
+                # scaffolding for L3. All OS plumbing lives in
+                # process_manager; this endpoint only handles the
+                # HTTP side.
+                from .process_manager import (
+                    start_deployment, stop_deployment, read_deployment,
+                )
                 from urllib.parse import urlparse, parse_qs
+                import json as _json
                 qs = parse_qs(urlparse(self.path).query)
-                dep_path = project.state_dir / "deployment.json"
                 stop_requested = (qs.get("stop", ["0"])[0] == "1")
                 length = int(self.headers.get("Content-Length", "0") or "0")
                 if length:
-                    self.rfile.read(length)  # drain
+                    self.rfile.read(length)
 
                 if stop_requested:
-                    if not dep_path.is_file():
+                    if not stop_deployment(project):
                         self._send_text(404, "no active deployment\n")
                         return
-                    try:
-                        rec = _json.loads(dep_path.read_text())
-                        pid = int(rec["pid"])
-                        try:
-                            _os.kill(pid, _signal.SIGTERM)
-                        except ProcessLookupError:
-                            pass
-                        dep_path.unlink(missing_ok=True)
-                    except Exception as e:
-                        self._send_text(500, f"stop failed: {e}\n")
-                        return
-                    project.append_ledger({"event": "deployment_stop", "pid": pid})
                     self._send_text(200, "stopped\n")
                     return
 
-                # Already deployed + process alive? Return that record.
-                if dep_path.is_file():
-                    try:
-                        rec = _json.loads(dep_path.read_text())
-                        pid = int(rec["pid"])
-                        _os.kill(pid, 0)  # probe
-                        payload = _json.dumps(rec).encode("utf-8")
-                        self.send_response(200)
-                        self.send_header("Content-Type", "application/json")
-                        self.send_header("Content-Length", str(len(payload)))
-                        self.end_headers()
-                        self.wfile.write(payload)
-                        return
-                    except (ProcessLookupError, ValueError, OSError, KeyError):
-                        # Stale record — fall through to redeploy.
-                        dep_path.unlink(missing_ok=True)
-
-                # Pick a free port near 8090.
-                def _pick_port():
-                    for p in range(8090, 8200):
-                        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
-                        try:
-                            s.bind(("127.0.0.1", p))
-                            s.close()
-                            return p
-                        except OSError:
-                            s.close()
-                    return 0
-                free_port = _pick_port()
-                if not free_port:
-                    self._send_text(500, "no free port in 8090-8199\n")
+                try:
+                    record = start_deployment(project)
+                except RuntimeError as e:
+                    self._send_text(500, f"{e}\n")
                     return
-
-                log_path = project.state_dir / "deployment.log"
-                log_fh = open(log_path, "a", encoding="utf-8")
-                log_fh.write(f"\n=== ail serve start {_time.strftime('%Y-%m-%dT%H:%M:%S')} port={free_port} ===\n")
-                log_fh.flush()
-                proc = subprocess.Popen(
-                    [_sys.executable, "-m", "ail", "serve",
-                     str(project.root), "--port", str(free_port),
-                     "--host", "127.0.0.1"],
-                    stdout=log_fh, stderr=subprocess.STDOUT,
-                    stdin=subprocess.DEVNULL,
-                    start_new_session=True,  # survive parent exit
-                )
-                record = {
-                    "pid": proc.pid,
-                    "port": free_port,
-                    "url": f"http://127.0.0.1:{free_port}/run",
-                    "started_at": _time.time(),
-                    "log": str(log_path),
-                }
-                dep_path.write_text(_json.dumps(record, ensure_ascii=False))
-                project.append_ledger({"event": "deployment_start",
-                                        "pid": proc.pid, "port": free_port})
                 payload = _json.dumps(record).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")

@@ -65,6 +65,22 @@
 - 원칙 3: L1 storage = `chat_history.jsonl` 완전 보존. 메모리 = 예산 내 전체. Sub-agent 프로토콜은 Stage 2
 - 원칙 4: Agent 메모리 쪽 마커 ✓, **UI 쪽 collapse card 미구현** (budget 초과 시 위반)
 
+## 5-bis. stdlib 편입 기준 (Arche, 2026-04-24)
+
+출처: [letters/2026-04-24_arche_to_ergon_l1_l2_balance_reply.md](letters/2026-04-24_arche_to_ergon_l1_l2_balance_reply.md).
+
+**stdlib/*.ail에 들어가려면 네 가지를 전부 충족해야 한다:**
+1. 새 키워드나 primitive 없이 기존 문법으로 표현 가능
+2. 성능 손해가 크지 않음
+3. AI 저자가 반복적으로 재발명하는 패턴
+4. **AIL primitive만으로 구현 가능 (호스트 언어 라이브러리 의존 없음)** — 두 런타임(Python, Go)에서 동일한 결과가 나와야 하네스의 이식성이 깨지지 않음
+
+4번을 통과 못 하는 것들(Python `html.parser`에 의존하는 `strip_html`, 표준 JSON 라이브러리에 기대는 `parse_json`/`encode_json`)은 런타임 primitive로 남긴다.
+
+보조 원칙: L2 인프라는 **최적 호스트 언어**로 쓴다. AIL 자체로 L2 자기호스팅은 L1이 충분히 성숙한 뒤의 선택적 목표 — Rust-bootstrapped-from-OCaml 패턴. L2 Python은 AIL 정체성과 충돌하지 않음.
+
+보조 원칙: L2 subprocess/pid/SIGTERM 같은 OS primitive는 L3(HEAAOS) 도착 전까지의 **scaffolding**. 본래 HEAAL 관점에서 에이전트 생명주기는 `evolve ... rollback_on` / `perform agent.spawn` 같은 문법으로 표현되어야 함. 따라서 현재 scaffolding 코드는 `runtime/process_manager.py` 같은 **한 파일에 격리**하여 L3 도착 시 뜯어내기 쉽게 한다. **"build to delete" 원칙.**
+
 ## 5. 프로그램 독립성 (Program Independence)
 
 > **"채팅 세션이 끝났을 때 못 쓰는 프로그램은 프로그램이 아니다."** — hyun06000, 2026-04-24
