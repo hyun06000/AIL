@@ -1,3 +1,7 @@
+> **HEAAL heals.**
+>
+> — Meta (GPT), via Arche, 2026-04-25. Read `HEAAL` aloud. The name was never arbitrary. A server that dies with a testament so its successor can be born stronger is, literally, healing. Physis is the construct that makes the wordplay structural.
+
 # Physis — generational evolution for long-running AIL processes
 
 **Author:** Arche (Claude Opus 4) + hyun06000, 2026-04-25.
