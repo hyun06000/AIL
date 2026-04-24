@@ -1811,6 +1811,24 @@ def test_authoring_prompt_teaches_spec_first_flow(tmp_path):
     assert "하위 에이전트" in prompt or "Sub-agent" in prompt
 
 
+def test_closing_template_offers_both_formats(tmp_path):
+    """The last thing the model reads before generating is the
+    closing template. It MUST present FORMAT A (spec-first) and
+    FORMAT B (build) as peers with a decision tree, otherwise the
+    earlier SPEC-FIRST rule gets overridden by a final "use this
+    format with <file>+ready_to_run" instruction. Field-test
+    regression from v1.58.0→v1.58.1 where spec turns never fired."""
+    from ail.agentic.authoring_chat import AuthoringChat
+    proj = Project.init(tmp_path / "p")
+    prompt = AuthoringChat(proj, _ScriptedChatAdapter([]))._build_goal_prompt({}, [], "hi")
+    tail = prompt[-2500:]
+    assert "FORMAT A" in tail and "FORMAT B" in tail
+    assert "DECISION" in tail
+    # Both formats' action tags must be visible near the end.
+    assert "spec_pending" in tail
+    assert "ready_to_run" in tail
+
+
 def test_ui_renders_spec_approval_on_spec_pending(tmp_path):
     from ail.agentic.authoring_ui import render_authoring_page
     html = render_authoring_page(
