@@ -1790,6 +1790,36 @@ def test_chat_ui_service_card_links_to_run_route(tmp_path):
     assert "독립 실행" in html or "Ready to serve" in html
 
 
+def test_parse_recognizes_spec_pending_action(tmp_path):
+    """Spec-first flow (user, 2026-04-24 late evening): a new agent
+    request triggers a detailed spec with <action>spec_pending</action>
+    BEFORE any file is written. The parser must recognize it."""
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    _, _, action = chat._parse_response(
+        "<reply># My Agent — 명세\n## 목적\n...\n</reply>"
+        "<action>spec_pending</action>")
+    assert action == "spec_pending"
+
+
+def test_authoring_prompt_teaches_spec_first_flow(tmp_path):
+    from ail.agentic.authoring_chat import AuthoringChat
+    proj = Project.init(tmp_path / "p")
+    prompt = AuthoringChat(proj, _ScriptedChatAdapter([]))._build_goal_prompt({}, [], "hi")
+    assert "SPEC-FIRST FOR NEW AGENTS" in prompt
+    assert "spec_pending" in prompt
+    assert "하위 에이전트" in prompt or "Sub-agent" in prompt
+
+
+def test_ui_renders_spec_approval_on_spec_pending(tmp_path):
+    from ail.agentic.authoring_ui import render_authoring_page
+    html = render_authoring_page(
+        project_name="x", host="127.0.0.1", port=8080, history=[])
+    assert "addSpecApprovalCard" in html
+    assert "spec_pending" in html
+    assert "이대로 빌드" in html or "Approve & build" in html
+
+
 def test_parse_recognizes_ready_to_serve_action(tmp_path):
     proj = Project.init(tmp_path / "p")
     chat = AuthoringChat(proj, _ScriptedChatAdapter([]))

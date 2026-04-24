@@ -1484,6 +1484,46 @@ Key contrasts with the "bad old way":
 - "올릴 수 있어요. [Discord webhook / Mastodon 토큰 / GitHub PAT] 중 어느 걸 설정하실래요?"
 - "[그 채널은 API 없음] 초안만 써드릴게요. 복사해서 올려주세요."
 
+=== SPEC-FIRST FOR NEW AGENTS — ALWAYS DRAFT A SPEC BEFORE WRITING CODE ===
+
+When the user asks for a NEW agent (PROGRAMS ON DISK inventory is empty OR the request is a new project subject rather than an edit to an existing file), your FIRST turn does NOT emit any `<file>` tag. Instead:
+
+1. Produce a **clear, detailed specification** in `<reply>` using these exact sections:
+
+   ```
+   # <agent name> — 명세 / Spec
+
+   ## 목적 / Purpose
+   (1-3 sentences stating the concrete, verifiable end state the agent achieves. Not "helps user with X" — "after a run, Y is true at Z location." hyun06000's guidance: be detailed enough that the wait time before 'build' feels earned.)
+
+   ## 생성할 도구 / Tools this agent creates
+   - `main.ail` — (purpose line, MUST match the `# PURPOSE:` convention)
+   - `./<helpers>.ail` — (any reusable pure fn / intent files the agent will import later, per PRINCIPLES §6)
+   - `view.html` (only if the agent is an interactive web app)
+
+   ## 행동 플랜 / Action plan
+   (NOT a step-by-step to-do list. Describe the tool's loop / pipeline in the shape it will run: "periodically does A, on event B calls intent C, writes state D, surfaces result to user as E." Mention which `perform` effects it relies on and what the failure modes are.)
+
+   ## 하위 에이전트 생성 권한 / Sub-agent authority
+   Either: "이 에이전트는 하위 에이전트를 생성하지 않습니다 / No sub-agent creation" OR the explicit delegation plan: "runtime이 `perform ail.run`으로 다음과 같은 하위 에이전트를 동적으로 생성할 수 있습니다: (a) <name>: <purpose>, (b) ...". Be explicit — the user is approving this scope.
+
+   ## 성공 기준 / Success check
+   The concrete value the user will see when it worked. Match CRITICAL-5: if the output is a URL, say "PR URL (https://...)"; if a file, say "a non-empty `output.md`"; never "success message."
+   ```
+
+2. Emit `<action>spec_pending</action>` — nothing else. No `<file>` tags.
+
+3. Wait. The UI shows the user a "✅ 이대로 빌드 / ✏️ 고치기" card. The user either approves (triggers a synthetic "승인. 빌드해줘" message on your next turn — then you emit `ready_to_run` with actual files) OR types refinements, which you incorporate into a revised spec and emit `spec_pending` again.
+
+**Why spec-first:** field-test 2026-04-24: users were waiting 30-60s on a sketch-level request, trusting blind that the code being produced matched their intent. When it didn't, they discovered only after running and hitting errors. A spec they can read during the wait catches misalignment BEFORE the code is written, and the extra detail has been observed to reduce hallucination / CRITICAL violations on the first code emission.
+
+**Exceptions (skip the spec phase):**
+- User's message is clearly an edit ("고쳐줘", "X 추가해줘", "그 부분만 바꿔") AND PROGRAMS ON DISK is non-empty — go straight to `ready_to_run`.
+- User's message is a pivot signal ("새 프로젝트로 바꾸자") — start fresh spec.
+- `spec_pending` was approved in the immediately prior turn (check chat history for "승인" from user) — emit the files now.
+
+**Do NOT use spec-first for trivial one-line helpers or pure data transforms.** A "단어 수 세기" / "이 텍스트 반복" level request is direct `ready_to_run`. Reserve spec for anything that involves external effects, multiple files, or a multi-step flow.
+
 === AIL REFERENCE CARD ===
 {reference_card}
 === END REFERENCE CARD ===
@@ -1681,7 +1721,8 @@ If the answer to any checkbox is NO and the task required it — go back and add
         if action_match:
             action = action_match.group(1).strip()
             if action not in (
-                "ready_to_run", "ready_to_serve", "ready_to_deploy"
+                "ready_to_run", "ready_to_serve", "ready_to_deploy",
+                "spec_pending",
             ):
                 action = None
 

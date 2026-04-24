@@ -837,7 +837,12 @@ def render_authoring_page(
         thread.appendChild(box);
       }}
 
-      if (action === 'ready_to_run') {{
+      if (action === 'spec_pending') {{
+        // Spec-first flow (PRINCIPLES §6 follow-up, user request
+        // 2026-04-24 late evening). Agent drafted a spec; user
+        // approves before any file is written.
+        addSpecApprovalCard();
+      }} else if (action === 'ready_to_run') {{
         addRunWidget(false);
       }} else if (action === 'ready_to_serve' || action === 'ready_to_deploy') {{
         addRunWidget(true);
@@ -856,6 +861,70 @@ def render_authoring_page(
     // `inputUsed` controls whether to render the input textarea —
     // when false (entry doesn't reference input), the widget is a
     // bare Run button with no confusing empty input field.
+    function addSpecApprovalCard() {{
+      const card = document.createElement('div');
+      card.className = 'run-card';
+      card.style.background = '#eff6ff';
+      card.style.borderColor = '#bfdbfe';
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.style.color = '#1e40af';
+      title.textContent = '📋 명세 검토 / Review spec';
+      card.appendChild(title);
+      const desc = document.createElement('div');
+      desc.className = 'desc';
+      desc.textContent =
+        '에이전트가 위 명세대로 빌드하면 괜찮을까요? ' +
+        '수정이 필요하면 채팅으로 설명해주세요.';
+      card.appendChild(desc);
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
+      const approve = document.createElement('button');
+      approve.className = 'run-inline';
+      approve.textContent = '✅ 이대로 빌드 / Approve & build';
+      approve.onclick = async () => {{
+        approve.disabled = true;
+        approve.textContent = '빌드 요청 중…';
+        try {{
+          const r = await fetch('/authoring-chat', {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'text/plain; charset=utf-8' }},
+            body: '승인합니다. 이 명세대로 빌드해주세요 — ' +
+              '<file> 태그로 실제 .ail 소스를 emit하고 ' +
+              '<action>ready_to_run</action>을 달아주세요.',
+          }});
+          const text = await r.text();
+          const data = JSON.parse(text);
+          if (typeof data.session_total_tokens === 'number') {{
+            sessionTotalTokens = data.session_total_tokens;
+            renderTokenWidget();
+          }}
+          if (Array.isArray(data.programs)) programsForNext = data.programs;
+          if (data.active_program) activeProgramForNext = data.active_program;
+          addAgent(data.reply || '(empty)', data.files || [],
+                   data.action || null);
+          appendTokenFooter(thread.lastElementChild,
+                            data.input_tokens, data.output_tokens);
+          refreshFileTree();
+          card.style.opacity = '0.5';
+          card.style.pointerEvents = 'none';
+        }} catch (e) {{
+          addError('승인 전송 실패: ' + e.message);
+          approve.disabled = false;
+          approve.textContent = '✅ 이대로 빌드 / Approve & build';
+        }}
+      }};
+      row.appendChild(approve);
+      const hint = document.createElement('span');
+      hint.style.cssText =
+        'font-size:11px;color:#6b7280;align-self:center;';
+      hint.textContent = '또는 채팅으로 "X 부분 바꿔줘" 식으로 수정 요청';
+      row.appendChild(hint);
+      card.appendChild(row);
+      thread.appendChild(card);
+      scrollBottom();
+    }}
+
     function addRunWidget(service) {{
       // v1.13.1: widget operates on a selected program. `programs`
       // and `activeProgramForNext` come from the latest agent turn.
