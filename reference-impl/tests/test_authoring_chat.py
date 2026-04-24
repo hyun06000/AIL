@@ -514,6 +514,42 @@ def test_prompt_teaches_purpose_convention(tmp_path):
     assert "PROGRAMS ON DISK (inventory)" in prompt or "filename — purpose" in prompt
 
 
+def test_turn_returns_and_persists_token_usage(tmp_path):
+    """Each turn must surface input/output tokens for the UI widget
+    and accumulate them in .ail/token_usage.jsonl so reopening the
+    tab doesn't reset the running total."""
+    from ail.agentic.authoring_chat import AuthoringChat, read_session_total_tokens
+    from ail.runtime.model import ModelResponse
+    proj = Project.init(tmp_path / "p")
+
+    class _UsageAdapter:
+        name = "usage"
+        def __init__(self): self.n = 0
+        def invoke(self, **kw):
+            self.n += 1
+            return ModelResponse(
+                value="<reply>ok</reply>",
+                confidence=0.9,
+                model_id="test",
+                raw={"input_tokens": 100 * self.n,
+                     "output_tokens": 10 * self.n},
+            )
+
+    chat = AuthoringChat(proj, _UsageAdapter())
+    r1 = chat.turn("first")
+    assert r1["input_tokens"] == 100
+    assert r1["output_tokens"] == 10
+    assert r1["session_total_tokens"] == 110
+
+    r2 = chat.turn("second")
+    assert r2["input_tokens"] == 200
+    assert r2["output_tokens"] == 20
+    assert r2["session_total_tokens"] == 110 + 220  # cumulative
+
+    # Storage should let a fresh AuthoringChat instance read the total.
+    assert read_session_total_tokens(proj) == 330
+
+
 def test_history_persists_across_instances(tmp_path):
     proj = Project.init(tmp_path / "demo")
     c1 = AuthoringChat(

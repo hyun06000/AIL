@@ -16,6 +16,7 @@ from html import escape
 def render_authoring_page(
     *, project_name: str, host: str, port: int, history: list,
     programs: list | None = None,
+    session_total_tokens: int = 0,
 ) -> str:
     """Render the chat shell. History is seeded into the page so a
     reload preserves the conversation across restarts.
@@ -33,6 +34,7 @@ def render_authoring_page(
     import json as _json
     programs_json = _json.dumps(programs or [])
     json_project_name = _json.dumps(project_name or "ail-project")
+    session_total_tokens_json = _json.dumps(int(session_total_tokens))
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -341,6 +343,42 @@ def render_authoring_page(
       ? !!programsForNext[0].input_used : true;
     let envRequiredForNext = programsForNext.length > 0
       ? (programsForNext[0].env_required || []) : [];
+
+    // Token usage (hyun06000 2026-04-24: "토큰 얼마나 쓰는지 알
+    // 수 없는 건 단점"). Session total is seeded from storage so
+    // reopening the tab doesn't reset the counter.
+    let sessionTotalTokens = {session_total_tokens_json};
+    function fmtTokens(n) {{
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+      if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+      return String(n);
+    }}
+    const tokenWidget = document.createElement('div');
+    tokenWidget.style.cssText =
+      'position:fixed;bottom:8px;right:12px;font-size:11px;' +
+      'color:#6b7280;font-family:ui-monospace,Menlo,monospace;' +
+      'background:rgba(255,255,255,0.85);padding:4px 8px;' +
+      'border:1px solid #e5e7eb;border-radius:6px;' +
+      'pointer-events:none;z-index:1000;';
+    function renderTokenWidget() {{
+      tokenWidget.textContent = '세션 누적 ' + fmtTokens(sessionTotalTokens) + ' tok';
+    }}
+    renderTokenWidget();
+    document.body.appendChild(tokenWidget);
+
+    function appendTokenFooter(turnEl, inputTokens, outputTokens) {{
+      if (!turnEl) return;
+      const inp = Number(inputTokens) || 0;
+      const out = Number(outputTokens) || 0;
+      if (inp === 0 && out === 0) return;
+      const foot = document.createElement('div');
+      foot.style.cssText =
+        'font-size:10px;color:#9ca3af;margin-top:2px;' +
+        'font-family:ui-monospace,Menlo,monospace;';
+      foot.textContent = '↑ ' + fmtTokens(inp) + ' · ↓ ' + fmtTokens(out) +
+        ' · 누적 ' + fmtTokens(sessionTotalTokens);
+      turnEl.appendChild(foot);
+    }}
 
     // Replay history embedded by the server on first render.
     const INITIAL_HISTORY = {history_json};
@@ -1031,16 +1069,24 @@ def render_authoring_page(
       cancelBtn.style.display = '';
       currentAbortController = new AbortController();
 
-      // Placeholder "…" bubble while waiting.
+      // Pending bubble with elapsed-time counter. hyun06000 asked
+      // for visible token feedback during the wait; the honest
+      // piece we can show before the response arrives is how long
+      // the user has been waiting.
       const pendingTurn = document.createElement('div');
       pendingTurn.className = 'turn agent';
       const pendingBubble = document.createElement('div');
       pendingBubble.className = 'bubble';
-      pendingBubble.textContent = '…';
       pendingBubble.style.color = '#6b7280';
+      const waitStart = Date.now();
+      pendingBubble.textContent = '⏳ Claude 응답 중… (0s)';
       pendingTurn.appendChild(pendingBubble);
       thread.appendChild(pendingTurn);
       scrollBottom();
+      const pendingTimer = setInterval(() => {{
+        const s = Math.floor((Date.now() - waitStart) / 1000);
+        pendingBubble.textContent = '⏳ Claude 응답 중… (' + s + 's)';
+      }}, 250);
 
       try {{
         const r = await fetch('/authoring-chat', {{
@@ -1049,6 +1095,7 @@ def render_authoring_page(
           body: userText,
           signal: currentAbortController.signal,
         }});
+        clearInterval(pendingTimer);
         pendingTurn.remove();
         const text = await r.text();
         if (!r.ok) {{
@@ -1077,7 +1124,13 @@ def render_authoring_page(
           activeProgramForNext = data.active_program;
         }}
         addAgent(data.reply || '(empty)', data.files || [], data.action || null);
+        if (typeof data.session_total_tokens === 'number') {{
+          sessionTotalTokens = data.session_total_tokens;
+          appendTokenFooter(thread.lastElementChild, data.input_tokens, data.output_tokens);
+          renderTokenWidget();
+        }}
       }} catch (e) {{
+        clearInterval(pendingTimer);
         pendingTurn.remove();
         if (e.name === 'AbortError') {{
           addError('중단됨 / Cancelled');

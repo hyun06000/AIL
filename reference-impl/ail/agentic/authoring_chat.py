@@ -115,12 +115,20 @@ class AuthoringChat:
                 applied_writes.append({"path": path, "skipped": summary})
 
         self._append_history(user_message, reply, applied_writes, action)
+
+        raw = response.raw or {}
+        input_tokens = raw.get("input_tokens") or 0
+        output_tokens = raw.get("output_tokens") or 0
+        session_total = self._append_token_usage(input_tokens, output_tokens)
+
         self.project.append_ledger({
             "event": "authoring_turn",
             "user_chars": len(user_message),
             "reply_chars": len(reply),
             "files": [w["path"] for w in applied_writes if "skipped" not in w],
             "action": action,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
         })
 
         programs = list_project_programs(self.project)
@@ -151,6 +159,9 @@ class AuthoringChat:
             "env_required": env_required,
             "programs": programs,
             "active_program": active_info["name"] if active_info else None,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "session_total_tokens": session_total,
         }
 
     def _active_program(self) -> Optional[str]:
@@ -1634,6 +1645,30 @@ If the answer to any checkbox is NO and the task required it — go back and add
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
+    def _token_usage_path(self) -> Path:
+        return self.project.state_dir / "token_usage.jsonl"
+
+    def _append_token_usage(self, input_tokens: int, output_tokens: int) -> int:
+        """Record per-turn token usage and return the running session total.
+
+        hyun06000 field-test (2026-04-24): "아무것도 관여하지 않는 것이
+        장점이지만 토큰을 얼마나 쓰는지 알 수 없는 건 단점." The UI
+        surfaces these numbers per turn; this file is the accumulator
+        that survives tab reloads.
+        """
+        total_so_far = read_session_total_tokens(self.project)
+        new_total = total_so_far + input_tokens + output_tokens
+        p = self._token_usage_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "ts": time.time(),
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_so_far": new_total,
+            }) + "\n")
+        return new_total
+
     def _append_run_result(self, run_input: str, outcome: dict) -> None:
         """Record a run-in-chat outcome to history so the next agent
         turn sees what happened. The UI also renders this as a
@@ -1653,6 +1688,29 @@ If the answer to any checkbox is NO and the task required it — go back and add
         }
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def read_session_total_tokens(project) -> int:
+    """Sum input+output tokens across every turn recorded for this
+    project. Used on page load to seed the running-total widget."""
+    p = project.state_dir / "token_usage.jsonl"
+    if not p.is_file():
+        return 0
+    total = 0
+    try:
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = json.loads(line)
+                total += int(e.get("input_tokens") or 0)
+                total += int(e.get("output_tokens") or 0)
+            except (json.JSONDecodeError, ValueError, TypeError):
+                continue
+    except OSError:
+        return 0
+    return total
 
 
 def list_project_programs(project) -> list[dict]:

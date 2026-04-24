@@ -471,9 +471,11 @@ def _make_handler(project: Project):
                     from .authoring_ui import render_authoring_page
                     from .authoring_chat import (
                         AuthoringChat, list_project_programs,
+                        read_session_total_tokens,
                     )
                     chat = AuthoringChat(project, adapter=None)
                     history = chat._load_history()
+                    session_total_tokens = read_session_total_tokens(project)
                     # Seed the current programs list so the run widget
                     # on initial render (before any new turn) already
                     # knows parse state, env_required, input_hint —
@@ -488,6 +490,7 @@ def _make_handler(project: Project):
                         port=self.server.server_address[1],
                         history=history,
                         programs=programs,
+                        session_total_tokens=session_total_tokens,
                     )
                     body = html.encode("utf-8")
                     self.send_response(200)
