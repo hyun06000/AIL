@@ -414,7 +414,12 @@ def _make_handler(project: Project):
                 self.wfile.write(body)
                 return
 
-            if self.path in ("/service", "/service/"):
+            # PRINCIPLES.md §5 Program Independence: edit URL ("/") and
+            # runtime URL ("/run") stay separated. "/run" is the
+            # user-facing standalone URL that opens in a new tab; the
+            # chat session at "/" keeps working regardless.
+            # "/service" is kept as a backward-compatible alias.
+            if self.path in ("/run", "/run/", "/service", "/service/"):
                 view_path = project.root / "view.html"
                 if view_path.is_file():
                     try:

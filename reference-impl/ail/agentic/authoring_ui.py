@@ -483,10 +483,10 @@ def render_authoring_page(
             }});
 
             const openBtn = document.createElement('a');
-            openBtn.href = '/service';
+            openBtn.href = '/run';
             openBtn.target = '_blank';
             openBtn.rel = 'noopener';
-            openBtn.textContent = '👁 새 창으로 열기';
+            openBtn.textContent = '👁 새 창으로 열기 (독립 실행)';
             openBtn.style.cssText =
               'margin-left:8px;font-size:11px;padding:2px 8px;' +
               'background:#047857;color:#fff;border-radius:4px;' +
@@ -573,18 +573,18 @@ def render_authoring_page(
       if (service) {{
         const title = document.createElement('div');
         title.className = 'title';
-        title.textContent = '🌐 서비스 모드 / Service mode';
+        title.textContent = '🌐 독립 실행 준비 / Ready to serve';
         card.appendChild(title);
         const desc = document.createElement('div');
         desc.className = 'desc';
-        desc.textContent = '이 프로그램을 반복해서 호출할 수 있어요. ' +
-          '외부에 공유할 페이지도 준비돼 있어요.';
+        desc.textContent = '이 프로그램은 채팅과 분리된 URL에서 돌릴 수 ' +
+          '있어요. 새 탭에서 열면 채팅 세션과 독립적으로 동작합니다.';
         card.appendChild(desc);
         const link = document.createElement('a');
         link.className = 'share-link';
-        link.href = '/service';
+        link.href = '/run';
         link.target = '_blank';
-        link.textContent = '공유용 페이지 열기 / Open public page →';
+        link.textContent = '🚀 새 탭에서 실행 / Open /run in new tab →';
         card.appendChild(link);
       }} else {{
         const title = document.createElement('div');

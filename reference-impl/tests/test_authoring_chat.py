@@ -629,6 +629,37 @@ def test_authored_project_serves_service_ui_on_get(tmp_path):
     assert "<textarea" in body
 
 
+def test_run_route_serves_runtime_ui_independent_of_authored_marker(tmp_path):
+    """PRINCIPLES.md §5 Program Independence: /run is the runtime URL
+    for a program, separate from the edit URL (/). It must serve the
+    runtime view (view.html if present, else the textarea) regardless
+    of whether the legacy authored_at marker is set."""
+    proj = Project.init(tmp_path / "runroute")
+    proj.write_app_source("entry main(input: Text) { return input }")
+    (proj.root / "view.html").write_text(
+        "<!doctype html><title>app</title><body>HELLO_FROM_VIEW</body>",
+        encoding="utf-8",
+    )
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/run", timeout=2) as r:
+        body = r.read().decode("utf-8")
+    assert "HELLO_FROM_VIEW" in body
+    assert "authoring-chat" not in body  # no chat shell on /run
+
+    # /service alias — back-compat.
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/service", timeout=2) as r:
+        body2 = r.read().decode("utf-8")
+    assert "HELLO_FROM_VIEW" in body2
+
+
 def test_authoring_run_endpoint_runs_and_returns_json(tmp_path):
     """v1.12.3 — clicking Run no longer kills the chat. POST
     /authoring-run executes app.ail, returns a JSON outcome, and
@@ -1510,18 +1541,17 @@ def test_prompt_teaches_multiple_program_file_naming(tmp_path):
     assert "Do NOT overwrite" in prompt
 
 
-def test_chat_ui_service_card_links_to_service_route(tmp_path):
-    """ready_to_serve renders the service card with a share link to
-    /service (classic UI on its own route, opened in a new tab)."""
+def test_chat_ui_service_card_links_to_run_route(tmp_path):
+    """ready_to_serve renders the deploy card with a share link to
+    /run — the runtime URL separated from the edit URL ("/") per
+    PRINCIPLES.md §5. /service is kept as a back-compat alias."""
     from ail.agentic.authoring_ui import render_authoring_page
     html = render_authoring_page(
         project_name="x", host="127.0.0.1", port=8080, history=[])
-    # The share link is generated client-side; check the URL literal
-    # appears in the render widget code.
-    assert "'/service'" in html
-    # Service card has distinguishing copy so it's clearly "service
-    # mode" vs plain run.
-    assert "서비스 모드" in html
+    assert "'/run'" in html
+    # Deploy card has distinguishing copy so it's clearly "independent
+    # execution" vs plain run.
+    assert "독립 실행" in html or "Ready to serve" in html
 
 
 def test_parse_recognizes_ready_to_serve_action(tmp_path):
