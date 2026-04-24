@@ -163,6 +163,21 @@ Arche's closing line on this:
 
 Correct trade. Speed now; principled shape later.
 
+## Follow-up: Physis
+
+`rollback_on` gives the server permission to die. The natural next
+question is: *what does it leave behind when it dies?* Arche + hyun06000
+answered that with an `on_death(reason, history) -> Testament` callback
+that writes a typed final record, and a runtime auto-spawn that reads
+the testament as the successor's starting state. Generations of the
+same `evolve` block adapt across deaths without any code being
+rewritten.
+
+The full proposal lives at [`physis.md`](physis.md). It's layered on
+top of this document — v0.2 is evolve-as-server without Physis; v0.3
+adds Physis. The two proposals stack: §9 is "death is a safety
+property," Physis is "death is also information."
+
 ## Benchmark justification when v0.2 starts (Rule 2)
 
 AIL-native servers enable agent-to-agent communication without a

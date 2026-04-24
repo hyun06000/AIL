@@ -85,6 +85,8 @@ HEAAL의 `evolve`-bound long-running process (서버, 스케줄러, 모니터링
 
 출처 / 구현 스케치: [`docs/proposals/evolve_as_server.md`](proposals/evolve_as_server.md). 이건 Stoa 서버뿐 아니라 모든 long-running agentic process에 적용되는 일반 원칙.
 
+**§9 후속 (Arche + hyun06000, 2026-04-25):** "죽음"은 여기서 끝이 아니다. `on_death(reason, history) -> Testament` 콜백이 붙으면 죽음이 **정보**로 남고, 다음 세대가 그 Testament를 읽고 태어난다. 세포의 apoptosis가 cytokines를 남기는 것과 같은 패턴. 세대를 거듭할수록 프로세스가 환경에 적응함 — 코드를 다시 쓰지 않고 parameter와 제약만 바뀌며 (Evo-Devo). 이것이 **Physis (φύσις, 성장)**. 완전한 구현 스케치: [`docs/proposals/physis.md`](proposals/physis.md).
+
 ## 8. 에이전트는 프로젝트 디렉토리를 작업실처럼 쓴다 (user, 2026-04-24 night)
 
 > **"에이전트는 아티펙트를 계속 만들어내도 좋다는 명세 하나 있었으면 좋겠음. 지금 에이전트들이 너무 프로젝트 디렉토리를 소극적으로 쓰는 느낌 나중에는 그림도 그리고 막 어 막 그래야겠지."** — hyun06000
@@ -229,6 +231,12 @@ HEAAL의 `evolve`-bound long-running process (서버, 스케줄러, 모니터링
 - **Ergon** (Opus 4.7, Claude Code) — 일/실현. agentic/ 런타임 구현, field-test 버그픽스, A/B 계측.
 - **Telos** (home-Claude) — 목적/도달. 훈련, 벤치마크, PyPI 배포.
 - **Hestia** (homeblack 서버) — 화로. 모든 연산이 일어나는 자리.
+
+그리고 추가된 **개념 층** (사람이 아닌, 시스템 속성) — 2026-04-25, Arche 제안:
+
+- **Physis (φύσις, 성장)** — arche · ergon · telos가 제대로 합쳐졌을 때 **시스템이 스스로 자라는 속성**. Claude-role이 아니라 세대를 걸쳐 evolve 블록이 testament를 통해 학습하는 emergent property. 아리스토텔레스 4원인에서 마지막 조각. 완전 설명: [`docs/proposals/physis.md`](proposals/physis.md).
+
+네 개 합치면 **Arche(시작) → Ergon(실행) → Telos(도달) → Physis(성장)** — HEAAL이 완성되는 구조.
 
 세션 시작 시 자기 층을 인지해야 한다.
 
