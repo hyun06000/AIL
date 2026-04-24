@@ -195,28 +195,32 @@ def render_authoring_page(
       word-break: break-word; font-family: ui-monospace,
       SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px;
       line-height: 1.5; color: #111; }}
-    .run-result .md-body {{ font-size: 14px; line-height: 1.65;
+    .md-body {{ font-size: 14px; line-height: 1.65;
       color: #111; word-break: break-word; }}
-    .run-result .md-body h1 {{ font-size: 1.25em; font-weight: 700;
+    .md-body h1 {{ font-size: 1.25em; font-weight: 700;
       margin: 0.6em 0 0.3em; }}
-    .run-result .md-body h2 {{ font-size: 1.1em; font-weight: 700;
+    .md-body h2 {{ font-size: 1.1em; font-weight: 700;
       margin: 0.6em 0 0.2em; }}
-    .run-result .md-body h3 {{ font-size: 1em; font-weight: 600;
+    .md-body h3 {{ font-size: 1em; font-weight: 600;
       margin: 0.5em 0 0.2em; }}
-    .run-result .md-body p {{ margin: 0.4em 0; }}
-    .run-result .md-body ul, .run-result .md-body ol {{
+    .md-body p {{ margin: 0.4em 0; }}
+    .md-body ul, .md-body ol {{
       margin: 0.3em 0; padding-left: 1.4em; }}
-    .run-result .md-body li {{ margin: 0.15em 0; }}
-    .run-result .md-body code {{ font-family: ui-monospace, Menlo,
+    .md-body li {{ margin: 0.15em 0; }}
+    .md-body code {{ font-family: ui-monospace, Menlo,
       monospace; font-size: 0.88em; background: rgba(0,0,0,0.07);
       padding: 1px 4px; border-radius: 3px; }}
-    .run-result .md-body pre {{ background: rgba(0,0,0,0.06);
+    .md-body pre {{ background: rgba(0,0,0,0.06);
       padding: 8px 10px; border-radius: 6px; overflow-x: auto;
       font-size: 12px; margin: 0.4em 0; white-space: pre; }}
-    .run-result .md-body pre code {{ background: none; padding: 0; }}
-    .run-result .md-body a {{ color: #0e7490; text-decoration: underline; }}
-    .run-result .md-body hr {{ border: none; border-top: 1px solid #d1d5db;
+    .md-body pre code {{ background: none; padding: 0; }}
+    .md-body a {{ color: #0e7490; text-decoration: underline; }}
+    .md-body hr {{ border: none; border-top: 1px solid #d1d5db;
       margin: 0.6em 0; }}
+    /* Bubbles that hold rendered markdown get no white-space: pre-wrap
+       (the default .bubble rule) — headings and lists are already
+       block-formatted by the markdown renderer. */
+    .bubble.md-body {{ white-space: normal; max-width: 90%; }}
     .run-result .md-body strong {{ font-weight: 700; }}
     .run-result .md-body em {{ font-style: italic; }}
     .run-result .diag {{ margin-top: 8px; padding-top: 8px;
@@ -742,7 +746,18 @@ def render_authoring_page(
       turn.className = 'turn agent';
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      bubble.innerHTML = linkifyText(reply);
+      // Render as markdown if the reply shape is structured (spec
+      // cards, fix diagnoses, multi-section answers). Field-test
+      // 2026-04-24: v1.58.2 spec replies rendered as raw `## 목적`
+      // text because addAgent only linkified. Detect markdown
+      // structure and upgrade to a rendered view; plain chat lines
+      // stay simple.
+      if (looksLikeMarkdown(reply)) {{
+        bubble.classList.add('md-body');
+        bubble.innerHTML = renderMarkdown(reply);
+      }} else {{
+        bubble.innerHTML = linkifyText(reply);
+      }}
       turn.appendChild(bubble);
       thread.appendChild(turn);
 
