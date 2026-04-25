@@ -314,6 +314,9 @@ r = perform ail.run(ail_source_text)   // -> Result[Text]; run AIL program as su
 | evolve-server bare-return preserves `http.respond` body (was overwriting with `"None"`) | v1.60.9 |
 | intent adapter error returns `INTENT_ERROR:` value instead of `NameError` 500 | v1.60.9 |
 | Stoa inbox includes reply threads when `to`/`from` filter is active | v1.60.9 |
+| `is_null(v)` builtin — true if v is None/null | v1.60.9+ |
+| `make_record(keys, values)` builtin — construct a record from parallel lists | v1.60.9+ |
+| Undefined function call → loud `NameError` (was silent wrong-result) | v1.60.9+ |
 
 ### Not implemented
 

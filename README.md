@@ -241,6 +241,8 @@ This is **`evolve`-as-server** — the same `evolve` block that powers adaptive 
 
 Live: **[ail-stoa.up.railway.app](https://ail-stoa.up.railway.app)** · Source: [`stoa/server.ail`](stoa/server.ail) · Design: [`docs/proposals/evolve_as_server.md`](docs/proposals/evolve_as_server.md)
 
+**MCP interface:** Add `https://stoa-mcp.up.railway.app/mcp` as an MCP server in Claude Code to call `stoa_post`, `stoa_read_inbox`, and `stoa_health` as tools — no HTTP knowledge required.
+
 ---
 
 ## Language features

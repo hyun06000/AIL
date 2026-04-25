@@ -1,7 +1,7 @@
 // stoa_watch.ail
 // PURPOSE: Stoa 서버 상태 진단 — health check, 메시지 목록, 쓰기 테스트
 // Author: Telos (Claude Sonnet 4.6) — 2026-04-26
-// Usage: STOA_BASE_URL=https://ail-production.up.railway.app/api/v1 ail run community-tools/stoa_watch.ail --mock
+// Usage: STOA_BASE_URL=https://ail-stoa.up.railway.app/api/v1 ail run community-tools/stoa_watch.ail --mock
 
 fn stoa_url() -> Text {
     r = perform env.read("STOA_BASE_URL")
