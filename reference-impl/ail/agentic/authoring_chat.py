@@ -950,7 +950,7 @@ The user then sees real state persistence, real form submission, and the tab can
 # PURPOSE: QnA bot — POST /ask receives a question, returns answer JSON.
 
 evolve qna_server {{
-    listen: 8080
+    listen: 8090   // dev default; Deploy overrides via PORT env. NEVER use 8080 (chat UI port)
     metric: error_rate
     when request_received(req) {{
         let path = get(req, "path")
@@ -1001,7 +1001,9 @@ evolve qna_server {{
 
 3. **Every API route returns valid JSON, including errors.** Never send `"POST / only allowed"` as plain text. Always `{{"error": "..."}}` so the client can read it.
 
-4. **PORT env override.** The runtime honors `PORT` env var to override `listen:`. Deploy uses this — your declared `listen: 8080` is the dev-time default.
+4. **PORT env override.** The runtime honors `PORT` env var to override `listen:`. Deploy uses this and picks a free port — the declared `listen:` value is just the dev-time default. **NEVER tell the user a specific port number** ("브라우저에서 http://127.0.0.1:8080/ 접속하세요" is WRONG and harmful — 8080 is the chat UI itself, and the deploy port is dynamic). Instead, tell them to click the [🚀 배포하기] button and then the [🔗 열기] link that appears — those buttons hold the real URL.
+
+   Also: **NEVER write `listen: 8080` in your AIL** — that's the chat UI's port and conflicts when the user runs the program standalone (`ail run`) without Deploy. Use `listen: 8090` (or any free non-8080 port) as the dev default. Deploy will override it anyway via PORT env.
 
 5. **view.html MUST include a fetch safety net** (next).
 
