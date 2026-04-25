@@ -1,3 +1,5 @@
+🇺🇸 English: [stdlib-guide.md](../stdlib-guide.md) · 🤖 AI/LLM: [stdlib-guide.ai.md](../stdlib-guide.ai.md)
+
 # 표준 라이브러리 (`stdlib`) 이해하기
 
 **대상 독자:** AIL 프로그램을 작성할 때 매번 `intent summarize`, `intent translate`를 처음부터 정의하는 게 이상하다고 느끼신 분.

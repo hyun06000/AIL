@@ -374,11 +374,14 @@ pip install ail-interpreter
 
 ## 더 읽기
 
-- [`docs/ko/heaal.ko.md`](heaal.ko.md) — HEAAL 매니페스토: 패러다임 설명, Rust 비유, AI 코드 안전성 3단계
-- [`docs/why-ail.md`](../why-ail.md) — Python + LLM SDK 대비 6가지 실행 가능한 장점
-- [`docs/open-questions.md`](../open-questions.md) — 17개의 미해결 설계 질문
-- [`spec/08-reference-card.ai.md`](../../spec/08-reference-card.ai.md) — AI 모델이 AIL을 한 번에 배우기 위한 기계 가독 스펙
-- [`docs/proposals/physis.md`](../proposals/physis.md) — Physis: 장기 실행 AIL 프로세스의 세대 진화 (v0.3 예정)
+- [`heaal.ko.md`](heaal.ko.md) — HEAAL 매니페스토: 패러다임 설명, Rust 비유, AI 코드 안전성 3단계
+- [`../why-ail.md`](../why-ail.md) — Python + LLM SDK 대비 6가지 실행 가능한 장점
+- [`../open-questions.md`](../open-questions.md) — 17개의 미해결 설계 질문
+- [`evolve-guide.ko.md`](evolve-guide.ko.md) — `evolve` 자기 수정 동작 방식: retune, rollback_on, calibration
+- [`stdlib-guide.ko.md`](stdlib-guide.ko.md) — 표준 라이브러리 참조: core, language (6개 intent), utils (12개 pure fn)
+- [`../../spec/08-reference-card.ai.md`](../../spec/08-reference-card.ai.md) — AI 모델이 AIL을 한 번에 배우기 위한 기계 가독 스펙
+- [`../proposals/physis.ko.md`](../proposals/physis.ko.md) — Physis: 장기 실행 AIL 프로세스의 세대 진화 (v0.3 예정)
+- [`../proposals/evolve_as_server.ko.md`](../proposals/evolve_as_server.ko.md) — `evolve`-bound 서버: 스스로 죽을 수 있는 서버 (설계 문서)
 
 ---
 

@@ -380,8 +380,11 @@ pip install ail-interpreter
 - [`docs/why-ail.md`](docs/why-ail.md) — six runnable advantages of AIL over Python + LLM SDK
 - [`docs/ecosystem.md`](docs/ecosystem.md) — how to build tools in AIL and contribute to the shared ecosystem
 - [`docs/open-questions.md`](docs/open-questions.md) — 17 unresolved design questions (good contribution starting points)
+- [`docs/evolve-guide.md`](docs/evolve-guide.md) — how `evolve` self-modification works: retune, rollback_on, calibration
+- [`docs/stdlib-guide.md`](docs/stdlib-guide.md) — standard library reference: core, language (6 intents), utils (12 pure fns)
 - [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md) — machine-readable spec for any AI model to learn AIL in one read
-- [`docs/proposals/physis.md`](docs/proposals/physis.md) — Physis: generational evolution for long-running AIL processes (upcoming v0.3)
+- [`docs/proposals/physis.md`](docs/proposals/physis.md) — Physis: generational evolution for long-running AIL processes (v0.3)
+- [`docs/proposals/evolve_as_server.md`](docs/proposals/evolve_as_server.md) — `evolve`-bound server: a server that can kill itself (design doc)
 
 ---
 

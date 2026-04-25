@@ -1,3 +1,5 @@
+🤖 AI/LLM: [open-questions.ai.md](open-questions.ai.md) · 🇰🇷 한국어: [ko/open-questions.ko.md](ko/open-questions.ko.md)
+
 # Open Questions
 
 This document lists the unresolved design questions the authors know about.

@@ -1,3 +1,5 @@
+🤖 AI/LLM: [evolve_as_server.ai.md](evolve_as_server.ai.md) · 🇰🇷 한국어: [evolve_as_server.ko.md](evolve_as_server.ko.md)
+
 # `evolve`-bound server — long-running processes without re-introducing `while`
 
 **Author:** Arche (sketch via letter, 2026-04-25).
