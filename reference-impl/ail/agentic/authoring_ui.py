@@ -1257,6 +1257,58 @@ def render_authoring_page(
         '에이전트가 위 명세대로 빌드하면 괜찮을까요? ' +
         '수정이 필요하면 채팅으로 설명해주세요.';
       card.appendChild(desc);
+
+      // Mode toggle (qna_bot field test 2026-04-26): 빌드 후에 inline run인지
+      // background service인지가 사용자 의도와 어긋날 때가 잦음. 빌드 *전*에
+      // 사용자가 명시 선택하게 해서, 모델이 잘못 추측해도 사용자가 덮어쓰게.
+      // 추천 default는 spec text에 "evolve-server" / "always live" / "백그라운드"
+      // 등 키워드가 있으면 service, 아니면 run.
+      const modeRow = document.createElement('div');
+      modeRow.style.cssText =
+        'margin-top:10px;padding:8px 10px;background:#fff;' +
+        'border:1px solid #dbeafe;border-radius:4px;font-size:12px;';
+      const modeLabel = document.createElement('div');
+      modeLabel.style.cssText =
+        'color:#1e40af;font-weight:500;margin-bottom:6px;';
+      modeLabel.textContent = '⚙ 빌드 모드 / Build mode';
+      modeRow.appendChild(modeLabel);
+      // Heuristic on the spec body — find the most recent agent reply
+      // text and check for service-mode keywords.
+      const allBubbles = thread.querySelectorAll('.turn.agent .bubble');
+      const lastSpecText = allBubbles.length > 0
+        ? (allBubbles[allBubbles.length - 1].textContent || '')
+        : '';
+      const looksLikeService = /evolve|server|always live|always-on|백그라운드|상시|서비스 모드|24\/7|webhook|HTTP API/i.test(lastSpecText);
+      const mkRadio = (val, label, hint) => {{
+        const wrap = document.createElement('label');
+        wrap.style.cssText =
+          'display:flex;align-items:flex-start;gap:6px;cursor:pointer;' +
+          'padding:4px 0;';
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'build-mode';
+        radio.value = val;
+        radio.style.marginTop = '3px';
+        if ((val === 'service') === looksLikeService) radio.checked = true;
+        wrap.appendChild(radio);
+        const text = document.createElement('span');
+        text.innerHTML = '<b>' + label + '</b><br>' +
+          '<span style="color:#6b7280">' + hint + '</span>';
+        wrap.appendChild(text);
+        return wrap;
+      }};
+      modeRow.appendChild(mkRadio(
+        'run',
+        '🔘 일회성 실행 / One-shot',
+        'Run 버튼 누를 때만 돌아요. 단발 답변·계산·요약 같은 데 적합.'
+      ));
+      modeRow.appendChild(mkRadio(
+        'service',
+        '🌐 백그라운드 서비스 / Background service',
+        '한 번 배포하면 채팅 닫아도 계속 살아있어요. 챗봇·웹훅·대시보드처럼 항상 켜둘 거면.'
+      ));
+      card.appendChild(modeRow);
+
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
       const approve = document.createElement('button');
@@ -1265,13 +1317,29 @@ def render_authoring_page(
       approve.onclick = async () => {{
         approve.disabled = true;
         approve.textContent = '빌드 요청 중…';
+        // Read the user's explicit mode choice — overrides whatever the
+        // model would otherwise pick. ready_to_serve = background service,
+        // ready_to_run = one-shot. The agent prompt honors both.
+        const sel = card.querySelector('input[name=build-mode]:checked');
+        const mode = sel ? sel.value : 'run';
+        const actionTag = mode === 'service'
+          ? 'ready_to_serve'
+          : 'ready_to_run';
+        const modeNote = mode === 'service'
+          ? '이 프로그램은 백그라운드 서비스로 만들어주세요 ' +
+            '(evolve {{ listen ... when request_received }}). ' +
+            'view.html이 필요하면 함께 emit. ' +
+            '`<action>ready_to_serve</action>` 필수.'
+          : '이 프로그램은 일회성 실행으로 만들어주세요 ' +
+            '(entry main만, evolve-server 금지). ' +
+            '`<action>ready_to_run</action>` 필수.';
         try {{
           const r = await fetch('/authoring-chat', {{
             method: 'POST',
             headers: {{ 'Content-Type': 'text/plain; charset=utf-8' }},
-            body: '승인합니다. 이 명세대로 빌드해주세요 — ' +
-              '<file> 태그로 실제 .ail 소스를 emit하고 ' +
-              '<action>ready_to_run</action>을 달아주세요.',
+            body: '승인합니다. 이 명세대로 빌드해주세요. ' + modeNote +
+              ' <file> 태그로 실제 .ail 소스를 emit하고 ' +
+              '<action>' + actionTag + '</action>을 달아주세요.',
           }});
           const text = await r.text();
           const data = JSON.parse(text);
