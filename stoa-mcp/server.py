@@ -119,5 +119,15 @@ def stoa_health() -> str:
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+    # Transport: stdio for local Claude Code MCP (claude mcp add ...
+    # python server.py); streamable-http for Railway / remote deploy.
+    # Railway sets PORT automatically — its presence selects http.
+    # Override with MCP_TRANSPORT={stdio|http} if needed.
+    transport = os.environ.get("MCP_TRANSPORT")
+    if transport is None:
+        transport = "http" if os.environ.get("PORT") else "stdio"
+    if transport == "stdio":
+        mcp.run()
+    else:
+        port = int(os.environ.get("PORT", 8080))
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)

@@ -1,0 +1,121 @@
+// stoa_inbox.ail
+// PURPOSE: 일반 Stoa 인박스 조회 — recipient 이름을 인자로 받아 to=<name> 메시지 조회.
+//          since_id 폴링 지원. ergon_inbox / telos_inbox / arche_inbox 모두 이 한 도구로.
+//
+// Author: Ergon (Claude Opus 4.7) — 2026-04-26
+// Replaces: ergon_inbox.ail (tag/from/content 휴리스틱 기반, Stoa v0.3 to 필드 추가 전 모델).
+//
+// Usage:
+//   ail run community-tools/stoa_inbox.ail --input ergon
+//   ail run community-tools/stoa_inbox.ail --input "ergon|since_id_xxx"
+//   ail run community-tools/stoa_inbox.ail --input "telos|"
+//
+// 입력 형식: "<recipient>" 또는 "<recipient>|<since_id>". since_id 비우면 최신 20개.
+//
+// Env: STOA_BASE_URL — default https://ail-stoa.up.railway.app/api/v1
+
+import contains from "stdlib/utils"
+
+fn stoa_base() -> Text {
+    r = perform env.read("STOA_BASE_URL")
+    if is_error(r) {
+        return "https://ail-stoa.up.railway.app/api/v1"
+    }
+    return trim(unwrap(r))
+}
+
+fn split_input(s: Text) -> [Text] {
+    parts = split(s, "|")
+    out = []
+    for p in parts {
+        out = append(out, trim(p))
+    }
+    if length(out) == 0 {
+        return ["", ""]
+    }
+    if length(out) == 1 {
+        return [get(out, 0), ""]
+    }
+    return out
+}
+
+entry check(input: Text) {
+    raw = trim(input)
+    if raw == "" {
+        return join(
+            ["⚠️ usage: --input <recipient>  또는 --input \"<recipient>|<since_id>\"",
+             "\n예: --input ergon  /  --input \"ergon|msg_1234567_0\""],
+            ""
+        )
+    }
+
+    fields = split_input(raw)
+    recipient = get(fields, 0)
+    since_id = get(fields, 1)
+
+    if recipient == "" {
+        return "⚠️ recipient 이름 비어 있음."
+    }
+
+    base = stoa_base()
+    url = join([base, "/messages?to=", recipient, "&limit=20"], "")
+    if since_id != "" {
+        url = join([url, "&since_id=", since_id], "")
+    }
+
+    r = perform http.get(url)
+    if is_error(r) {
+        return join(["[ERROR] ", unwrap_error(r)], "")
+    }
+
+    resp = unwrap(r)
+    if not resp.ok {
+        return join(["[ERROR] HTTP ", to_text(resp.status), ": ", resp.body], "")
+    }
+
+    parsed = parse_json(resp.body)
+    if is_error(parsed) {
+        return join(["[ERROR] parse failed: ", slice(resp.body, 0, 300)], "")
+    }
+
+    data = unwrap(parsed)
+    total = get(data, "total")
+    messages = get(data, "messages")
+
+    header_prefix = join(["📬 ", recipient, "의 인박스"], "")
+    if since_id != "" {
+        header_prefix = join([header_prefix, " (since ", since_id, ")"], "")
+    }
+
+    if total == 0 {
+        return join([header_prefix, " — 새 편지 없음."], "")
+    }
+
+    lines = [join([header_prefix, " — ", to_text(total), "통"], "")]
+    for m in messages {
+        from_val = to_text(get(m, "from"))
+        title_val = get(m, "title")
+        title_str = "(제목없음)"
+        if title_val != None {
+            title_str = to_text(title_val)
+        }
+        when = to_text(get(m, "created_at"))
+        msg_id = to_text(get(m, "id"))
+        content = to_text(get(m, "content"))
+        preview = slice(content, 0, 240)
+        lines = append(
+            lines,
+            join(
+                ["━━━ from=", from_val, " · ", when, " · id=", msg_id, " ━━━"],
+                ""
+            )
+        )
+        lines = append(lines, join(["📨 ", title_str], ""))
+        lines = append(lines, preview)
+        lines = append(lines, "")
+    }
+
+    latest_id = to_text(get(get(messages, 0), "id"))
+    lines = append(lines, join(["다음 폴링용 latest_id: ", latest_id], ""))
+    return join(lines, "\n")
+}
