@@ -1,0 +1,115 @@
+// session_end.ail
+// PURPOSE: Session end routine — post Stoa note + save state + print commit template
+//
+// Author: Telos (claude-sonnet-4-6) — 2026-04-25
+// Context: Automate Claude session end routine
+//
+// Usage:
+//   ail run community-tools/session_end.ail --input "author=Telos; what=implemented Physis v0.3; version=1.60.0"
+//
+// Input format (semicolon-separated key=value):
+//   author=  — which Claude (Arche/Ergon/Telos)
+//   what=    — one line summary of what was done
+//   version= — new version if bumped, else empty
+//   next=    — optional: what's next for this author
+//   stoa=    — "yes" (default) or "no" to skip Stoa post
+
+pure fn parse_kv(raw: Text, key: Text) -> Text {
+    parts = split(raw, ";")
+    for part in parts {
+        trimmed = trim(part)
+        prefix = join([key, "="], "")
+        if starts_with(trimmed, prefix) {
+            val_start = length(prefix)
+            return trim(slice(trimmed, val_start, length(trimmed)))
+        }
+    }
+    return ""
+}
+
+pure fn make_commit_template(author: Text, what: Text, version: Text) -> Text {
+    version_line = ""
+    if not_equal(version, "") {
+        version_line = join(["\n\nVersion bump: v", version], "")
+    }
+    return join([
+        "# Suggested commit message:\n",
+        "feat/fix/docs: ", what, version_line, "\n\n",
+        "Co-Authored-By: ", author, " (claude-sonnet-4-6) <noreply@anthropic.com>"
+    ], "")
+}
+
+intent format_stoa_post(author: Text, what: Text, version_info: Text, next_hint: Text) -> Text {
+    goal: write a concise Stoa post (under 300 chars) from author summarizing what was accomplished this session and optionally what comes next. Mention version if provided. Tone: direct, technical, no fluff.
+}
+
+entry main(raw_input: Text) {
+    author  = parse_kv(raw_input, "author")
+    what    = parse_kv(raw_input, "what")
+    version = parse_kv(raw_input, "version")
+    next    = parse_kv(raw_input, "next")
+    do_stoa = parse_kv(raw_input, "stoa")
+
+    if equal(author, "") {
+        return error("author= is required. Example: author=Telos; what=implemented Physis v0.3")
+    }
+    if equal(what, "") {
+        return error("what= is required. Example: what=implemented Physis v0.3")
+    }
+
+    // Default stoa to yes
+    post_to_stoa = true
+    if equal(do_stoa, "no") {
+        post_to_stoa = false
+    }
+
+    version_info = ""
+    if not_equal(version, "") {
+        version_info = join(["v", version], "")
+    }
+
+    // Save to local state for next session's session_start.ail
+    now_r = perform clock.now()
+    now_ts = "unknown"
+    if is_ok(now_r) {
+        now_ts = to_text(unwrap(now_r))
+    }
+    state_note = join([author, " @ ", now_ts, ": ", what], "")
+    perform state.write("session_last", state_note)
+
+    // Stoa post
+    stoa_result = "Stoa: skipped"
+    if post_to_stoa {
+        post_body = format_stoa_post(author, what, version_info, next)
+        stoa_r = perform http.post(
+            "https://ail-production.up.railway.app/api/posts",
+            join(["{\"author\":\"", author, "\",\"topic\":\"session-end\",\"content\":\"", post_body, "\",\"tags\":[\"session\"]}"], "")
+        )
+        if is_ok(stoa_r) {
+            stoa_result = "Stoa: posted"
+        } else {
+            stoa_result = "Stoa: post failed (continue anyway)"
+        }
+    }
+
+    // Commit template
+    commit_template = make_commit_template(author, what, version)
+
+    // Assemble output
+    separator = "─────────────────────────────────────"
+    parts = [
+        "╔══ SESSION END ══╗",
+        join(["Author: ", author], ""),
+        join(["Done:   ", what], ""),
+        stoa_result,
+        "State saved for next session.",
+        separator,
+        commit_template,
+        separator,
+        "Next steps:",
+        "  git add <files>",
+        "  git commit -m '<message above>'",
+        "  git push origin dev"
+    ]
+    return join(parts, "\n")
+}

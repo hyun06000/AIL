@@ -331,7 +331,10 @@ Do NOT import `stdlib/math`, `stdlib/io`, `stdlib/json`, `stdlib/string` — the
 from ail.runtime import MockAdapter
 from ail.runtime.anthropic_adapter import AnthropicAdapter  # ANTHROPIC_API_KEY
 from ail.runtime.ollama_adapter import OllamaAdapter        # AIL_OLLAMA_MODEL
+from ail.runtime.openai_adapter import OpenAICompatibleAdapter  # OPENAI_API_KEY + any OpenAI-compatible server
 ```
+
+OpenAICompatibleAdapter env vars: `AIL_OPENAI_COMPAT_MODEL`, `AIL_OPENAI_COMPAT_BASE_URL` (default: http://localhost:8000), `AIL_OPENAI_COMPAT_API_KEY`. Supports o-series reasoning models (temperature omitted, system message merged into user).
 
 ## ARCHITECTURE NOTE: AUTHORING vs INTENT MODEL
 

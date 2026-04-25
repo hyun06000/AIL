@@ -69,17 +69,26 @@ class OpenAICompatibleAdapter:
         # Skip JSON mode for AIL authoring (same logic as OllamaAdapter)
         is_authoring = context.get("_intent_name") == "__author_ail__"
 
-        payload: dict = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": self.temperature,
-            "stream": False,
-        }
-        if not is_authoring:
-            payload["response_format"] = {"type": "json_object"}
+        # o-series reasoning models don't support temperature, system messages, or json_object mode
+        is_reasoning = self.model.startswith("o1") or self.model.startswith("o3") or self.model.startswith("o4")
+        if is_reasoning:
+            payload: dict = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": f"{system}\n\n{user}"}],
+                "stream": False,
+            }
+        else:
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                "temperature": self.temperature,
+                "stream": False,
+            }
+            if not is_authoring:
+                payload["response_format"] = {"type": "json_object"}
 
         body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(

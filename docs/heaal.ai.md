@@ -99,9 +99,13 @@ Analogy: C (raw pointers) → C++ (smart pointers as convention) → Rust (borro
 
 ## EMPIRICAL FINDING
 
-Claude Sonnet with zero AIL training produces AIL code with safety comparable to or exceeding its Python output. The model did not improve. The harness removed categories of error.
+Claude Sonnet 4.5 and OpenAI o4-mini, with zero AIL training, both produce AIL code with 88% answer accuracy — tied. The models did not improve. The harness removed categories of error.
 
-Specifically: AIL programs that parse omit error-handling on failable ops 0% of the time. Measured constant across Sonnet, qwen14b, llama8b, and a 7B fine-tune. Python on the same prompts omits 12-70% depending on author model — stronger models often omit MORE because they attempt more ambitious code with more failable calls. The constancy of the AIL number is the harness; the variance of the Python number is what conventional safety tooling chases per-model.
+Specifically: AIL programs that parse omit error-handling on failable ops 0% of the time. Measured constant across: Anthropic Sonnet 4.5, OpenAI gpt-4o/gpt-4.1/gpt-4.1-mini/o4-mini, Alibaba qwen14b, Meta llama8b, and a 7B fine-tune. Python on the same prompts omits 42-86% depending on model — frontier models cluster at 66-70% regardless of vendor. The error-handling gap is a PYTHON LANGUAGE PROPERTY, not a model property. Better models do not close it.
+
+CROSS-VENDOR: Series F (2026-04-25) confirmed safety gap holds for all 4 GPT models. Python err-miss: gpt-4o 66%, gpt-4.1 68%, gpt-4.1-mini 70%, o4-mini 68%. AIL: 0% all models.
+
+SILENT LLM SKIP: All 4 GPT models produced Python with avg LLM calls = 0.00 per task. When asked to write Python for judgment tasks, they implement hardcoded logic instead of calling the model. Python answer rate: 26-32%. AIL `intent` is runtime-enforced — cannot be silently skipped.
 
 BOUNDARY: author model must clear AIL parse threshold for grammar floor to apply. mistral:7b without fine-tune produces 0 parseable AIL on the corpus. Below-threshold tiers require AIL-track fine-tune (e.g. ail-coder:7b-v3). See docs/benchmarks/2026-04-22_heaal_boundary_summary.md.
 

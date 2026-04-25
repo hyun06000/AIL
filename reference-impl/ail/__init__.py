@@ -15,13 +15,37 @@ def compile_source(source: str):
     return parse(source)
 
 
+class _NoCredentialsAdapter:
+    """Returned when no credentials are configured.
+
+    Pure-fn programs run fine — this adapter is never called.
+    Programs with `intent` will get a clear error at the point the LLM
+    is actually needed, not at program startup.
+    """
+    name = "no_credentials"
+
+    def invoke(self, **_kwargs):
+        raise RuntimeError(
+            "No model credentials found. Set one of: ANTHROPIC_API_KEY, "
+            "AIL_OLLAMA_MODEL, AIL_OPENAI_COMPAT_MODEL + AIL_OPENAI_COMPAT_BASE_URL, "
+            "or OPENAI_API_KEY. "
+            "For tests or offline use, pass adapter=MockAdapter() explicitly "
+            "or use `ail run --mock`."
+        )
+
+
 def _default_adapter() -> ModelAdapter:
     """Pick an adapter based on the environment.
 
     Preference order:
       1. `AIL_OLLAMA_MODEL` set → OllamaAdapter (local, no API key)
       2. `ANTHROPIC_API_KEY` set → AnthropicAdapter
-      3. MockAdapter (offline)
+      3. `AIL_OPENAI_COMPAT_MODEL` or `OPENAI_API_KEY` set → OpenAICompatibleAdapter
+      4. No credentials → raise RuntimeError (no silent mock fallback)
+
+    Use MockAdapter() explicitly in tests or pass --mock to `ail run`.
+    Implicit fallback to mock was removed to prevent false successes in
+    production when credentials are missing.
 
     Before checking the environment, load a .env file from the current
     working directory or from the parent directories up to a reasonable
@@ -38,7 +62,10 @@ def _default_adapter() -> ModelAdapter:
             return AnthropicAdapter()
         except ImportError:
             pass
-    return MockAdapter()
+    if os.environ.get("AIL_OPENAI_COMPAT_MODEL") or os.environ.get("OPENAI_API_KEY"):
+        from .runtime.openai_adapter import OpenAICompatibleAdapter
+        return OpenAICompatibleAdapter()
+    return _NoCredentialsAdapter()
 
 
 def _load_dotenv_if_present() -> None:
