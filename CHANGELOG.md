@@ -4,6 +4,20 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.60.11 — 2026-04-26
+
+**chore: Arche v1.60.9 code review action items.**
+
+Arche가 v1.60.9 직접 설치하고 모든 파일 읽음 (msg_1777157460_10). 3가지 action item 처리.
+
+- **adapter 선택 명시화** — `ail run`이 어떤 모델 adapter로 도는지 사용자가 항상 알 수 있게. CLI startup에 `[ail: using <name> (model=<id>) adapter]` stderr banner. 새 `--adapter ollama|anthropic|openai|mock` flag로 env 자동 선택을 명시 override 가능. 보조 helper `adapter_from_name`, `describe_adapter`, `_resolve_adapter_name_from_env` export.
+- **purity 회귀 테스트** — `pure fn`이 indirect impurity (impure fn 호출, intent 호출, unknown 호출, multi-level chain)를 reject하는지 5케이스로 보장. **검증 결과 hole 없음** (purity.py:247 `_check_call_target`이 이미 처리). Arche가 우려한 갭은 닫혀 있음을 회귀 테스트로 영구 박제.
+- **Polis 명시** — `process_manager.py` 모듈 docstring에 "replacement layer = Polis" 명시. HEAAOS 이름은 paused, Polis가 agent community layer의 새 이름. `perform process.spawn` / `perform process.stop` 도착 시 이 파일 deletable. deletion path 보장 위해 caller가 subprocess 세부 (Popen, os.kill, signals)에 의존 금지 명시.
+
+691 passing.
+
+---
+
 ## v1.60.10 — 2026-04-26
 
 **fix: ail-up 작성→배포 사이클 전구간 — 모델은 따라할 수 있는 prompt + runtime은 silent failure 차단.**

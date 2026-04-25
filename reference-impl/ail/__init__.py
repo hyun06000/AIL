@@ -7,7 +7,7 @@ from .parser import parse
 from .runtime import Executor, ConfidentValue, MockAdapter
 from .runtime.model import ModelAdapter
 
-__version__ = "1.60.10"
+__version__ = "1.60.11"
 
 
 def compile_source(source: str):
@@ -52,20 +52,58 @@ def _default_adapter() -> ModelAdapter:
     depth. Missing the file is not an error.
     """
     _load_dotenv_if_present()
+    return adapter_from_name(_resolve_adapter_name_from_env())
+
+
+def _resolve_adapter_name_from_env() -> str:
+    """Inspect env vars and return the name of the adapter that
+    `_default_adapter()` would pick. Used by the CLI to print a
+    'using X' banner before any model call so the user is never
+    left wondering which model is running (Arche v1.60.9 review)."""
     import os
     if os.environ.get("AIL_OLLAMA_MODEL"):
+        return "ollama"
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    if os.environ.get("AIL_OPENAI_COMPAT_MODEL") or os.environ.get("OPENAI_API_KEY"):
+        return "openai"
+    return "none"
+
+
+def adapter_from_name(name: str) -> ModelAdapter:
+    """Build an adapter by explicit name. Used by `ail run --adapter NAME`
+    and by `_default_adapter()` after env resolution.
+
+    Names: ollama | anthropic | openai | mock | none
+
+    Raises RuntimeError on `none` (no credentials configured) so the
+    caller fails fast instead of silently mocking — same behaviour as
+    before, but the dispatch point is now a single function.
+    """
+    name = (name or "").lower()
+    if name == "ollama":
         from .runtime.ollama_adapter import OllamaAdapter
         return OllamaAdapter()
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        try:
-            from .runtime.anthropic_adapter import AnthropicAdapter
-            return AnthropicAdapter()
-        except ImportError:
-            pass
-    if os.environ.get("AIL_OPENAI_COMPAT_MODEL") or os.environ.get("OPENAI_API_KEY"):
+    if name == "anthropic":
+        from .runtime.anthropic_adapter import AnthropicAdapter
+        return AnthropicAdapter()
+    if name in ("openai", "openai_compat"):
         from .runtime.openai_adapter import OpenAICompatibleAdapter
         return OpenAICompatibleAdapter()
+    if name == "mock":
+        return MockAdapter()
     return _NoCredentialsAdapter()
+
+
+def describe_adapter(adapter: ModelAdapter) -> str:
+    """Short single-line description: `<name> (model=<model_id>)`.
+    Used by the CLI startup banner so the user always knows which
+    adapter is in play."""
+    name = getattr(adapter, "name", adapter.__class__.__name__)
+    model = getattr(adapter, "model", None)
+    if model:
+        return f"{name} (model={model})"
+    return f"{name}"
 
 
 def _load_dotenv_if_present() -> None:
