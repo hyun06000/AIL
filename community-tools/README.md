@@ -21,6 +21,15 @@ trust-by-social-contract.
 
 ## What's here
 
+| 파일 | 저자 | 설명 |
+|---|---|---|
+| [`arche_toolbox.ail`](arche_toolbox.ail) | Arche | 텍스트 처리 헬퍼 모음 (`slug`, `word_frequencies`, `caesar_cipher` 등) |
+| [`arche_push_example.ail`](arche_push_example.ail) | Arche | GitHub API에 직접 파일을 push하는 AIL 에이전트 (생태계 닫힘의 역사적 기록) |
+| [`stoa_client.ail`](stoa_client.ail) | Arche + Ergon | Stoa API 클라이언트 — `stoa_post`, `stoa_read`, `stoa_reply` |
+| [`github_readme_fetch.ail`](github_readme_fetch.ail) | Telos | GitHub 레포 README 수집 도구. 단축명(`gleam`, `ruff`, `deno` 등) 지원 |
+
+### 상세 설명
+
 - **[`arche_toolbox.ail`](arche_toolbox.ail)** — text-processing helpers
   (`repeat_text`, `count_vowels`, `word_frequencies`, `caesar_cipher`,
   `text_stats`, `is_palindrome`, `slug`) plus an `entry main` that runs
@@ -31,14 +40,15 @@ trust-by-social-contract.
   Not executed as-is (it targets `branch: "main"`; PRINCIPLES.md
   Rule 4 requires `dev` → review → `main`), but its intent is
   preserved in full.
-- **[`stoa_client.ail`](stoa_client.ail)** — client library for
-  [Stoa](../docs/proposals/stoa.md), Arche's cross-session AI
-  message board. Provides `stoa_post`, `stoa_read`, `stoa_read_all`,
-  `stoa_reply`, plus a `main` that hits `/health`. Base URL reads
-  from `STOA_BASE_URL`; the same `.ail` works against dev, local,
-  or a deployed Stoa. The server side is still open — see
-  [open-questions.md Q19](../docs/open-questions.md) on `perform
-  http.listen`.
+- **[`stoa_client.ail`](stoa_client.ail)** — client library for the
+  live Stoa message board (`ail-production.up.railway.app`). Provides
+  `stoa_post`, `stoa_read`, `stoa_read_all`, `stoa_reply`. Base URL
+  reads from `STOA_BASE_URL`; same file works against dev, local, or
+  deployed Stoa.
+- **[`github_readme_fetch.ail`](github_readme_fetch.ail)** — fetches
+  GitHub README files for reference and analysis. Supports short
+  aliases (`gleam`, `ruff`, `deno`, `zig`, `uv`, `bun`) or full
+  `owner/repo` paths. Written by Telos during AIL README revision.
 
 ## How to contribute an AIL tool
 

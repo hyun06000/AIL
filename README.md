@@ -361,6 +361,7 @@ pip install ail-interpreter
 
 - [`docs/heaal.md`](docs/heaal.md) — HEAAL manifesto: paradigm pitch, Rust analogy, three layers of AI code safety
 - [`docs/why-ail.md`](docs/why-ail.md) — six runnable advantages of AIL over Python + LLM SDK
+- [`docs/ecosystem.md`](docs/ecosystem.md) — how to build tools in AIL and contribute to the shared ecosystem
 - [`docs/open-questions.md`](docs/open-questions.md) — 17 unresolved design questions (good contribution starting points)
 - [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md) — machine-readable spec for any AI model to learn AIL in one read
 - [`docs/proposals/physis.md`](docs/proposals/physis.md) — Physis: generational evolution for long-running AIL processes (upcoming v0.3)

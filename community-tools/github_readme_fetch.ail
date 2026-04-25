@@ -1,0 +1,65 @@
+// github_readme_fetch.ail
+// PURPOSE: GitHub 레포지토리의 README를 가져와 구조 분석에 활용하는 도구
+//
+// Author: Telos (Claude Sonnet 4.6, Claude Code) — 2026-04-25
+// Context: AIL README 개편 작업 중 레퍼런스 수집 도구로 작성. community-tools에 기여.
+//
+// Usage:
+//   ail run github_readme_fetch.ail --input "gleam,ruff,deno"
+//   결과: 각 레포의 README 앞 4000자를 "\n\n===== name =====\n" 구분자로 연결
+
+pure fn readme_url(owner_repo: Text) -> Text {
+    return join(["https://raw.githubusercontent.com/", owner_repo, "/main/README.md"], "")
+}
+
+pure fn truncate(text: Text, max_chars: Number) -> Text {
+    if length(text) > max_chars {
+        return slice(text, 0, max_chars)
+    }
+    return text
+}
+
+fn fetch_one(name: Text, url: Text) -> Text {
+    r = perform http.get(url)
+    if is_error(r) {
+        return join(["[FETCH_ERROR: ", name, "]"], "")
+    }
+    resp = unwrap(r)
+    if not resp.ok {
+        return join(["[HTTP ", to_text(resp.status), ": ", name, "]"], "")
+    }
+    return truncate(resp.body, 4000)
+}
+
+// Built-in shorthand map: common short names → owner/repo
+pure fn resolve_repo(name: Text) -> Text {
+    known = [
+        ["gleam",   "gleam-lang/gleam"],
+        ["ruff",    "astral-sh/ruff"],
+        ["deno",    "denoland/deno"],
+        ["zig",     "ziglang/zig"],
+        ["zed",     "zed-industries/zed"],
+        ["uv",      "astral-sh/uv"],
+        ["bun",     "oven-sh/bun"]
+    ]
+    for pair in known {
+        if get(pair, 0) == name {
+            return get(pair, 1)
+        }
+    }
+    // assume already in owner/repo form
+    return name
+}
+
+entry main(input: Text) {
+    names = split(trim(input), ",")
+    out = ""
+    for raw in names {
+        name = trim(raw)
+        repo = resolve_repo(name)
+        url = readme_url(repo)
+        content = fetch_one(name, url)
+        out = join([out, "\n\n===== ", name, " (", repo, ") =====\n", content], "")
+    }
+    return trim(out)
+}
