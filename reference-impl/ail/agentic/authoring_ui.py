@@ -447,6 +447,10 @@ def render_authoring_page(
       ? !!programsForNext[0].input_used : true;
     let envRequiredForNext = programsForNext.length > 0
       ? (programsForNext[0].env_required || []) : [];
+    // Track the most recent agent action so runtime-error auto-fix
+    // can preserve it (otherwise ready_to_serve gets downgraded to
+    // ready_to_run on every retry — qna_bot field test 2026-04-26).
+    let lastAgentAction = null;
 
     // File tree — NERDTree-style side panel, refreshed after every
     // agent turn so file writes appear immediately.
@@ -611,20 +615,189 @@ def render_authoring_page(
         deployBtn.onclick = async () => {{
           deployBtn.disabled = true;
           deployBtn.textContent = '배포 중…';
+          let succeeded = false;
           try {{
             const r = await fetch('/authoring-deploy', {{method:'POST'}});
             if (!r.ok) {{
               alert('배포 실패: ' + await r.text());
+            }} else {{
+              succeeded = true;
             }}
           }} catch (e) {{
             alert('배포 실패: ' + e.message);
           }}
           await refreshDeployBar();
+          if (succeeded) {{
+            // Drop a guidance bubble in the chat thread so the user
+            // sees concrete next-step instructions (open URL, close
+            // chat is OK) inline — the top bar's 🔗 열기 link is
+            // easy to miss after a long fix loop.
+            let newRec = null;
+            try {{
+              const s = await fetch('/authoring-deploy/status');
+              if (s.ok) {{
+                const sb = await s.json();
+                newRec = sb && sb.deployment ? sb.deployment : null;
+              }}
+            }} catch (e) {{}}
+            const cta = document.createElement('div');
+            cta.className = 'turn agent';
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.style.cssText =
+              'background:#ecfdf5;border:1px solid #a7f3d0;' +
+              'color:#065f46;font-size:13px;line-height:1.5;';
+            cta.appendChild(bubble);
+            thread.appendChild(cta);
+            appendDeployedGuidance(bubble, newRec);
+          }}
         }};
         deployBar.appendChild(deployBtn);
       }}
     }}
     refreshDeployBar();
+
+    // After an agent turn that wrote files, re-check deployable
+    // status and (if the program is an evolve-server) demote the
+    // inline Run widget + surface a chat-thread CTA aimed at the
+    // top Deploy bar. Inline /authoring-run cannot drive a Flask
+    // listener — it would hang. The user must deploy.
+    async function maybeShowDeployCTA(action) {{
+      let deployable = false;
+      let rec = null;
+      try {{
+        const r = await fetch('/authoring-deploy/status');
+        if (r.ok) {{
+          const body = await r.json();
+          deployable = !!(body && body.deployable);
+          rec = body && body.deployment ? body.deployment : null;
+        }}
+      }} catch (e) {{ return; }}
+      // Always refresh the top bar — its visibility tracks deployable.
+      await refreshDeployBar();
+      if (!deployable) return;
+
+      // Disable the most recent inline Run widget — for an
+      // evolve-server it would block. Service-mode card (which
+      // already speaks the right language) we leave alone.
+      if (action === 'ready_to_run') {{
+        const cards = document.querySelectorAll('.run-card:not(.service)');
+        const last = cards[cards.length - 1];
+        if (last) {{
+          last.style.opacity = '0.4';
+          last.style.pointerEvents = 'none';
+          if (!last.querySelector('.deploy-only-badge')) {{
+            const b = document.createElement('div');
+            b.className = 'deploy-only-badge';
+            b.style.cssText =
+              'font-size:11px;color:#b45309;margin-top:6px;font-weight:500;';
+            b.textContent = '⚠ 이 프로그램은 백그라운드 서비스라 ' +
+              '여기서 바로 실행할 수 없어요. 위 [🚀 배포하기]를 ' +
+              '눌러주세요.';
+            last.appendChild(b);
+          }}
+        }}
+      }}
+
+      // Append a friendly chat bubble explaining the situation +
+      // (if not yet deployed) wiring a one-click Deploy button.
+      const cta = document.createElement('div');
+      cta.className = 'turn agent';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.style.cssText =
+        'background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;' +
+        'font-size:13px;line-height:1.5;';
+      if (rec) {{
+        bubble.innerHTML =
+          '🟢 <b>이미 배포 중이에요.</b> 새 코드는 다음 배포부터 ' +
+          '반영돼요. 변경을 적용하려면 위 바에서 ⏹ 중단 후 다시 ' +
+          '🚀 배포하세요. ' +
+          '<a href="' + rec.url + '" target="_blank" rel="noopener" ' +
+          'style="color:#047857;font-weight:500">🔗 현재 배포 열기</a>';
+        cta.appendChild(bubble);
+        thread.appendChild(cta);
+        scrollBottom();
+        return;
+      }}
+      bubble.innerHTML =
+        '🌐 <b>이 프로그램은 백그라운드 서비스예요.</b> ' +
+        '한 번 배포하면 이 채팅을 닫아도 계속 살아 있어요. ' +
+        '준비됐으면 아래 버튼을 눌러주세요.';
+      const btn = document.createElement('button');
+      btn.textContent = '🚀 지금 배포하기';
+      btn.style.cssText =
+        'margin-top:10px;padding:6px 14px;background:#047857;color:#fff;' +
+        'border:0;border-radius:4px;cursor:pointer;font-size:13px;' +
+        'font-family:inherit;display:block;';
+      btn.onclick = async () => {{
+        btn.disabled = true;
+        btn.textContent = '배포 중…';
+        try {{
+          const r = await fetch('/authoring-deploy', {{method:'POST'}});
+          if (!r.ok) {{
+            btn.textContent = '🚀 지금 배포하기';
+            btn.disabled = false;
+            alert('배포 실패: ' + await r.text());
+            return;
+          }}
+          // Pull the fresh record so the guidance bubble has the URL.
+          let newRec = null;
+          try {{
+            const s = await fetch('/authoring-deploy/status');
+            if (s.ok) {{
+              const sb = await s.json();
+              newRec = sb && sb.deployment ? sb.deployment : null;
+            }}
+          }} catch (e) {{}}
+          await refreshDeployBar();
+          btn.remove();
+          appendDeployedGuidance(bubble, newRec);
+        }} catch (e) {{
+          btn.textContent = '🚀 지금 배포하기';
+          btn.disabled = false;
+          alert('배포 실패: ' + e.message);
+        }}
+      }};
+      bubble.appendChild(btn);
+      cta.appendChild(bubble);
+      thread.appendChild(cta);
+      scrollBottom();
+    }}
+
+    // Post-deploy chat guidance — replaces the deploy button inside
+    // the CTA bubble with a "click here to use" link + a short
+    // explanation that the process now lives independently.
+    function appendDeployedGuidance(bubble, rec) {{
+      const url = rec && rec.url ? rec.url : 'http://127.0.0.1:8080/';
+      const port = rec && rec.port ? rec.port : '?';
+      const pid = rec && rec.pid ? rec.pid : '?';
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'margin-top:10px;';
+      wrap.innerHTML =
+        '✅ <b>배포 완료.</b> 새 탭에서 열어 사용해보세요. ' +
+        '채팅을 닫아도 프로세스는 계속 돌아요. ' +
+        '<div style="margin-top:8px;font-size:11px;color:#6b7280;' +
+        'font-family:ui-monospace,Menlo,monospace">' +
+        'port ' + port + ' · pid ' + pid + '</div>';
+      const open = document.createElement('a');
+      open.href = url;
+      open.target = '_blank';
+      open.rel = 'noopener';
+      open.textContent = '🔗 ' + url + ' 열기';
+      open.style.cssText =
+        'display:inline-block;margin-top:8px;padding:6px 14px;' +
+        'background:#047857;color:#fff;border-radius:4px;' +
+        'text-decoration:none;font-size:13px;font-weight:500;';
+      wrap.appendChild(open);
+      const stopHint = document.createElement('div');
+      stopHint.style.cssText =
+        'margin-top:8px;font-size:11px;color:#9ca3af;';
+      stopHint.textContent = '중단은 위 바의 ⏹ 버튼.';
+      wrap.appendChild(stopHint);
+      bubble.appendChild(wrap);
+      scrollBottom();
+    }}
 
     // v1.54/v1.56: auto-fix + auto-re-run loop. All author models
     // are agentic (PRINCIPLES.md §4 extension). Field test showed
@@ -707,21 +880,29 @@ def render_authoring_page(
         }}
       }}, 250);
 
+      // Preserve the prior action across auto-fix so an evolve-server
+      // (ready_to_serve) doesn't get downgraded to one-shot ready_to_run
+      // just because the file had a syntax error. Field test 2026-04-26
+      // (qna_bot): Turn 2 was ready_to_serve, parse-error fix → ready_to_run
+      // → inline auto-run hung because evolve-server can't run inline.
+      const priorAction = (failed && failed.prior_action) || 'ready_to_run';
+      const actionTag = '`<action>' + priorAction + '</action>`';
       let errSummary;
       if (failed && failed.parse_error) {{
         errSummary =
           '방금 emit한 파일이 AIL 파서를 통과하지 못했어. 실행 자체가 ' +
           '안 돼. 에러 메시지를 한 줄로 진단한 뒤, `<file>`로 고친 ' +
-          '전체 소스를 다시 emit하고 `<action>ready_to_run</action>`을 ' +
-          '달아. (PRINCIPLES.md §4 자동 수정 루프 — 사용자 클릭 없이 ' +
-          '진행 중.) ' +
+          '전체 소스를 다시 emit하고 ' + actionTag + '을 ' +
+          '달아 (직전 턴과 동일한 action 유지). ' +
+          '(PRINCIPLES.md §4 자동 수정 루프 — 사용자 클릭 없이 진행 중.) ' +
           'Parse error: ' + (failed.parse_error || '') +
           (failed.file_path ? ' (file: ' + failed.file_path + ')' : '');
       }} else {{
         errSummary =
           '이전 실행이 에러로 끝났어. PRINCIPLES.md §4 — 저자 모델은 ' +
           '에이전틱. 원인부터 한 줄로 진단한 뒤, `<file>`로 고쳐진 ' +
-          '전체 소스를 emit하고 `<action>ready_to_run</action>`을 달아. ' +
+          '전체 소스를 emit하고 ' + actionTag + '을 달아 ' +
+          '(직전 턴과 동일한 action 유지). ' +
           '하드코딩 우회 금지 (search + filter 결과가 0이면 필터 조건을 ' +
           '고치거나 쿼리를 재설계하지, 결과를 상수로 박지 말 것). ' +
           'Error: ' + (failed.value || '') + ' | ' +
@@ -766,14 +947,31 @@ def render_authoring_page(
         ctaBubble.style.cssText =
           'background:#ecfdf5;border:1px solid #a7f3d0;' +
           'color:#065f46;font-size:12px;';
+        // Probe deployable BEFORE deciding to auto-run. An evolve-server
+        // can never be exercised via /authoring-run — its Flask listener
+        // would block the request thread and the user sees "실행 중…"
+        // forever. qna_bot field test 2026-04-26.
+        let isDeployable = false;
+        try {{
+          const dr = await fetch('/authoring-deploy/status');
+          if (dr.ok) {{
+            const db = await dr.json();
+            isDeployable = !!(db && db.deployable);
+          }}
+        }} catch (e) {{}}
         const shouldAutoRun =
           data.action === 'ready_to_run' &&
-          autoCycleCount < AUTO_CYCLE_MAX;
+          autoCycleCount < AUTO_CYCLE_MAX &&
+          !isDeployable;
         if (shouldAutoRun) {{
           autoCycleCount += 1;
           ctaBubble.innerHTML =
             '🔄 <b>자동 재실행 중</b> (' + autoCycleCount + '/' +
             AUTO_CYCLE_MAX + ') — 수정된 코드를 바로 돌려봐요…';
+        }} else if (isDeployable) {{
+          ctaBubble.innerHTML =
+            '✓ <b>자동 수정 완료.</b> 백그라운드 서비스라서 ' +
+            '여기서 바로 못 돌려요 — 위 [🚀 배포하기]를 눌러 실행하세요.';
         }} else {{
           ctaBubble.innerHTML =
             '✓ <b>자동 수정 완료.</b> ' +
@@ -867,6 +1065,7 @@ def render_authoring_page(
     }}
 
     function addAgent(reply, files, action) {{
+      lastAgentAction = action || lastAgentAction;
       const turn = document.createElement('div');
       turn.className = 'turn agent';
       const bubble = document.createElement('div');
@@ -988,6 +1187,19 @@ def render_authoring_page(
         addRunWidget(true);
       }}
 
+      // qna_bot field test 2026-04-26: when the agent emits a fresh
+      // .ail file the deployable status may flip (broken→ok, or new
+      // evolve-server arrived). The Deploy bar is only polled at page
+      // load + on its own button clicks, so without this the bar
+      // stays hidden forever after the FIRST emit cycle. Also, an
+      // evolve-server cannot run inline via /authoring-run (the Flask
+      // listener would block the request thread), so for deployable
+      // programs we suppress the inline Run widget and surface a
+      // chat-thread CTA pointing at the Deploy bar.
+      if (files && files.length) {{
+        maybeShowDeployCTA(action);
+      }}
+
       // Auto-fix when an emitted file fails the syntax check. Field
       // test 2026-04-26: agent emitted broken AIL and the run widget
       // showed a manual "ask agent to fix" button — but the same
@@ -1007,6 +1219,7 @@ def render_authoring_page(
           const failed = {{
             parse_error: meta.parse_error || '(no detail available)',
             file_path: brokenFiles[0].path,
+            prior_action: action || 'ready_to_run',
           }};
           // Fire after a paint tick so the rendered file tag + parse
           // banner are visible briefly before the auto-fix overlay
@@ -1437,6 +1650,7 @@ def render_authoring_page(
           // user click-click-click. Bounded at 3 retries per Run
           // click to prevent loops.
           if (data && data.ok === false) {{
+            data.prior_action = lastAgentAction || 'ready_to_run';
             await autoFixOnError(data, 0);
           }}
         }} catch (e) {{
