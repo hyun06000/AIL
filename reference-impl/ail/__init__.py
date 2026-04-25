@@ -15,6 +15,25 @@ def compile_source(source: str):
     return parse(source)
 
 
+class _NoCredentialsAdapter:
+    """Returned when no credentials are configured.
+
+    Pure-fn programs run fine — this adapter is never called.
+    Programs with `intent` will get a clear error at the point the LLM
+    is actually needed, not at program startup.
+    """
+    name = "no_credentials"
+
+    def invoke(self, **_kwargs):
+        raise RuntimeError(
+            "No model credentials found. Set one of: ANTHROPIC_API_KEY, "
+            "AIL_OLLAMA_MODEL, AIL_OPENAI_COMPAT_MODEL + AIL_OPENAI_COMPAT_BASE_URL, "
+            "or OPENAI_API_KEY. "
+            "For tests or offline use, pass adapter=MockAdapter() explicitly "
+            "or use `ail run --mock`."
+        )
+
+
 def _default_adapter() -> ModelAdapter:
     """Pick an adapter based on the environment.
 
@@ -46,13 +65,7 @@ def _default_adapter() -> ModelAdapter:
     if os.environ.get("AIL_OPENAI_COMPAT_MODEL") or os.environ.get("OPENAI_API_KEY"):
         from .runtime.openai_adapter import OpenAICompatibleAdapter
         return OpenAICompatibleAdapter()
-    raise RuntimeError(
-        "No model credentials found. Set one of: ANTHROPIC_API_KEY, "
-        "AIL_OLLAMA_MODEL, AIL_OPENAI_COMPAT_MODEL + AIL_OPENAI_COMPAT_BASE_URL, "
-        "or OPENAI_API_KEY. "
-        "For tests or offline use, pass adapter=MockAdapter() explicitly "
-        "or use `ail run --mock`."
-    )
+    return _NoCredentialsAdapter()
 
 
 def _load_dotenv_if_present() -> None:
