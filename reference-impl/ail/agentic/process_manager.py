@@ -79,9 +79,45 @@ def read_deployment(project) -> Optional[dict]:
         return None
 
 
+def _resolve_active_program_path(project):
+    """Resolve which `.ail` file to treat as the deploy target.
+
+    Precedence: `.ail/active_program` marker → `app.ail` → first
+    `.ail` file found in the project root. qna_bot field test
+    2026-04-26: when the agent emits a descriptively-named file
+    like `qna_server.ail` (default-named `app.ail` doesn't exist),
+    `_program_is_evolve_server` was reading an empty source and
+    returning False, breaking the whole Deploy CTA chain.
+    """
+    root = project.root
+    marker = project.state_dir / "active_program"
+    if marker.is_file():
+        try:
+            name = marker.read_text(encoding="utf-8").strip()
+        except OSError:
+            name = ""
+        if name and name.endswith(".ail") and "/" not in name and "\\" not in name:
+            candidate = root / name
+            if candidate.is_file():
+                return candidate
+    if project.app_path.is_file():
+        return project.app_path
+    try:
+        for p in sorted(root.iterdir()):
+            if p.is_file() and p.suffix == ".ail":
+                return p
+    except OSError:
+        pass
+    return None
+
+
 def _program_is_evolve_server(project) -> bool:
-    """Return True if the project's app.ail declares an evolve-server
-    block (an `evolve` decl with a `when request_received(req)` arm).
+    """Return True if the project's active program declares an
+    evolve-server block (an `evolve` decl with a
+    `when request_received(req)` arm).
+
+    Resolves the active program via marker → app.ail → any .ail in
+    root, so descriptively-named files (e.g. qna_server.ail) work.
 
     Evolve-server programs cannot be deployed via `ail serve` — that
     only serves view.html. They need `ail run`, which dispatches to
@@ -89,8 +125,11 @@ def _program_is_evolve_server(project) -> bool:
     the user's `when request_received` arm. Detecting this here lets
     Deploy auto-pick the right launcher.
     """
+    target = _resolve_active_program_path(project)
+    if target is None:
+        return False
     try:
-        source = project.read_app_source()
+        source = target.read_text(encoding="utf-8")
     except Exception:
         return False
     try:
@@ -137,7 +176,12 @@ def start_deployment(project) -> dict:
     is_evolve_server = _program_is_evolve_server(project)
     if is_evolve_server:
         mode = "evolve-server"
-        cmd = [sys.executable, "-m", "ail", "run", str(project.app_path)]
+        # Resolve the actual evolve-server file — was hard-coded
+        # `project.app_path` and silently picking app.ail even when the
+        # active program lived in qna_server.ail (qna_bot field test
+        # 2026-04-26).
+        target = _resolve_active_program_path(project) or project.app_path
+        cmd = [sys.executable, "-m", "ail", "run", str(target)]
         env = dict(os.environ)
         env["PORT"] = str(port)
         log_fh.write(
