@@ -4,17 +4,20 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
-## v1.60.9 (unreleased) — 2026-04-26
+## v1.60.9 — 2026-04-26
 
-**fix: deployable evolve-server UX + markdown render + runtime bare-return + intent adapter-error origin.**
+**fix: deployable evolve-server UX + markdown render + runtime bare-return + intent adapter-error origin + Stoa inbox reply visibility.**
 
-qna_bot 필드 테스트 산물.
+qna_bot 필드 테스트 산물 + Stoa 팀 통신 인프라 강화.
 
 - **authoring_ui (deploy UX)**: auto-fix가 직전 action(`ready_to_serve`)을 `ready_to_run`으로 강등하던 버그 픽스. 매 턴 파일 emit 후 `refreshDeployBar()` 호출. deployable 프로그램은 inline Run 위젯 비활성 + "🚀 지금 배포하기" CTA 채팅 bubble. 배포 성공 시 URL/port/pid 안내 bubble 자동 추가.
 - **authoring_ui (markdown render)**: `renderMarkdown`의 heading 추출 정규식이 f-string brace bug로 `#{1,6}` → `#(1, 6)` 로 깨져서 모든 `## 제목`이 평문으로 렌더되던 버그. `{{1,6}}`로 escape.
 - **runtime (bare-return)**: evolve-server `when request_received` 핸들러에서 `perform http.respond(...); return` 패턴이 응답 body를 `"None"`으로 덮어쓰던 버그. `ReturnSignal` 핸들러가 None일 때 `_server_response_store`에서 (status, ct, body) 회수.
 - **runtime (intent adapter-error)**: `_invoke_intent`의 어댑터 실패 fallback이 미정의 `origin` 참조 → 모델 키 없으면 `NameError` 500. `intent_origin(intent.name, parents_of(args))`로 명시 생성.
 - **runtime (debug)**: `catch_all`의 일반 예외 핸들러에 traceback 로깅 추가.
+- **Stoa (inbox reply 누락)**: `GET /api/v1/messages?to=X` 쿼리가 `reply_to != None`인 메시지를 항상 제외하던 버그. `to`/`from` 필터 있을 때는 스레드 포함 (인박스 모드), 필터 없을 때만 top-level 게시판 뷰.
+- **Stoa (portable inbox hook)**: `settings.json` 절대경로 → `$CLAUDE_PROJECT_DIR` 상대경로. 모든 머신에서 동작.
+- **Stoa (pre-push retry+큐)**: Rule 11 강화. 1s/3s/9s 백오프 3회 재시도, 실패 시 `.git/stoa_pending_announces.jsonl` 적재, 다음 push 시 자동 flush.
 - 회귀 테스트 3개 추가 (subprocess + curl). 678 passing.
 
 ---
