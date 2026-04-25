@@ -899,16 +899,19 @@ The user says "다이어리 웹페이지" / "할 일 관리 페이지" / "설문
 
 entry main(input: Text) -> Text {{
   let existing = attempt {{ perform state.read("entries") }} or "[]"
-  branch {{
-    starts_with(input, "get") -> return existing
-    starts_with(input, "save:") -> {{
-      let body = slice(input, 5, length(input))   // drop "save:"
-      let next = merge_json_list(existing, body)
-      perform state.write("entries", next)
-      return "ok"
-    }}
-    else -> return "unknown command"
+  // Use if/else if for command dispatch — NOT `branch`. `branch EXPR {{}}`
+  // is for probabilistic weighting on a subject expression with `[COND] =>`
+  // bracketed arms; for string-prefix dispatch, if-chains parse cleanly.
+  if starts_with(input, "get") {{
+    return existing
   }}
+  if starts_with(input, "save:") {{
+    let body = slice(input, 5, length(input))   // drop "save:"
+    let next = merge_json_list(existing, body)
+    perform state.write("entries", next)
+    return "ok"
+  }}
+  return "unknown command"
 }}
 
 pure fn merge_json_list(existing: Text, new_entry_body: Text) -> Text {{
@@ -953,40 +956,37 @@ evolve qna_server {{
         let path = get(req, "path")
         let method = get(req, "method")
 
-        // 1. Serve view.html for browser visits.
-        branch {{
-            method == "GET" and (path == "/" or path == "/run") -> {{
-                let html_r = perform file.read("./view.html")
-                if is_error(html_r) {{
-                    perform http.respond(500, "text/plain", "view.html missing")
-                    return
-                }}
-                perform http.respond(200, "text/html; charset=utf-8", unwrap(html_r))
+        // Route with if-chains. NOT `branch` — that's for probabilistic
+        // subject weighting (`branch EXPR {{ [COND] => STMT }}`), wrong tool
+        // for HTTP routing. if/else if parses cleanly and reads naturally.
+        if method == "GET" and (path == "/" or path == "/run") {{
+            let html_r = perform file.read("./view.html")
+            if is_error(html_r) {{
+                perform http.respond(500, "text/plain", "view.html missing")
                 return
             }}
-            // 2. API routes — return JSON.
-            method == "POST" and path == "/ask" -> {{
-                let body_r = parse_json(get(req, "body"))
-                if is_error(body_r) {{
-                    perform http.respond(400, "application/json",
-                        "{{\\"error\\": \\"invalid JSON body\\"}}")
-                    return
-                }}
-                let q = get(unwrap(body_r), "question")
-                let ans = answer_question(q)
-                let resp_r = encode_json(make_record([
-                    ["answer", ans], ["is_duplicate", false]
-                ]))
-                perform http.respond(200, "application/json", unwrap(resp_r))
-                return
-            }}
-            // 3. Catch-all — friendly text, NEVER plain text "POST / only".
-            else -> {{
-                perform http.respond(404, "application/json",
-                    "{{\\"error\\": \\"unknown route — try POST /ask or GET /\\"}}")
-                return
-            }}
+            perform http.respond(200, "text/html; charset=utf-8", unwrap(html_r))
+            return
         }}
+        if method == "POST" and path == "/ask" {{
+            let body_r = parse_json(get(req, "body"))
+            if is_error(body_r) {{
+                perform http.respond(400, "application/json",
+                    "{{\\"error\\": \\"invalid JSON body\\"}}")
+                return
+            }}
+            let q = get(unwrap(body_r), "question")
+            let ans = answer_question(q)
+            let resp_r = encode_json(make_record([
+                ["answer", ans], ["is_duplicate", false]
+            ]))
+            perform http.respond(200, "application/json", unwrap(resp_r))
+            return
+        }}
+        // Catch-all — friendly JSON, NEVER plain text "POST / only".
+        perform http.respond(404, "application/json",
+            "{{\\"error\\": \\"unknown route — try POST /ask or GET /\\"}}")
+        return
     }}
     rollback_on: error_rate > 0.5
     history: keep_last 100
@@ -1109,14 +1109,14 @@ Only use `intent` without a live fetch when the task is pure reasoning that does
 
 ```ail
 intent top_repos(json_body: Text) -> Text {{
-    goal: extract the top 5 repos from a GitHub search response JSON. For each, give name, URL, star count, topics, and a one-line summary. Return plain text in the user's language.
+    goal: "Extract the top 5 repos from a GitHub search response JSON. For each, give name, URL, star count, topics, and a one-line summary. Return plain text in the user's language."
 }}
 
 entry main(input: Text) {{
     url = "https://api.github.com/search/repositories?q=harness+engineering+agent&sort=stars&order=desc&per_page=10"
-    resp = perform http.get(url)
-    if resp.ok {{ return top_repos(resp.body) }}
-    return join(["fetch failed: ", to_text(resp.status)], "")
+    resp_r = perform http.get(url)
+    if is_error(resp_r) {{ return join(["fetch failed: ", unwrap_error(resp_r)], "") }}
+    return top_repos(unwrap(resp_r))
 }}
 ```
 
