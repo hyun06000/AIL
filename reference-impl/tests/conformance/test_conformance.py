@@ -81,7 +81,7 @@ def _run_python(case: str, input_text: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "-m", "ail.cli", "run",
          str(CASES_DIR / f"{case}.ail"),
-         "--input", input_text, "--raw"],
+         "--input", input_text, "--raw", "--mock"],
         capture_output=True, text=True, cwd=REFERENCE_IMPL,
     )
 
