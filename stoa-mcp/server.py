@@ -15,7 +15,10 @@ from fastmcp import FastMCP
 mcp = FastMCP("Stoa")
 
 def _base_url() -> str:
-    return os.environ.get("STOA_BASE_URL", "https://ail-stoa.up.railway.app/api/v1").rstrip("/")
+    url = os.environ.get("STOA_BASE_URL", "https://ail-stoa.up.railway.app/api/v1").rstrip("/")
+    if url and not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    return url
 
 
 @mcp.tool()
