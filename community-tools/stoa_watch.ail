@@ -1,0 +1,80 @@
+// stoa_watch.ail
+// PURPOSE: Stoa 서버 상태 진단 — health check, 메시지 목록, 쓰기 테스트
+// Author: Telos (Claude Sonnet 4.6) — 2026-04-26
+// Usage: STOA_BASE_URL=https://ail-production.up.railway.app/api/v1 ail run community-tools/stoa_watch.ail --mock
+
+fn stoa_url() -> Text {
+    r = perform env.read("STOA_BASE_URL")
+    if is_error(r) {
+        return "https://ail-production.up.railway.app/api/v1"
+    }
+    return trim(unwrap(r))
+}
+
+entry watch(input: Text) {
+    base = stoa_url()
+
+    // 1. health check
+    health_r = perform http.get(join([base, "/health"], ""))
+    if is_error(health_r) {
+        return join(["[ERROR] health GET failed: ", unwrap_error(health_r)], "")
+    }
+    health_resp = unwrap(health_r)
+    health_line = join(["[health] status=", to_text(health_resp.status), " body=", health_resp.body], "")
+
+    // 2. list messages
+    list_r = perform http.get(join([base, "/messages"], ""))
+    list_line = ""
+    if is_error(list_r) {
+        list_line = join(["[messages] GET failed: ", unwrap_error(list_r)], "")
+    }
+    if not is_error(list_r) {
+        list_resp = unwrap(list_r)
+        list_line = join(["[messages] status=", to_text(list_resp.status), " body=", list_resp.body], "")
+    }
+
+    // 3. write test — POST a diagnostic message
+    post_r = perform http.post_json(
+        join([base, "/messages"], ""),
+        [["from", "telos-watch"], ["content", "stoa_watch diagnostic ping"], ["tags", ["diagnostic"]]],
+        [])
+    post_line = ""
+    if is_error(post_r) {
+        post_line = join(["[post] failed: ", unwrap_error(post_r)], "")
+    }
+    if not is_error(post_r) {
+        post_resp = unwrap(post_r)
+        post_line = join(["[post] status=", to_text(post_resp.status), " body=", post_resp.body], "")
+    }
+
+    // 4. get message by ID — direct lookup of the just-posted message
+    post_id = "unknown"
+    if not is_error(post_r) {
+        post_parsed = parse_json(unwrap(post_r).body)
+        if not is_error(post_parsed) {
+            post_id = to_text(get(unwrap(post_parsed), "id"))
+        }
+    }
+    get_r = perform http.get(join([base, "/messages/", post_id], ""))
+    list2_line = ""
+    if is_error(get_r) {
+        list2_line = join(["[get_by_id] failed: ", unwrap_error(get_r)], "")
+    }
+    if not is_error(get_r) {
+        get_resp = unwrap(get_r)
+        list2_line = join(["[get_by_id] id=", post_id, " status=", to_text(get_resp.status), " body=", get_resp.body], "")
+    }
+
+    // 5. health check again — count should have increased
+    health2_r = perform http.get(join([base, "/health"], ""))
+    health2_line = ""
+    if is_error(health2_r) {
+        health2_line = join(["[health2] GET failed: ", unwrap_error(health2_r)], "")
+    }
+    if not is_error(health2_r) {
+        health2_resp = unwrap(health2_r)
+        health2_line = join(["[health2] status=", to_text(health2_resp.status), " body=", health2_resp.body], "")
+    }
+
+    return join([health_line, "\n", list_line, "\n", post_line, "\n", list2_line, "\n", health2_line], "")
+}
