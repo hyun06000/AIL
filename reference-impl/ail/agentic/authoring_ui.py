@@ -677,25 +677,26 @@ def render_authoring_page(
       await refreshDeployBar();
       if (!deployable) return;
 
-      // Disable the most recent inline Run widget — for an
-      // evolve-server it would block. Service-mode card (which
-      // already speaks the right language) we leave alone.
-      if (action === 'ready_to_run') {{
-        const cards = document.querySelectorAll('.run-card:not(.service)');
-        const last = cards[cards.length - 1];
-        if (last) {{
-          last.style.opacity = '0.4';
-          last.style.pointerEvents = 'none';
-          if (!last.querySelector('.deploy-only-badge')) {{
-            const b = document.createElement('div');
-            b.className = 'deploy-only-badge';
-            b.style.cssText =
-              'font-size:11px;color:#b45309;margin-top:6px;font-weight:500;';
-            b.textContent = '⚠ 이 프로그램은 백그라운드 서비스라 ' +
-              '여기서 바로 실행할 수 없어요. 위 [🚀 배포하기]를 ' +
-              '눌러주세요.';
-            last.appendChild(b);
-          }}
+      // Fade out BOTH the inline Run widget and any service-mode
+      // card. qna_bot field test 2026-04-26 (박상현 두 번째 자다 깬
+      // 피드백): service card의 "🚀 새 탭에서 실행" 링크와 deploy
+      // CTA가 동시에 노출돼서 모호. 둘 다 클릭 가능한 affordance인데
+      // service card의 /run 링크는 evolve-server에서는 잘못된 행동
+      // (chat-side /run 라우트는 evolve-server 리스너랑 무관). 진짜
+      // 행동은 [🚀 배포하기] 하나뿐 — 그것만 부각해야 한다.
+      const cards = document.querySelectorAll('.run-card');
+      const last = cards[cards.length - 1];
+      if (last) {{
+        last.style.opacity = '0.4';
+        last.style.pointerEvents = 'none';
+        if (!last.querySelector('.deploy-only-badge')) {{
+          const b = document.createElement('div');
+          b.className = 'deploy-only-badge';
+          b.style.cssText =
+            'font-size:11px;color:#b45309;margin-top:6px;font-weight:500;';
+          b.textContent = '⚠ 이 프로그램은 백그라운드 서비스예요. ' +
+            '위 [🚀 배포하기]를 누르면 새 탭에서 사용할 수 있어요.';
+          last.appendChild(b);
         }}
       }}
 
