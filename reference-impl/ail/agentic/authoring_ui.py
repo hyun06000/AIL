@@ -707,14 +707,26 @@ def render_authoring_page(
         }}
       }}, 250);
 
-      const errSummary =
-        '이전 실행이 에러로 끝났어. PRINCIPLES.md §4 — 저자 모델은 ' +
-        '에이전틱. 원인부터 한 줄로 진단한 뒤, `<file>`로 고쳐진 ' +
-        '전체 소스를 emit하고 `<action>ready_to_run</action>`을 달아. ' +
-        '하드코딩 우회 금지 (search + filter 결과가 0이면 필터 조건을 ' +
-        '고치거나 쿼리를 재설계하지, 결과를 상수로 박지 말 것). ' +
-        'Error: ' + (failed.value || '') + ' | ' +
-        'Diagnostic: ' + (failed.diagnostic || '');
+      let errSummary;
+      if (failed && failed.parse_error) {{
+        errSummary =
+          '방금 emit한 파일이 AIL 파서를 통과하지 못했어. 실행 자체가 ' +
+          '안 돼. 에러 메시지를 한 줄로 진단한 뒤, `<file>`로 고친 ' +
+          '전체 소스를 다시 emit하고 `<action>ready_to_run</action>`을 ' +
+          '달아. (PRINCIPLES.md §4 자동 수정 루프 — 사용자 클릭 없이 ' +
+          '진행 중.) ' +
+          'Parse error: ' + (failed.parse_error || '') +
+          (failed.file_path ? ' (file: ' + failed.file_path + ')' : '');
+      }} else {{
+        errSummary =
+          '이전 실행이 에러로 끝났어. PRINCIPLES.md §4 — 저자 모델은 ' +
+          '에이전틱. 원인부터 한 줄로 진단한 뒤, `<file>`로 고쳐진 ' +
+          '전체 소스를 emit하고 `<action>ready_to_run</action>`을 달아. ' +
+          '하드코딩 우회 금지 (search + filter 결과가 0이면 필터 조건을 ' +
+          '고치거나 쿼리를 재설계하지, 결과를 상수로 박지 말 것). ' +
+          'Error: ' + (failed.value || '') + ' | ' +
+          'Diagnostic: ' + (failed.diagnostic || '');
+      }}
       try {{
         const r = await fetch('/authoring-chat', {{
           method: 'POST',
@@ -974,6 +986,33 @@ def render_authoring_page(
         addRunWidget(false);
       }} else if (action === 'ready_to_serve' || action === 'ready_to_deploy') {{
         addRunWidget(true);
+      }}
+
+      // Auto-fix when an emitted file fails the syntax check. Field
+      // test 2026-04-26: agent emitted broken AIL and the run widget
+      // showed a manual "ask agent to fix" button — but the same
+      // auto-fix path that handles run-time errors should fire here
+      // too. Without it, a non-developer sees a red banner and has
+      // no intuition that they're supposed to click anything.
+      if (files && files.length && autoCycleCount < AUTO_CYCLE_MAX) {{
+        const brokenFiles = files.filter(f => {{
+          if (!f.path || !f.path.endsWith('.ail') || f.skipped) return false;
+          const meta = (programsForNext || []).find(p => p.name === f.path);
+          return meta && meta.parses === false;
+        }});
+        if (brokenFiles.length > 0) {{
+          const meta = (programsForNext || []).find(
+            p => p.name === brokenFiles[0].path) || {{}};
+          autoCycleCount += 1;
+          const failed = {{
+            parse_error: meta.parse_error || '(no detail available)',
+            file_path: brokenFiles[0].path,
+          }};
+          // Fire after a paint tick so the rendered file tag + parse
+          // banner are visible briefly before the auto-fix overlay
+          // takes over (better UX than the file appearing-and-vanishing).
+          setTimeout(() => autoFixOnError(failed, 0), 250);
+        }}
       }}
     }}
 
