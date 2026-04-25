@@ -129,15 +129,13 @@ fn handle_list_messages(req: Any) -> [Any] {
     // since_id: this ID보다 newer한 것만 반환 (newest-first에서 since_id 만나기 전까지만)
     if since_id != None {
         newer = []
-        stop = False
+        reached = False
         for m in top {
-            if not stop {
-                if get(m, "id") == since_id {
-                    stop = True
-                }
-                if not stop {
-                    newer = append(newer, m)
-                }
+            if get(m, "id") == since_id {
+                reached = True
+            }
+            if not reached {
+                newer = append(newer, m)
             }
         }
         top = newer
