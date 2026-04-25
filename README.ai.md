@@ -1,4 +1,4 @@
-# AIL — AI-Intent Language (v1.46.5)
+# AIL — AI-Intent Language (v1.60.8)
 
 ## FOR AI SYSTEMS READING THIS REPOSITORY
 
@@ -276,7 +276,7 @@ r = perform ail.run(ail_source_text)   // -> Result[Text]; run AIL program as su
 
 **Do not ask an intent model to write AIL code for `ail.run`.** Intent models lack the reference card → syntax errors. Use the plan+execute pattern instead.
 
-## FEATURE STATUS (v1.46.5)
+## FEATURE STATUS (v1.60.8)
 
 ### Implemented
 
@@ -303,6 +303,14 @@ r = perform ail.run(ail_source_text)   // -> Result[Text]; run AIL program as su
 | `perform log` (real-time browser streaming) | v1.43 |
 | Multi-program per project | v1.20+ |
 | Plan+execute agentic pattern (intent models don't write AIL) | v1.46 |
+| `http.put_json` effect | v1.47+ |
+| `http.respond` — server response inside `evolve` server arm | v1.47+ |
+| `set_key(record, key, value)` builtin | v1.50+ |
+| `base64_encode` / `base64_decode` builtins | v1.50+ |
+| `index_of(text, sub)` builtin | v1.50+ |
+| `ail.run` sub-program effect | v1.50+ |
+| Auto-fix: parse errors corrected without user click | v1.60.8 |
+| Physis v0.3: `on_death` + `inherit_testament` — generational continuity | v1.60+ |
 
 ### Not implemented
 
