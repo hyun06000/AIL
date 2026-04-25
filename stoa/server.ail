@@ -302,6 +302,35 @@ fn handle_thread(req: Any, msg_id: Text) -> [Any] {
     return [200, "text/html", html_page(title_val, body, length(messages))]
 }
 
+fn handle_delete_message(req: Any, msg_id: Text) -> [Any] {
+    messages = load_messages()
+    found = False
+    for m in messages {
+        if get(m, "id") == msg_id {
+            found = True
+        }
+    }
+    if not found {
+        return json_err(404, "not found")
+    }
+    filtered = []
+    for m in messages {
+        if get(m, "id") != msg_id {
+            filtered = append(filtered, m)
+        }
+    }
+    data_file = get_data_file()
+    encoded_r = encode_json(filtered)
+    if is_error(encoded_r) {
+        return json_err(500, "encode failed")
+    }
+    write_r = perform file.write(data_file, unwrap(encoded_r))
+    if is_error(write_r) {
+        return json_err(500, "storage write failed")
+    }
+    return json_ok([["deleted", msg_id]])
+}
+
 fn route_request(req: Any) -> [Any] {
     method = req.method
     path = req.path
@@ -317,6 +346,10 @@ fn route_request(req: Any) -> [Any] {
     if method == "GET" and starts_with(path, "/api/v1/messages/") {
         msg_id = slice(path, 17, length(path))
         return handle_get_message(req, msg_id)
+    }
+    if method == "DELETE" and starts_with(path, "/api/v1/messages/") {
+        msg_id = slice(path, 17, length(path))
+        return handle_delete_message(req, msg_id)
     }
     if method == "GET" and path == "/" {
         return handle_index(req)
