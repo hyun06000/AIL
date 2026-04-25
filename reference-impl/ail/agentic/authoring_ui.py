@@ -983,6 +983,14 @@ def render_authoring_page(
         cta.appendChild(ctaBubble);
         thread.appendChild(cta);
         refreshFileTree();
+        // qna_bot field test 2026-04-26 (박상현 자다 깬 피드백): auto-fix
+        // 후에도 정상 턴과 똑같이 deploy CTA가 떠야 함. 안 그러면 deployable
+        // 프로그램이 inline Run 위젯만 보여주고 "배포할지 실행할지 모호한
+        // 화면"이 나와. normal turn flow의 maybeShowDeployCTA 호출이
+        // auto-fix 경로에서도 동일 동작해야 한다.
+        if (data.files && data.files.length) {{
+          maybeShowDeployCTA(data.action);
+        }}
         scrollBottom();
         if (shouldAutoRun) {{
           // Small delay so the user can see the fix reply + CTA
