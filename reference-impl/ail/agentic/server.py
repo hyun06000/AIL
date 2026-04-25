@@ -470,13 +470,19 @@ def _make_handler(project: Project, serve_only: bool = False):
                              "/authoring-deploy-status"):
                 # Liveness probe + stale cleanup lives in
                 # process_manager.read_deployment. See PRINCIPLES §5-bis.
-                from .process_manager import read_deployment
+                # Also reports whether the project has any deployable
+                # program (evolve-server) so the UI can hide the
+                # Deploy bar for single-shot projects — Deploy is only
+                # meaningful for long-running independent agents.
+                from .process_manager import read_deployment, _program_is_evolve_server
                 import json as _json
                 rec = read_deployment(project)
-                if rec is None:
-                    self._send_text(404, "no deployment\n")
-                    return
-                payload = _json.dumps(rec).encode("utf-8")
+                deployable = _program_is_evolve_server(project)
+                payload_obj = {
+                    "deployment": rec,
+                    "deployable": deployable,
+                }
+                payload = _json.dumps(payload_obj).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))

@@ -861,10 +861,12 @@ def test_admin_stop_endpoint_only_in_serve_mode(tmp_path):
         assert e.code == 404
 
 
-def test_deploy_status_endpoint_returns_404_when_no_deployment(tmp_path):
-    """GET /authoring-deploy/status returns 404 if no deployment.json
-    exists yet. The UI relies on this to flip to the 'not deployed'
-    state on page load."""
+def test_deploy_status_endpoint_reports_deployable_and_deployment(tmp_path):
+    """GET /authoring-deploy/status returns 200 with
+    {deployment: rec|null, deployable: bool}. `deployable` is True
+    iff the project has an evolve-server program — the only kind
+    where Deploy makes sense. UI hides the Deploy bar when both are
+    falsy (single-shot project, no live deployment)."""
     proj = Project.init(tmp_path / "p")
     proj.write_app_source("entry main(input: Text) { return input }")
     port = _free_port()
@@ -876,12 +878,43 @@ def test_deploy_status_endpoint_returns_404_when_no_deployment(tmp_path):
     t.start()
     _wait_listening(port)
 
-    try:
-        urllib.request.urlopen(
-            f"http://127.0.0.1:{port}/authoring-deploy/status", timeout=2)
-        assert False, "expected 404"
-    except urllib.error.HTTPError as e:
-        assert e.code == 404
+    resp = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/authoring-deploy/status", timeout=2)
+    assert resp.status == 200
+    body = json.loads(resp.read().decode("utf-8"))
+    assert body == {"deployment": None, "deployable": False}
+
+
+def test_deploy_status_reports_deployable_for_evolve_server(tmp_path):
+    """Project with an evolve-server program → deployable: True even
+    when nothing is currently deployed. UI uses this to keep the
+    Deploy bar visible (with the 🚀 button)."""
+    proj = Project.init(tmp_path / "p")
+    proj.write_app_source(
+        "evolve s {\n"
+        "    listen: 8080\n"
+        "    metric: error_rate\n"
+        "    when request_received(req) {\n"
+        "        perform http.respond(200, \"text/plain\", \"ok\")\n"
+        "    }\n"
+        "    rollback_on: error_rate > 0.5\n"
+        "    history: keep_last 100\n"
+        "}\n"
+    )
+    port = _free_port()
+    t = threading.Thread(
+        target=serve_project,
+        kwargs={"project": proj, "port": port, "watch": False},
+        daemon=True,
+    )
+    t.start()
+    _wait_listening(port)
+
+    resp = urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/authoring-deploy/status", timeout=2)
+    body = json.loads(resp.read().decode("utf-8"))
+    assert body["deployable"] is True
+    assert body["deployment"] is None
 
 
 def test_serve_only_mode_redirects_root_and_disables_chat(tmp_path):
