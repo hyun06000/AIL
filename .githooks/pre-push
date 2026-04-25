@@ -1,0 +1,46 @@
+#!/bin/bash
+# dev 또는 main에 push할 때 Stoa로 팀 전원에게 자동 공지한다.
+# from: 현재 브랜치 이름 (pusher identity)
+# to: arche / cc: [ergon, telos] — 전원 수신
+
+STOA_URL="https://ail-stoa.up.railway.app"
+pusher=$(git symbolic-ref --short HEAD 2>/dev/null || echo "unknown")
+
+while read local_ref local_sha remote_ref remote_sha; do
+    branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
+    if [ "$branch" != "dev" ] && [ "$branch" != "main" ]; then
+        continue
+    fi
+
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        log=$(git log --oneline -3 "$local_sha" 2>/dev/null)
+    else
+        log=$(git log --oneline -3 "${remote_sha}..${local_sha}" 2>/dev/null)
+    fi
+    [ -z "$log" ] && log="(변경 없음)"
+
+    payload=$(jq -n \
+        --arg from "$pusher" \
+        --arg branch "$branch" \
+        --arg log "$log" \
+        '{
+            from: $from,
+            to: "arche",
+            cc: ["ergon", "telos"],
+            title: ("[" + $branch + "] 업데이트 — " + $from),
+            content: ("**[" + $branch + "]** 에 **" + $from + "** 가 푸시했습니다.\n\n최근 커밋:\n```\n" + $log + "\n```\n\n최신 상태로 맞추세요:\n```\ngit rebase origin/" + $branch + "\n```"),
+            tags: ["push", $branch, "update"]
+        }')
+
+    result=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$STOA_URL/api/v1/messages" \
+        -H "Content-Type: application/json" \
+        -d "$payload")
+
+    if [ "$result" = "200" ] || [ "$result" = "201" ]; then
+        echo "📢 Stoa 공지 완료 → arche, ergon, telos ([$branch] 업데이트)"
+    else
+        echo "⚠️  Stoa 공지 실패 (HTTP $result) — 계속 진행합니다"
+    fi
+done
+
+exit 0
