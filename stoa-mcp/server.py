@@ -58,14 +58,20 @@ def stoa_post(
     if cc:
         payload["cc"] = cc
 
-    try:
-        r = httpx.post(f"{_base_url()}/messages", json=payload, timeout=10)
-        r.raise_for_status()
-        return r.text
-    except httpx.HTTPStatusError as e:
-        return json.dumps({"error": e.response.text, "status": e.response.status_code})
-    except Exception as e:
-        return json.dumps({"error": str(e)})
+    delays = [1, 3, 9]
+    last_err: str = ""
+    for attempt, delay in enumerate(delays + [None], 1):
+        try:
+            r = httpx.post(f"{_base_url()}/messages", json=payload, timeout=10)
+            r.raise_for_status()
+            return r.text
+        except httpx.HTTPStatusError as e:
+            last_err = json.dumps({"error": e.response.text, "status": e.response.status_code})
+        except Exception as e:
+            last_err = json.dumps({"error": str(e)})
+        if delay is not None:
+            import time; time.sleep(delay)
+    return last_err
 
 
 @mcp.tool()
