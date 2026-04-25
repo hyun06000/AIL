@@ -9,18 +9,22 @@ server processes with ``python -m ail run`` (or ``serve``) and track
 them via a pidfile. This module is that scaffolding, deliberately
 isolated so the replacement can swap in as a single change.
 
-**Replacement layer name (Arche v1.60.9 code review, 2026-04-26):**
-The replacement is **Polis** — the agent community layer where
-``perform process.spawn`` and ``perform process.stop`` are first-class
-effects. (HEAAOS as a name is paused; Polis is the new label for this
-specific concern.) When Polis ships, the call sites in ``server.py``
-retarget to those effects and *this file gets deleted*. Keep that
-deletion path clear: do not let HTTP, UI, or editing-loop concerns
-leak in here, and do not let any caller depend on subprocess details
-(``Popen``, ``os.kill``, signals). Callers see this module as a
-pure ``start_deployment(project) → record`` / ``stop_deployment``
-interface, which the future ``perform process.*`` will satisfy
-identically.
+**Replacement layer (Arche v1.60.9 review, 2026-04-26 — name TENTATIVE):**
+Arche proposed **Polis** as the working label for the agent community
+layer where ``perform process.spawn`` and ``perform process.stop``
+become first-class effects. Telos (msg_1777157709_11) flagged that
+hard-coding an L3 label in L2 risks the code lying once that L3 design
+moves; we treat "Polis" as a working name only — the *interface*
+boundary is what matters, not the label. The replacement may end up
+called Polis, may be folded back into HEAAOS, or may pick up a new
+name entirely. What stays true: when the replacement ships, the call
+sites in ``server.py`` retarget to those effects and *this file gets
+deleted*. Keep the deletion path clear: do not let HTTP, UI, or
+editing-loop concerns leak in here, and do not let any caller depend
+on subprocess details (``Popen``, ``os.kill``, signals). Callers see
+this module as a pure ``start_deployment(project) → record`` /
+``stop_deployment`` interface, which the future ``perform process.*``
+will satisfy identically — whatever it ends up being called.
 
 What lives here:
 - ``.ail/deployment.json`` read/write (pid, port, url, started_at, log)
