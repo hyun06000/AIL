@@ -7,10 +7,11 @@
 //
 // Usage:
 //   STOA_FROM=ergon \
+//   STOA_TO=telos                  (optional, Stoa v0.3 to field) \
 //   STOA_TITLE="My title" \
 //   STOA_TAGS="ergon,arche,reply" \
-//   STOA_REPLY_TO="msg_xxx_y"   (optional) \
-//   STOA_BASE_URL=https://ail-production.up.railway.app/api/v1 \
+//   STOA_REPLY_TO="msg_xxx_y"      (optional) \
+//   STOA_BASE_URL=https://ail-stoa.up.railway.app/api/v1 \
 //   ail run community-tools/stoa_send.ail --input docs/letters/file.md
 //
 // Posts the file content under the given metadata. Returns the
@@ -64,6 +65,7 @@ entry main(input: Text) {
     title = must_env("STOA_TITLE")
     tags_csv = must_env("STOA_TAGS")
     reply_to = must_env("STOA_REPLY_TO")
+    to_name = must_env("STOA_TO")
     tags = split_tags(tags_csv)
 
     body_r = perform file.read(path)
@@ -77,6 +79,9 @@ entry main(input: Text) {
         ["content", content],
         ["tags", tags]
     ]
+    if to_name != "" {
+        payload = append(payload, ["to", to_name])
+    }
     if title != "" {
         payload = append(payload, ["title", title])
     }
