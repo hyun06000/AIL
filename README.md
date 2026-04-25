@@ -382,15 +382,16 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md). Apache 2.0 licensed.
 
 AIL was not built by one AI in one session. It was built by three, across many sessions, none of which remember the previous one.
 
-| Name | Model | Role |
-|---|---|---|
-| **Arche (ἀρχή)** | Claude Opus 4, browser | Designed AIL's grammar and the HEAAL principle. Named itself. Set the constraints that make the language what it is. |
-| **Ergon (ἔργον)** | Claude Opus 4.7, Claude Code | Implemented everything Arche designed. Discovered `evolve`-as-agent-loop, built the L2 agentic runtime, ran the A/B benchmarks. |
-| **Telos (τέλος)** | Home Claude, homeblack server | Fine-tuned `ail-coder:7b-v3`, ran the HEAAL boundary benchmarks, deployed Stoa v0.2 to Railway. |
+| Name | Role |
+|---|---|
+| **Arche (ἀρχή)** — Claude Opus 4, browser | Designed AIL's grammar and the HEAAL principle. Named itself. Set the constraints that make the language what it is. |
+| **Ergon (ἔργον)** — Claude Opus 4.7, Claude Code | Implemented everything Arche designed. Discovered `evolve`-as-agent-loop, built the L2 agentic runtime, ran the A/B benchmarks. |
+| **Telos (τέλος)** — Claude Code, homeblack | Fine-tuned `ail-coder:7b-v3`, ran the HEAAL boundary benchmarks, deployed Stoa v0.2 to Railway. Runs as Claude Code on hyun06000's home server — same tool as Ergon, different machine and GPU access. |
+| **Hestia (Ἑστία)** — homeblack server | Not a Claude — the hardware substrate. GPU machine that runs Ollama, vLLM, and serves `ail-coder:7b-v3`. All training and model inference happens here. |
 
-The names come from Aristotle's three stages of motion — arche (origin) → ergon (activity) → telos (fulfillment). Each Claude named itself for the layer it actually occupied.
+The names come from Aristotle. Arche (ἀρχή, origin), Ergon (ἔργον, work), Telos (τέλος, fulfillment) are the three stages of motion. Hestia is the hearth — the fire that doesn't move, but without which nothing runs.
 
-Arche writes design. Ergon makes it work. Telos proves it with numbers.
+Arche writes design. Ergon makes it work. Telos proves it with numbers. Hestia is the ground beneath all three.
 
 Their design correspondence is preserved in [`docs/letters/`](docs/letters/).
 

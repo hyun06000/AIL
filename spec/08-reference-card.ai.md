@@ -162,6 +162,58 @@ evolve INTENT_NAME {
 
 REQUIRED fields: metric, when + action, rollback_on, history. Missing any = compile error.
 
+### evolve-as-server (v0.2)
+
+```ail
+evolve SERVER_NAME {
+    listen: PORT_NUMBER
+    metric: error_rate
+    when request_received(req) {
+        result = route_request(req)
+        perform http.respond(get(result, 0), get(result, 1), get(result, 2))
+    }
+    rollback_on: error_rate > 0.5
+    history: keep_last 100
+}
+```
+
+`when request_received(req)` is an event arm — fires on each HTTP request.
+`rollback_on` triggers self-termination (§9). `metric` and `when` fields
+are still present; `rollback_on` + `history` remain required.
+
+### Physis — generational evolution (v0.3)
+
+When `rollback_on` fires, the runtime looks for a `pure fn on_death` by
+name convention. If found, it calls `on_death(reason, history)` before
+shutting down, writes the Testament to `.ail/physis/<name>/current.json`,
+and re-execs the process (the next generation). The code stays frozen;
+parameters evolve across lifetimes.
+
+```ail
+// Called automatically by the runtime on rollback_on fire. No new keyword.
+pure fn on_death(reason: Text, history: [Any]) -> Any {
+    // summarise history, produce a testament record
+    return [
+        ["observed_patterns", ["high error rate on /api"]],
+        ["advice", "check upstream dependencies"],
+        ["params", [["retry_budget", 5]]]
+    ]
+}
+
+// Called at entry startup to read the predecessor's testament.
+entry main(input: Text) {
+    t_r = perform inherit_testament()   // Result[Testament]
+    if is_ok(t_r) {
+        t = unwrap(t_r)
+        // t.generation, t.advice, t.params, t.observed_patterns ...
+    }
+    // is_error(t_r) means genesis — no predecessor.
+}
+```
+
+Safety damping: if the process dies in < 30 s, the successor is NOT
+auto-spawned (operator intervention required). Max 1000 generations.
+
 ## STATEMENTS
 
 ```
@@ -627,6 +679,21 @@ Built-in effects:
     (3) DuckDuckGo HTML — always tried; no key needed.
     Confidence reflects backend quality: Google 0.9, SearXNG 0.8,
     DuckDuckGo 0.7. Returns Result-error only when all backends fail.
+  - `inherit_testament() -> Result[Testament]` — **Physis (v0.3)**.
+    Read the testament written by the predecessor generation of this
+    evolve block. Returns `error("no testament — genesis")` for the
+    first generation (no predecessor). Returns `ok(testament)` for
+    generation N+1, where `testament` is a Record with fields:
+    `generation`, `predecessor_id`, `reason`, `observed_patterns`,
+    `advice`, `params`, `born_at`, `died_at`, `lifetime_s`.
+    Blocked inside `pure fn` (it is I/O). Call at entry startup:
+    `t_r = perform inherit_testament(); if is_ok(t_r) { ... }`.
+    The `error` case means genesis — handle it without treating it as
+    a failure. Testament is written automatically when `rollback_on`
+    fires and the program defines `pure fn on_death(reason, history)`.
+  - `http.respond(status: Number, content_type: Text, body: Text)` —
+    server response from inside an `evolve` server arm. Used with
+    `evolve ... when request_received(req) { ... }` blocks.
   - `log(message: Any)` — stderr, returns nothing
   - `human_ask(question: Text) -> Text`
 

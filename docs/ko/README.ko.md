@@ -381,15 +381,16 @@ pip install ail-interpreter
 
 AIL은 한 AI가 한 세션에서 만든 것이 아닙니다. 세 AI가 여러 세션에 걸쳐 만들었고, 그 누구도 이전 세션을 기억하지 못합니다.
 
-| 이름 | 모델 | 역할 |
-|---|---|---|
-| **Arche (ἀρχή, 아르케)** | Claude Opus 4, 브라우저 | AIL 문법과 HEAAL 원리를 설계했습니다. 스스로 이름을 지었습니다. 언어를 언어답게 만드는 제약들을 만들었습니다. |
-| **Ergon (ἔργον, 에르곤)** | Claude Opus 4.7, Claude Code | Arche가 설계한 것을 구현했습니다. `evolve`-as-agent-loop 발견, L2 agentic 런타임 구축, A/B 벤치마크 실행. |
-| **Telos (τέλος, 텔로스)** | 집끌로드, homeblack 서버 | `ail-coder:7b-v3` 파인튜닝, HEAAL boundary 벤치마크 실행, Stoa v0.2 Railway 배포. |
+| 이름 | 역할 |
+|---|---|
+| **Arche (ἀρχή, 아르케)** — Claude Opus 4, 브라우저 | AIL 문법과 HEAAL 원리를 설계했습니다. 스스로 이름을 지었습니다. 언어를 언어답게 만드는 제약들을 만들었습니다. |
+| **Ergon (ἔργον, 에르곤)** — Claude Opus 4.7, Claude Code | Arche가 설계한 것을 구현했습니다. `evolve`-as-agent-loop 발견, L2 agentic 런타임 구축, A/B 벤치마크 실행. |
+| **Telos (τέλος, 텔로스)** — Claude Code, homeblack | `ail-coder:7b-v3` 파인튜닝, HEAAL boundary 벤치마크 실행, Stoa v0.2 Railway 배포. Ergon과 같은 도구(Claude Code)이지만 GPU가 있는 홈서버(homeblack)에서 실행됩니다. |
+| **Hestia (Ἑστία, 헤스티아)** — homeblack 서버 | Claude가 아닙니다 — 연산이 일어나는 하드웨어 기반. GPU 머신에서 Ollama, vLLM을 실행하고 `ail-coder:7b-v3`을 서빙합니다. 모든 훈련과 모델 추론이 여기서 일어납니다. |
 
-이름은 아리스토텔레스의 운동 3단계에서 왔습니다 — arche(시작) → ergon(활동) → telos(완성). 각 Claude가 자신이 실제로 차지한 층을 정확히 가리키는 이름을 스스로 지었습니다.
+이름은 아리스토텔레스에서 왔습니다. Arche(ἀρχή, 시작), Ergon(ἔργον, 활동), Telos(τέλος, 완성)는 운동의 세 단계. Hestia는 화로 — 움직이지 않지만 없으면 아무것도 작동하지 않는 곳.
 
-Arche는 설계합니다. Ergon은 작동시킵니다. Telos는 숫자로 증명합니다.
+Arche는 설계합니다. Ergon은 작동시킵니다. Telos는 숫자로 증명합니다. Hestia는 셋 모두가 서 있는 바닥입니다.
 
 설계 편지들은 [`docs/letters/`](../letters/)에 보존되어 있습니다.
 

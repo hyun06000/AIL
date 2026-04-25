@@ -514,13 +514,15 @@ class Executor:
             return self._search_web(args, kwargs, origin)
         if name == "ail.run":
             return self._ail_run(args, kwargs, origin)
+        if name == "inherit_testament":
+            return self._inherit_testament(args, kwargs, origin)
         raise RuntimeError(
             f"unknown effect: {name} "
             f"(supported: human_ask, log, http.get, http.post, "
             f"http.post_json, http.put_json, http.graphql, file.read, file.write, "
             f"clock.now, state.read, state.write, state.has, "
             f"state.delete, schedule.every, env.read, human.approve, "
-            f"search.web, ail.run, or a declared effect)"
+            f"search.web, ail.run, inherit_testament, or a declared effect)"
         )
 
     # --- clock effect (L2 case study 2026-04-23 — fills the "hardcoded
@@ -945,16 +947,65 @@ class Executor:
             self._server_response_store.value = (int(raw[0]), "text/plain", str(raw[1]))
         return ConfidentValue(True, 1.0, origin=origin)
 
+    # --- Physis: generational evolution helpers ---
+
+    def _physis_dir(self, evolve_name: str) -> "Path":
+        root = self.project_root or Path(".")
+        d = root / ".ail" / "physis" / evolve_name
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def _physis_generation(self, evolve_name: str) -> int:
+        """Return the current generation number (1 = genesis, N+1 after N deaths)."""
+        import json as _json
+        counter_path = self._physis_dir(evolve_name) / "_counter.json"
+        if counter_path.exists():
+            try:
+                return _json.loads(counter_path.read_text())["generation"]
+            except Exception:
+                pass
+        return 1
+
+    def _physis_write_testament(self, evolve_name: str, testament: dict) -> None:
+        """Write testament dict to .ail/physis/<name>/gen<N>.json and update current.json."""
+        import json as _json
+        d = self._physis_dir(evolve_name)
+        gen = testament.get("generation", 1)
+        gen_path = d / f"gen{gen}.json"
+        gen_path.write_text(_json.dumps(testament, indent=2, ensure_ascii=False))
+        current_path = d / "current.json"
+        current_path.write_text(_json.dumps(testament, indent=2, ensure_ascii=False))
+        counter_path = d / "_counter.json"
+        counter_path.write_text(_json.dumps({"generation": gen + 1}))
+
+    def _physis_read_current(self, evolve_name: str) -> dict | None:
+        """Read current.json if it exists, else None (genesis)."""
+        import json as _json
+        p = self._physis_dir(evolve_name) / "current.json"
+        if p.exists():
+            try:
+                return _json.loads(p.read_text())
+            except Exception:
+                pass
+        return None
+
     def run_server(self, evolve_decl) -> None:
         """Run a server evolve block.
 
         Starts a Flask HTTP server. Each request is dispatched to the
         `when request_received(req) { ... }` handler block. The block
         calls `perform http.respond(status, content_type, body)` to send
-        the response. `rollback_on` is checked after each request — if it
-        fires, the server shuts down (§9: self-termination as a safety property).
+        the response. `rollback_on` is checked after each request.
+
+        Physis (v0.3): if `rollback_on` fires and a `pure fn on_death` is
+        defined in the program, the runtime calls it with (reason, history),
+        writes the returned Testament to .ail/physis/<name>/, and re-execs
+        the server process so the next generation can inherit_testament().
+        Safety damping: if the process dies in < PHYSIS_MIN_LIFETIME_S (30s),
+        the successor is NOT spawned — operator intervention required.
         """
         import threading
+        import time as _time
         import os as _os
         from flask import Flask, request as flask_request, Response
 
@@ -970,19 +1021,25 @@ class Executor:
         if port_env:
             port_val = int(port_env)
 
-        # Ensure state.read/write work — use .ail/state next to the server file
+        # Ensure state.read/write work
         if not _os.environ.get("AIL_STATE_DIR"):
             state_dir = (self.project_root or Path(".")) / ".ail" / "state"
             state_dir.mkdir(parents=True, exist_ok=True)
             _os.environ["AIL_STATE_DIR"] = str(state_dir)
 
+        # Physis: expose active evolve name for inherit_testament effect
+        self._active_evolve_name = evolve_decl.intent_name
+        born_at = _time.time()
+        generation = self._physis_generation(evolve_decl.intent_name)
+        history_limit = getattr(evolve_decl, "history_keep", 100) or 100
+
         self._server_response_store = threading.local()
         self._server_request_count = 0
         self._server_error_count = 0
         self._server_lock = threading.Lock()
+        self._server_history: list[dict] = []   # ring buffer of request events
 
         flask_app = Flask(__name__)
-
         executor_ref = self
 
         @flask_app.route("/", defaults={"path": ""}, methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
@@ -1016,6 +1073,18 @@ class Executor:
                     executor_ref._server_request_count += 1
                     executor_ref._server_error_count += 1
 
+                # Append to history ring buffer
+                event = {
+                    "ts": _time.time(),
+                    "method": req_dict["method"],
+                    "path": req_dict["path"],
+                    "status": int(status),
+                    "is_error": int(status) >= 500,
+                }
+                executor_ref._server_history.append(event)
+                if len(executor_ref._server_history) > history_limit:
+                    executor_ref._server_history = executor_ref._server_history[-history_limit:]
+
                 # Check rollback_on after each request
                 n = executor_ref._server_request_count
                 err = executor_ref._server_error_count
@@ -1026,18 +1095,118 @@ class Executor:
                     rb = executor_ref._eval_expr(evolve_decl.rollback_on, rb_scope)
                     if _truthy(rb):
                         import logging
+                        reason = (f"rollback_on fired: error_rate={error_rate:.2f} "
+                                  f"({err}/{n})")
+                        logging.warning(f"[physis] {reason}. Gen {generation} dying.")
+
+                        # --- Physis §1: call on_death if defined ---
+                        died_at = _time.time()
+                        lifetime_s = died_at - born_at
+                        testament = None
+                        if "on_death" in executor_ref.fns:
+                            try:
+                                history_cv = ConfidentValue(
+                                    executor_ref._server_history, 1.0)
+                                result_cv = executor_ref._invoke_fn(
+                                    executor_ref.fns["on_death"],
+                                    [ConfidentValue(reason, 1.0), history_cv],
+                                    {},
+                                )
+                                raw = result_cv.value
+                                if isinstance(raw, dict):
+                                    testament = raw
+                                elif isinstance(raw, list):
+                                    # AIL record [[k,v],...] → dict
+                                    testament = dict(raw)
+                            except Exception as e:
+                                logging.warning(f"[physis] on_death failed: {e}")
+
+                        if testament is None:
+                            testament = {}
+
+                        # Inject required fields the on_death fn may have omitted
+                        testament.setdefault("generation", generation)
+                        testament.setdefault("predecessor_id", str(_os.getpid()))
+                        testament.setdefault("reason", reason)
+                        testament.setdefault("born_at", born_at)
+                        testament["died_at"] = died_at
+                        testament["lifetime_s"] = lifetime_s
+
+                        # Enforce testament size limits
+                        if "observed_patterns" in testament:
+                            op = testament["observed_patterns"]
+                            if isinstance(op, list):
+                                testament["observed_patterns"] = [
+                                    str(p)[:200] for p in op[:20]
+                                ]
+                        if "advice" in testament and isinstance(testament["advice"], str):
+                            testament["advice"] = testament["advice"][:2000]
+
+                        # --- Physis §2: persist testament ---
+                        executor_ref._physis_write_testament(
+                            evolve_decl.intent_name, testament)
                         logging.warning(
-                            f"[stoa] rollback_on fired: error_rate={error_rate:.2f} "
-                            f"({err}/{n}). Shutting down."
+                            f"[physis] testament written: gen {generation}, "
+                            f"lifetime {lifetime_s:.1f}s"
                         )
-                        import os, signal
-                        os.kill(os.getpid(), signal.SIGTERM)
+
+                        # --- Physis §3: spawn successor if safe ---
+                        PHYSIS_MIN_LIFETIME_S = 30
+                        MAX_GENERATION = 1000
+                        if generation >= MAX_GENERATION:
+                            logging.warning(
+                                f"[physis] max_generation ({MAX_GENERATION}) reached. "
+                                "Lineage exhausted — operator review required."
+                            )
+                            import os, signal
+                            os.kill(os.getpid(), signal.SIGTERM)
+                        elif lifetime_s < PHYSIS_MIN_LIFETIME_S:
+                            logging.warning(
+                                f"[physis] rapid death ({lifetime_s:.1f}s < "
+                                f"{PHYSIS_MIN_LIFETIME_S}s). Auto-spawn suspended — "
+                                "operator intervention required."
+                            )
+                            import os, signal
+                            os.kill(os.getpid(), signal.SIGTERM)
+                        else:
+                            # Re-exec this process — next generation reads inherit_testament()
+                            logging.warning(
+                                f"[physis] spawning gen {generation + 1}.")
+                            import sys
+                            _os.execv(sys.executable, [sys.executable] + sys.argv)
                 except Exception:
                     pass
 
             return Response(body, status=status, mimetype=ct)
 
         flask_app.run(host="0.0.0.0", port=port_val)
+
+    # --- Physis: inherit_testament effect ---
+
+    def _inherit_testament(self, args: list[ConfidentValue],
+                           kwargs: dict[str, ConfidentValue],
+                           origin: Origin) -> ConfidentValue:
+        """Read the testament left by the predecessor generation, if any.
+
+        Signature: perform inherit_testament() -> Result[Testament]
+        Genesis (no predecessor): returns error("no testament — genesis").
+        Subsequent generations: returns ok(testament_dict).
+        Blocked inside pure fn bodies by the purity checker (it's I/O).
+        """
+        evolve_name = getattr(self, "_active_evolve_name", None)
+        if evolve_name is None:
+            # Not running inside a server evolve — infer from fns or return genesis
+            t = None
+        else:
+            t = self._physis_read_current(evolve_name)
+
+        if t is None:
+            return ConfidentValue(
+                {"_result": True, "ok": False, "error": "no testament — genesis"},
+                1.0, origin=origin)
+        return ConfidentValue(
+            {"_result": True, "ok": True, "value": t},
+            1.0, origin=origin)
 
     # --- effect implementations ---
 
