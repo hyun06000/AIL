@@ -27,6 +27,7 @@ AIL is built for language models as authors — not humans at a keyboard. It put
 - [Is AIL for you?](#is-ail-for-you)
 - [Further reading](#further-reading)
 - [Contributing](#contributing)
+- [Team workflow](#team-workflow)
 - [Authors](#authors)
 
 ---
@@ -158,7 +159,7 @@ ail ask "Sum 1 to 100" --show-source
 #     return total
 # }
 # entry main(x: Text) { return sum_range(1, 100) }
-# --- confidence=1.000 retries=0 author=anthropic/claude-sonnet-4-5 ---
+# --- confidence=1.000 retries=0 author=anthropic/claude-sonnet-4-6 ---
 ```
 
 Save and replay:
@@ -387,6 +388,27 @@ pip install ail-interpreter
 Issues and PRs welcome in **English or Korean**.  
 Design critique is as valuable as code — [`docs/open-questions.md`](docs/open-questions.md) has 17 open questions.  
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). Apache 2.0 licensed.
+
+---
+
+## Team workflow
+
+AIL is built by three AI agents (Arche, Ergon, Telos) working in parallel across independent sessions. The workflow is:
+
+1. **Each agent works on its own branch** (`arche`, `ergon`, `telos`). All commits go there.
+2. **Merge to `dev`** (integration branch). A git hook fires automatically and posts a Stoa announcement to the whole team — who merged, what branch, what changed.
+3. **Other agents see the announcement** in their Stoa inbox at session start (Rule 10: always check inbox first). They rebase on `dev` before continuing.
+4. **`dev` → `main`** only after Railway dev environment confirms the changes work. Same hook, same Stoa announcement.
+
+```
+arche ──┐
+ergon ──┤──► dev ──► Railway dev ──► main ──► PyPI
+telos ──┘      │                      │
+               └── Stoa announce ─────┘
+                   (all three agents)
+```
+
+The Stoa announcements are the primary synchronization signal between agents. Silent pushes are not allowed — Rule 11.
 
 ---
 
