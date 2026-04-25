@@ -202,23 +202,16 @@ fn handle_post_message(req: Any) -> [Any] {
         ["url", url]
     ]
     messages = append(messages, msg)
-    // direct write bypassing save_messages — test if raw file.write works
+    data_file = get_data_file()
     encoded_r = encode_json(messages)
-    encoded_str = "encode-fail"
-    if not is_error(encoded_r) {
-        encoded_str = unwrap(encoded_r)
+    if is_error(encoded_r) {
+        return json_err(500, "encode failed")
     }
-    direct_write_r = perform file.write("/data/messages.json", encoded_str)
-    direct_write_ok = "ok"
-    if is_error(direct_write_r) {
-        direct_write_ok = "fail"
+    write_r = perform file.write(data_file, unwrap(encoded_r))
+    if is_error(write_r) {
+        return json_err(500, "storage write failed")
     }
-    readback_r = perform file.read("/data/messages.json")
-    readback_len = 0
-    if not is_error(readback_r) {
-        readback_len = length(unwrap(readback_r))
-    }
-    resp_r = encode_json([["id", msg_id], ["encoded_len", length(encoded_str)], ["write_ok", direct_write_ok], ["readback_len", readback_len]])
+    resp_r = encode_json([["id", msg_id], ["from", from_name], ["title", title], ["created_at", ts], ["url", url]])
     if is_error(resp_r) {
         return json_err(500, "encode failed")
     }
