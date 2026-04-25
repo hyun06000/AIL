@@ -528,18 +528,33 @@ def render_authoring_page(
     renderTokenWidget();
     document.body.appendChild(tokenWidget);
 
-    // Deploy bar — PRINCIPLES.md §5. Chat-side button for background
-    // "ail serve" subprocess management. Poll status on load, refresh
-    // after deploy/stop actions. The UI mirrors what a non-developer
-    // expects: no terminal, just two buttons that flip state.
+    // Deploy bar — PRINCIPLES.md §5. Only relevant for projects that
+    // declare a long-running independent agent (evolve-server). For
+    // single-shot programs (dispatcher + view.html, scripts) the
+    // chat's Run widget is the sufficient surface — Deploy here just
+    // adds noise + false affordance. Field test 2026-04-26: a Deploy
+    // button pinned at top makes non-devs feel "I should press this"
+    // even when there's nothing to deploy.
     const deployBar = document.getElementById('deploy-bar');
+    const deployHelp = document.getElementById('deploy-help');
     async function refreshDeployBar() {{
       deployBar.innerHTML = '';
       let rec = null;
+      let deployable = false;
       try {{
         const r = await fetch('/authoring-deploy/status');
-        if (r.ok) rec = await r.json();
+        if (r.ok) {{
+          const body = await r.json();
+          rec = body && body.deployment ? body.deployment : null;
+          deployable = !!(body && body.deployable);
+        }}
       }} catch (e) {{ /* ignore */ }}
+      // Hide bar entirely if not deployable AND not deployed —
+      // single-shot project, no live process. No reason to show.
+      const shouldShow = !!rec || deployable;
+      deployBar.style.display = shouldShow ? 'flex' : 'none';
+      if (deployHelp) deployHelp.style.display = shouldShow ? '' : 'none';
+      if (!shouldShow) return;
       if (rec) {{
         const badge = document.createElement('span');
         badge.textContent = '🟢 배포 중';
