@@ -4,7 +4,8 @@
 # to: arche / cc: [ergon, telos] — 전원 수신
 
 STOA_URL="https://ail-stoa.up.railway.app"
-pusher=$(git symbolic-ref --short HEAD 2>/dev/null || echo "unknown")
+# ail.identity: 세션 시작 시 `git config ail.identity <name>` 으로 설정
+pusher=$(git config ail.identity 2>/dev/null || echo "unknown")
 
 while read local_ref local_sha remote_ref remote_sha; do
     branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
