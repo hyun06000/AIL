@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 # language itself; the canonical spec lives in spec/ and the Go
 # runtime lives in go-impl/. Import name and CLI both remain `ail`.
 name = "ail-interpreter"
-version = "1.60.4"
+version = "1.60.5"
 description = "AIL — Python interpreter for the AI-Intent Language. fn (pure) + intent (LLM) declarations, provenance, purity contracts, confidence-aware match, calibration"
 readme = "README.md"
 requires-python = ">=3.10"
