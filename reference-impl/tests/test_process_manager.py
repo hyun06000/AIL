@@ -88,3 +88,55 @@ def test_missing_app_is_not_server(tmp_path):
     (tmp_path / ".ail").mkdir(exist_ok=True)
     proj = Project.at(tmp_path)
     assert _program_is_evolve_server(proj) is False
+
+
+def test_descriptively_named_evolve_server_via_active_program_marker(tmp_path):
+    """qna_bot field test 2026-04-26: agent emits qna_server.ail
+    (no app.ail) and writes the active_program marker pointing at
+    it. Without resolving via the marker, _program_is_evolve_server
+    reads an empty source from app_path and returns False, which
+    breaks the Deploy CTA chain (service card never fades, no
+    'Deploy' button appears, user sees both 'Run' and 'Open in new
+    tab' simultaneously and gets confused)."""
+    (tmp_path / "INTENT.md").write_text("# test\n")
+    (tmp_path / ".ail").mkdir()
+    (tmp_path / ".ail" / "active_program").write_text("qna_server.ail")
+    src = textwrap.dedent("""
+    intent answer(q: Text) -> Text { goal: "answer" }
+    evolve qna_server {
+        listen: 8090
+        metric: error_rate
+        when request_received(req) {
+            perform http.respond(200, "text/plain", "hi")
+        }
+        rollback_on: error_rate > 0.99
+        history: keep_last 10
+    }
+    entry main(input: Text) { return "ok" }
+    """)
+    (tmp_path / "qna_server.ail").write_text(src)
+    proj = Project.at(tmp_path)
+    assert _program_is_evolve_server(proj) is True
+
+
+def test_descriptively_named_evolve_server_no_marker_fallback(tmp_path):
+    """When the marker is missing AND app.ail is missing, the
+    detector should still find the evolve-server by scanning the
+    project root for any `.ail` file."""
+    (tmp_path / "INTENT.md").write_text("# test\n")
+    (tmp_path / ".ail").mkdir()
+    src = textwrap.dedent("""
+    evolve s {
+        listen: 8090
+        metric: error_rate
+        when request_received(req) {
+            perform http.respond(200, "text/plain", "hi")
+        }
+        rollback_on: error_rate > 0.99
+        history: keep_last 10
+    }
+    entry main(input: Text) { return "ok" }
+    """)
+    (tmp_path / "qna_server.ail").write_text(src)
+    proj = Project.at(tmp_path)
+    assert _program_is_evolve_server(proj) is True
