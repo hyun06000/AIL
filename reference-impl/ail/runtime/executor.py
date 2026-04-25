@@ -1064,11 +1064,31 @@ class Executor:
                 except ReturnSignal as rs:
                     v = rs.value.value
                     if isinstance(v, list) and len(v) == 3:
+                        # `return [status, content_type, body]` — explicit triple
                         status, ct, body = int(v[0]), str(v[1]), str(v[2])
+                    elif v is None:
+                        # Bare `return` — user finished the handler with a side
+                        # effect (perform http.respond) and used `return` only
+                        # to exit early. Honor whatever the response_store has.
+                        # qna_bot field test 2026-04-26: every route was sending
+                        # the literal string "None" because this branch fell
+                        # through to str(None).
+                        status, ct, body = executor_ref._server_response_store.value
                     else:
+                        # `return some_value` — treat as plain text body.
                         status, ct, body = 200, "text/plain", str(v)
                     executor_ref._server_request_count += 1
+                    if int(status) >= 500:
+                        executor_ref._server_error_count += 1
                 except Exception as e:
+                    # Log the full traceback — without it, "name 'origin' is
+                    # not defined" came back as a json error string with no
+                    # way to find the broken line. qna_bot field test
+                    # 2026-04-26 found the buggy `_invoke_intent` adapter
+                    # fallback only after we wired this in.
+                    import traceback as _tb, logging as _lg
+                    _lg.warning("[server] request handler raised:\n%s",
+                                _tb.format_exc())
                     status, ct, body = 500, "application/json", f'{{"error": "{e}"}}'
                     executor_ref._server_request_count += 1
                     executor_ref._server_error_count += 1
@@ -2853,7 +2873,10 @@ class Executor:
                 err_msg = f"INTENT_ERROR: {type(adapter_exc).__name__}: {adapter_exc}"
                 self.trace.record("intent_adapter_error",
                                   intent=intent.name, error=err_msg)
-                return ConfidentValue(err_msg, 0.0, origin=origin)
+                return ConfidentValue(
+                    err_msg, 0.0,
+                    origin=intent_origin(intent.name, parents_of(args)),
+                )
 
             raw = response.raw or {}
             self.trace.record("model_response",
