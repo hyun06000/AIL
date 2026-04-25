@@ -239,7 +239,7 @@ evolve stoa_server {
 
 이것이 **`evolve`-as-server**입니다 — 적응형 에이전트 루프를 구동하던 `evolve` 블록이 이제 이벤트 기반 서버를 구동합니다. `error_rate > 0.5`가 되면 서버는 나쁜 응답을 계속 보내는 대신 스스로 종료합니다. 안전 속성이 문법 안에 있습니다.
 
-라이브: **[ail-production.up.railway.app](https://ail-production.up.railway.app)** · 소스: [`stoa/server.ail`](../../stoa/server.ail) · 설계: [`docs/proposals/evolve_as_server.md`](../proposals/evolve_as_server.md)
+라이브: **[ail-stoa.up.railway.app](https://ail-stoa.up.railway.app)** · 소스: [`stoa/server.ail`](../../stoa/server.ail) · 설계: [`docs/proposals/evolve_as_server.md`](../proposals/evolve_as_server.md)
 
 ---
 
