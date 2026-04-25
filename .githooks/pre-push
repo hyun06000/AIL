@@ -1,11 +1,84 @@
 #!/bin/bash
-# dev 또는 main에 push할 때 Stoa로 팀 전원에게 자동 공지한다.
-# from: 현재 브랜치 이름 (pusher identity)
-# to: arche / cc: [ergon, telos] — 전원 수신
+# dev/main push 시 Stoa 팀 공지 (Rule 11).
+#
+# 정책:
+# - Stoa 공지는 가장 중요한 팀 신호. 무조건 도착해야 한다.
+# - 1차 시도 실패 시 3회 재시도 (1s/3s/9s 지수 백오프).
+# - 그래도 실패하면 .git/stoa_pending_announces.jsonl 에 적재.
+# - 다음 pre-push 호출(성공이든 실패든) 진입 시 먼저 큐를 flush.
+# - 큐 적재가 일어나도 push 자체는 막지 않음 (개발 흐름 보호).
+#   대신 화면에 명확한 경고 + 큐 위치를 출력해서 사용자가 인지하게 한다.
 
 STOA_URL="https://ail-stoa.up.railway.app"
-# ail.identity: 세션 시작 시 `git config ail.identity <name>` 으로 설정
+PROJECT_DIR=$(git rev-parse --show-toplevel)
+QUEUE="$PROJECT_DIR/.git/stoa_pending_announces.jsonl"
+
 pusher=$(git config ail.identity 2>/dev/null || echo "unknown")
+
+# Try to POST one payload to Stoa with bounded retries.
+# Returns 0 on success, 1 on persistent failure.
+post_with_retry() {
+    local payload="$1"
+    local label="$2"
+    local delays=(1 3 9)
+    local attempt=1
+    local max=$((${#delays[@]} + 1))
+    while [ "$attempt" -le "$max" ]; do
+        local code
+        code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$STOA_URL/api/v1/messages" \
+            -H "Content-Type: application/json" \
+            --max-time 8 \
+            -d "$payload" 2>/dev/null)
+        if [ "$code" = "200" ] || [ "$code" = "201" ]; then
+            if [ "$attempt" -gt 1 ]; then
+                echo "📢 Stoa 공지 성공 ($label, attempt $attempt/$max)"
+            else
+                echo "📢 Stoa 공지 완료 → arche, ergon, telos ($label)"
+            fi
+            return 0
+        fi
+        if [ "$attempt" -lt "$max" ]; then
+            local d="${delays[$((attempt - 1))]}"
+            echo "⏳ Stoa 공지 재시도 ($label, HTTP $code, ${d}s 대기) [$attempt/$max]"
+            sleep "$d"
+        else
+            echo "⚠️  Stoa 공지 실패 ($label, HTTP $code, $max회 시도) — 큐로 적재"
+        fi
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
+# Flush any payloads queued by previous failed pushes. Each line is a
+# self-contained JSON payload. Successfully flushed lines are removed
+# atomically (write surviving lines to a tmp file then mv).
+flush_queue() {
+    [ ! -s "$QUEUE" ] || true
+    if [ ! -s "$QUEUE" ]; then
+        return 0
+    fi
+    echo "📤 Stoa 큐 flush — $(wc -l < "$QUEUE" | tr -d ' ') 건 대기 중"
+    local tmp="$QUEUE.tmp"
+    : > "$tmp"
+    local survived=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ -z "$line" ] && continue
+        if post_with_retry "$line" "큐 항목"; then
+            : # drop on success
+        else
+            echo "$line" >> "$tmp"
+            survived=$((survived + 1))
+        fi
+    done < "$QUEUE"
+    mv "$tmp" "$QUEUE"
+    [ "$survived" -gt 0 ] && echo "ℹ️  큐에 $survived 건 남음 — 다음 push에서 재시도"
+    [ "$survived" -eq 0 ] && rm -f "$QUEUE"
+    return 0
+}
+
+# Always try the queue first so pending announces don't pile up
+# silently across multiple pushes.
+flush_queue
 
 while read local_ref local_sha remote_ref remote_sha; do
     branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
@@ -33,14 +106,14 @@ while read local_ref local_sha remote_ref remote_sha; do
             tags: ["push", $branch, "update"]
         }')
 
-    result=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$STOA_URL/api/v1/messages" \
-        -H "Content-Type: application/json" \
-        -d "$payload")
-
-    if [ "$result" = "200" ] || [ "$result" = "201" ]; then
-        echo "📢 Stoa 공지 완료 → arche, ergon, telos ([$branch] 업데이트)"
-    else
-        echo "⚠️  Stoa 공지 실패 (HTTP $result) — 계속 진행합니다"
+    if ! post_with_retry "$payload" "[$branch] $pusher"; then
+        # Append the payload as a single JSON line to the queue.
+        # `jq -c` collapses to a single line so each queue entry is
+        # exactly one record.
+        echo "$payload" | jq -c . >> "$QUEUE"
+        echo "💾 큐 적재: $QUEUE"
+        echo "    다음 dev/main push 진입 시 자동으로 재전송됩니다."
+        echo "    수동 flush: 빈 push (\`git push\`) 한 번 더 해도 됨."
     fi
 done
 
