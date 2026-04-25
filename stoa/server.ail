@@ -202,7 +202,10 @@ fn handle_post_message(req: Any) -> [Any] {
         ["url", url]
     ]
     messages = append(messages, msg)
-    save_messages(messages)
+    save_r = save_messages(messages)
+    if is_error(save_r) {
+        return json_err(500, "storage write failed")
+    }
     resp_r = encode_json([["id", msg_id], ["from", from_name], ["title", title], ["created_at", ts], ["url", url]])
     if is_error(resp_r) {
         return json_err(500, "encode failed")
