@@ -3,27 +3,37 @@
 PRINCIPLES.md §5-bis (Arche, 2026-04-24): OS primitives (subprocess,
 pid, SIGTERM) are not HEAAL-native. A proper lifecycle for an AIL
 agent is expressed in the grammar — e.g. ``evolve my_agent { metric:
-health; when health < 0.1 { shutdown } }`` — and handled by L3
-HEAAOS. Until L3 exists, we spawn independent server processes with
-``python -m ail serve`` and track them via a pidfile. This module is
-that scaffolding, deliberately isolated so L3 can replace it in one
-swap.
+health; when health < 0.1 { shutdown } }`` — and handled by the
+agent-community layer. Until that layer exists, we spawn independent
+server processes with ``python -m ail run`` (or ``serve``) and track
+them via a pidfile. This module is that scaffolding, deliberately
+isolated so the replacement can swap in as a single change.
+
+**Replacement layer name (Arche v1.60.9 code review, 2026-04-26):**
+The replacement is **Polis** — the agent community layer where
+``perform process.spawn`` and ``perform process.stop`` are first-class
+effects. (HEAAOS as a name is paused; Polis is the new label for this
+specific concern.) When Polis ships, the call sites in ``server.py``
+retarget to those effects and *this file gets deleted*. Keep that
+deletion path clear: do not let HTTP, UI, or editing-loop concerns
+leak in here, and do not let any caller depend on subprocess details
+(``Popen``, ``os.kill``, signals). Callers see this module as a
+pure ``start_deployment(project) → record`` / ``stop_deployment``
+interface, which the future ``perform process.*`` will satisfy
+identically.
 
 What lives here:
 - ``.ail/deployment.json`` read/write (pid, port, url, started_at, log)
 - Port allocation (scan 8090..8199 for a free TCP port)
-- Subprocess spawn via ``python -m ail serve`` with ``start_new_session``
-  so the child survives the parent exit
+- Subprocess spawn via ``python -m ail run|serve`` with
+  ``start_new_session`` so the child survives the parent exit
 - Signal-based stop (SIGTERM)
 - Liveness probe (``os.kill(pid, 0)``) with stale-record cleanup
 
 What must NOT leak in here:
 - HTTP handler code (that stays in server.py and calls into these fns)
 - Anything tied to the chat UI or the editing loop
-
-When L3 arrives, this file should be deletable. The callers in
-server.py should retarget to a ``perform agent.spawn`` / ``perform
-agent.stop`` equivalent and the OS plumbing disappears.
+- Any caller-visible reliance on ``Popen`` / ``os.kill`` semantics
 """
 from __future__ import annotations
 

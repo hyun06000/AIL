@@ -92,7 +92,15 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--trace", action="store_true", help="Print execution trace")
     p_run.add_argument("--trace-json", action="store_true", help="Print trace as JSON")
     p_run.add_argument("--mock", action="store_true",
-                       help="Use mock adapter (no model calls)")
+                       help="Use mock adapter (no model calls). Equivalent to --adapter mock.")
+    p_run.add_argument(
+        "--adapter", default=None,
+        choices=["ollama", "anthropic", "openai", "mock"],
+        help="Force a specific model adapter. Overrides env-var auto-detection. "
+             "Without this flag, the env order is: AIL_OLLAMA_MODEL → "
+             "ANTHROPIC_API_KEY → AIL_OPENAI_COMPAT_MODEL/OPENAI_API_KEY. "
+             "The chosen adapter + model is printed to stderr at startup so "
+             "you always know which model is running.")
     p_run.add_argument("--raw", action="store_true",
                        help="Print only the return value on a single line "
                             "(no header, no confidence, no trace). "
@@ -307,7 +315,27 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "run":
-        adapter = MockAdapter() if args.mock else None
+        # Adapter selection precedence (Arche v1.60.9 review action item):
+        # explicit --mock → mock; explicit --adapter NAME → that adapter;
+        # otherwise env-var auto-detect via _default_adapter().
+        # Whichever wins, print the choice to stderr so the user is never
+        # left wondering which model is running.
+        from . import adapter_from_name, describe_adapter, _resolve_adapter_name_from_env
+        if args.mock:
+            adapter = MockAdapter()
+        elif getattr(args, "adapter", None):
+            adapter = adapter_from_name(args.adapter)
+        else:
+            adapter = None  # run() will call _default_adapter()
+        chosen = adapter
+        if chosen is None:
+            # Replicate the env resolution so we can print the same choice
+            # the runtime is about to make.
+            from . import _default_adapter
+            chosen = _default_adapter()
+            adapter = chosen
+        print(f"[ail: using {describe_adapter(chosen)} adapter]",
+              file=sys.stderr)
         try:
             result, trace = run(args.file, input=args.input, adapter=adapter)
         except Exception as e:
