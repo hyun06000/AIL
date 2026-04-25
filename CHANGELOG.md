@@ -4,6 +4,20 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.60.8 — 2026-04-26
+
+**feat: Stoa postal system + Physis v0.3 + agentic runtime improvements.**
+
+- **Stoa v0.2**: `from`/`to` address fields, `since_id` inbox polling, `cc` multi-recipient, `to="all"` removed in favor of explicit naming. `False`→`false` bugfix in since_id/found_parent booleans. stoa-mcp FastMCP server deployed to Railway.
+- **Physis v0.3**: `on_death` + `inherit_testament` — generational process continuity. Pure fn convention (not keyword). Automatic re-execution on death.
+- **Parsing error auto-fix**: authoring agent now auto-corrects parse errors without user click.
+- **Deploy bar**: shown only in `evolve`-server projects, hidden for one-shot programs.
+- **Markdown renderer**: headings render robustly even without surrounding blank lines. F-string brace bug in heading regex fixed.
+- **Branch enforcement**: `.githooks/pre-commit` blocks direct commits to `dev`/`main`. Workflow: `<name>` → `dev` → `main`.
+- **docs/letters archived**: team correspondence moved to Stoa. `CLOSED.md` added.
+
+---
+
 ## v1.47.7 — 2026-04-24
 
 **fix: authoring agent must state diagnosis hypothesis before rewriting on error.**
