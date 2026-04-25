@@ -79,11 +79,51 @@ def read_deployment(project) -> Optional[dict]:
         return None
 
 
+def _program_is_evolve_server(project) -> bool:
+    """Return True if the project's app.ail declares an evolve-server
+    block (an `evolve` decl with a `when request_received(req)` arm).
+
+    Evolve-server programs cannot be deployed via `ail serve` — that
+    only serves view.html. They need `ail run`, which dispatches to
+    `executor.run_server()` and starts the Flask listener defined by
+    the user's `when request_received` arm. Detecting this here lets
+    Deploy auto-pick the right launcher.
+    """
+    try:
+        source = project.read_app_source()
+    except Exception:
+        return False
+    try:
+        from ..parser import parse
+        from ..parser.ast import EvolveDecl
+        program = parse(source)
+        for decl in program.declarations:
+            if isinstance(decl, EvolveDecl) and decl.server_arm is not None:
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def start_deployment(project) -> dict:
-    """Spawn `python -m ail serve <project>` on a free port and
-    record the resulting {pid, port, url, started_at, log}. Returns
-    the existing record unchanged if a live deployment already exists.
-    Raises RuntimeError if no port is available."""
+    """Spawn the project on a free port and record the resulting
+    {pid, port, url, started_at, log, mode}. Returns the existing record
+    unchanged if a live deployment already exists. Raises RuntimeError
+    if no port is available.
+
+    Two launch modes:
+    - **evolve-server** — app.ail has `evolve { when request_received }`.
+      Spawn `python -m ail run app.ail` with `PORT=<picked>` so the
+      executor's `run_server()` Flask listener binds the picked port.
+      The user's `request_received` arm handles every route, including
+      serving view.html for `/` and `/run`.
+    - **single-shot / view.html** — anything else. Spawn `python -m ail
+      serve` which serves view.html and the `/run` widget. The program
+      runs once per Run click, not as a persistent listener.
+
+    Mode is auto-detected from app.ail's grammar so the agent can write
+    either kind without the user having to choose a launcher.
+    """
     existing = read_deployment(project)
     if existing is not None:
         return existing
@@ -93,30 +133,50 @@ def start_deployment(project) -> dict:
             f"no free port in {_PORT_SCAN_START}-{_PORT_SCAN_END - 1}")
     log_path = _log_path(project)
     log_fh = open(log_path, "a", encoding="utf-8")
-    log_fh.write(
-        f"\n=== ail serve start {time.strftime('%Y-%m-%dT%H:%M:%S')} "
-        f"port={port} ===\n")
+
+    is_evolve_server = _program_is_evolve_server(project)
+    if is_evolve_server:
+        mode = "evolve-server"
+        cmd = [sys.executable, "-m", "ail", "run", str(project.app_path)]
+        env = dict(os.environ)
+        env["PORT"] = str(port)
+        log_fh.write(
+            f"\n=== ail run (evolve-server) start "
+            f"{time.strftime('%Y-%m-%dT%H:%M:%S')} port={port} ===\n")
+    else:
+        mode = "single-shot"
+        cmd = [sys.executable, "-m", "ail", "serve",
+               str(project.root), "--port", str(port), "--host", "127.0.0.1"]
+        env = None
+        log_fh.write(
+            f"\n=== ail serve start {time.strftime('%Y-%m-%dT%H:%M:%S')} "
+            f"port={port} ===\n")
     log_fh.flush()
     proc = subprocess.Popen(
-        [sys.executable, "-m", "ail", "serve",
-         str(project.root), "--port", str(port), "--host", "127.0.0.1"],
+        cmd,
         stdout=log_fh, stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
         start_new_session=True,
+        env=env,
+        cwd=str(project.root),
     )
     record = {
         "pid": proc.pid,
         "port": port,
-        "url": f"http://127.0.0.1:{port}/run",
+        "url": f"http://127.0.0.1:{port}/",
         "started_at": time.time(),
         "log": str(log_path),
+        "mode": mode,
     }
+    if mode == "single-shot":
+        record["url"] = f"http://127.0.0.1:{port}/run"
     _deployment_path(project).write_text(
         json.dumps(record, ensure_ascii=False))
     project.append_ledger({
         "event": "deployment_start",
         "pid": proc.pid,
         "port": port,
+        "mode": mode,
     })
     return record
 

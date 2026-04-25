@@ -1,0 +1,90 @@
+"""Tests for `agentic.process_manager` deployment-mode detection.
+
+The Deploy button must auto-pick the right launcher: `ail run` for
+evolve-server programs (so the user's `when request_received` arm
+actually starts), and `ail serve` for everything else (single-shot
+programs that present a `view.html` + `/run` widget).
+
+A non-developer should never see the difference — they click Deploy
+and the URL works either way.
+"""
+from __future__ import annotations
+
+import textwrap
+from pathlib import Path
+
+import pytest
+
+from ail.agentic import Project
+from ail.agentic.process_manager import _program_is_evolve_server
+
+
+def _make_project(tmp_path: Path, app_source: str) -> Project:
+    (tmp_path / "INTENT.md").write_text("# test\n")
+    (tmp_path / "app.ail").write_text(app_source)
+    (tmp_path / ".ail").mkdir(exist_ok=True)
+    return Project.at(tmp_path)
+
+
+def test_detects_evolve_server(tmp_path):
+    src = textwrap.dedent("""
+    evolve my_server {
+        listen: 8080
+        metric: error_rate
+        when request_received(req) {
+            perform http.respond(200, "text/plain", "hi")
+        }
+        rollback_on: error_rate > 0.5
+        history: keep_last 100
+    }
+    """)
+    proj = _make_project(tmp_path, src)
+    assert _program_is_evolve_server(proj) is True
+
+
+def test_single_shot_program_is_not_evolve_server(tmp_path):
+    src = textwrap.dedent("""
+    entry main(input: Text) -> Text {
+        return "hello"
+    }
+    """)
+    proj = _make_project(tmp_path, src)
+    assert _program_is_evolve_server(proj) is False
+
+
+def test_evolve_without_request_arm_is_not_server(tmp_path):
+    """A plain `evolve` (no `when request_received`) is metric-driven
+    tuning, not a server. Must not trigger the evolve-server path."""
+    src = textwrap.dedent("""
+    intent guess(x: Number) -> Number {
+        goal: "double it"
+    }
+    evolve guess {
+        metric: confidence(sampled: 1.0)
+        when confidence < 0.5 {
+            retune confidence_threshold: within [0.3, 0.8]
+        }
+        rollback_on: confidence < 0.15
+        history: keep_last 5
+    }
+    entry main(x: Number) -> Number {
+        return guess(x)
+    }
+    """)
+    proj = _make_project(tmp_path, src)
+    assert _program_is_evolve_server(proj) is False
+
+
+def test_unparseable_app_is_not_server(tmp_path):
+    """A broken app.ail must return False (not crash). The Deploy
+    button still needs to make a decision — false is the safe default
+    (single-shot uses `ail serve` which only serves files)."""
+    proj = _make_project(tmp_path, "this is not valid AIL {{{")
+    assert _program_is_evolve_server(proj) is False
+
+
+def test_missing_app_is_not_server(tmp_path):
+    (tmp_path / "INTENT.md").write_text("# test\n")
+    (tmp_path / ".ail").mkdir(exist_ok=True)
+    proj = Project.at(tmp_path)
+    assert _program_is_evolve_server(proj) is False
