@@ -86,10 +86,16 @@ fn handle_list_messages(req: Any) -> [Any] {
     if offset_str != None {
         offset = to_number(offset_str)
     }
+    // to/from 필터 있으면 스레드 포함 — 인박스는 모든 수신 메시지를 봐야 함
+    // 필터 없을 때만 top-level만 (게시판 뷰)
+    inbox_mode = to_name != None or from_name != None
     top = []
     for m in messages {
-        reply_to = get(m, "reply_to")
-        if reply_to == None {
+        reply_to_val = get(m, "reply_to")
+        if inbox_mode {
+            top = append(top, m)
+        }
+        if not inbox_mode and reply_to_val == None {
             top = append(top, m)
         }
     }
