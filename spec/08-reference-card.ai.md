@@ -275,10 +275,15 @@ range(start: Number, end: Number) -> [Number]
 map(list: [T], fn_name: Text) -> [T]
 filter(list: [T], fn_name: Text) -> [T]
 reduce(list: [T], fn_name: Text, initial: T) -> T
+make_record(pairs: [[Text, Any]]) -> Record   // [["k", v], ...] → record
+get(record: Record, key: Text) -> Any         // record field access (also works as obj.key)
+is_null(value: Any) -> Boolean                // true iff value is the None sentinel
 ```
 
 Note: map/filter/reduce take fn NAMES as strings, not lambda expressions.
-Note: get() returns a single element; slice() returns a sub-list. Use get() when you want one item.
+Note: get() returns a single element of a list, OR a field of a record. Use slice() for sub-lists.
+Note: `record.field` dot syntax also works on records (equivalent to `get(record, "field")`).
+Note: undefined function calls now raise NameError loudly — no silent truthy fallback. If you need a missing-value check, use `is_null(value)` for None sentinels and `is_error(result)` for Result types.
 
 ### Conversion
 ```
