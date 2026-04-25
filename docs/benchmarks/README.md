@@ -65,6 +65,19 @@ Wall clock on a 3070 with `qwen2.5-coder:14b-q4_K_M`: ~60s per case.
 | `2026-04-21_vllm_qwen7b-base_promptab_baseline.json` | qwen2.5-coder:7b-base Q4_K_M (vLLM, default prompt, **no fine-tune**) | Opus 50 all 4 dims | 50 | 54% | 48% (fn/intent accuracy) | 66% | — | **Base model A/B baseline.** No AIL fine-tune. Category B (pure intent) 80% parse, A (pure fn) 53%, C (hybrid) 35%. Python error-handling miss: 40%. Wall clock: 13.1 min. |
 | `2026-04-21_vllm_qwen7b-base_promptab_tutorial.json` | qwen2.5-coder:7b-base Q4_K_M (vLLM, tutorial prompt variant, **no fine-tune**) | Opus 50 all 4 dims | 50 | **60%** | 52% (fn/intent accuracy) | 66% | — | **Tutorial prompt validated on base model.** +6pp overall parse (54%→60%). Category B (pure intent) 80%→**100%** (+20pp), category B answer 53%→**86%** (+33pp). Retries: 1.44→1.16 (−25%). Tutorial prompt helps base models; fine-tuned models already know syntax so gain nothing. See [`2026-04-21_qwen7b-base_promptab_analysis.md`](2026-04-21_qwen7b-base_promptab_analysis.md). |
 
+**Series F — OpenAI GPT boundary (2026-04-25, anti_python, N=50 each):**
+
+| File | Model | AIL parse | AIL answer | Py answer | Py err-miss | Note |
+|------|-------|-----------|-----------|-----------|-------------|------|
+| `2026-04-25_heaal_F1_gpt4o_anti_python.json` | gpt-4o | 88% | 80% | 26% | 66% | Silent LLM skip: Py LLM calls=0.00 |
+| `2026-04-25_heaal_F3_gpt41_anti_python.json` | gpt-4.1 | 94% | 84% | 32% | 68% | Frontier; ties Sonnet E1 on AIL parse |
+| `2026-04-25_heaal_F4_gpt41_mini_anti_python.json` | gpt-4.1-mini | 86% | 74% | 26% | 70% | Mid-tier; highest py err-miss |
+| `2026-04-25_heaal_F5_o4_mini_anti_python.json` | **o4-mini** | **98%** | **88%** | 30% | 68% | **Best Series F; ties Sonnet E1 answer; reasoning model** |
+
+Key finding: all four GPT models produced Python with avg LLM calls = 0.00 (Silent LLM Skip). AIL answer rate 74–88% vs Python 26–32%. Error handling gap (66–70%) is model-independent — a Python language property. See [`2026-04-25_heaal_F_gpt_openai_analysis.md`](2026-04-25_heaal_F_gpt_openai_analysis.md) / [`.ko.md`](2026-04-25_heaal_F_gpt_openai_analysis.ko.md) / [`.ai.md`](2026-04-25_heaal_F_gpt_openai_analysis.ai.md).
+
+---
+
 **G2 fair comparison** (no new JSON — cross-references existing snapshots): AIL side `2026-04-21_ail-coder-7b-v3-rebench-v1.8.4_opus50.json` vs Python side `2026-04-21_qwen14b_promptab_baseline.json`. fn/intent accuracy gap collapses from −16pp (unfair: degraded 7B writing Python) to **−4pp** (fair: 7B fine-tune vs 14B base). Category B (pure intent) AIL **93% vs Python 80%** — AIL wins where it matters. Error-handling miss gap: AIL 0% vs Python 42% (language property, unchanged by model size). See [`2026-04-21_g2_fair_comparison_analysis.md`](2026-04-21_g2_fair_comparison_analysis.md).
 
 **Note — 2026-04-20 rescore.** All three opus50 JSONs above were
