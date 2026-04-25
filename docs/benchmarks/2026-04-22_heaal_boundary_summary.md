@@ -71,11 +71,22 @@ The AIL track row (`ail-coder:7b-v3`) demonstrates this: starting from a Qwen 7B
 
 | Regime | Threshold | Remedy | Empirical evidence |
 |---|---|---|---|
-| **Frontier** | API access | `anti_python` prompt variant | Sonnet 4.5 → 96.1 (E1) |
+| **Frontier** | API access | `anti_python` prompt variant | Sonnet 4.5 → 96.1 (E1); o4-mini → 98% parse / 88% ans (F5) |
 | **Above parse threshold, below frontier** | Model produces some parseable AIL | Default prompt + grammar floor | qwen14b 80.9, llama8b 74.3 |
 | **Below parse threshold** | Model produces no parseable AIL | AIL-track fine-tune | `ail-coder:7b-v3` → 87.7 |
 
-The regimes and remedies are now data-supported, not asserted. Each row in the cross-tier table provides at least one data point per regime.
+The regimes and remedies are now data-supported, not asserted. **Series F (2026-04-25) extended coverage to OpenAI GPT models** — see [`2026-04-25_heaal_F_gpt_openai_analysis.md`](2026-04-25_heaal_F_gpt_openai_analysis.md).
+
+**Series F cross-tier addition:**
+
+| Tier | Author model | Prompt | AIL parse | AIL ans | Py ans | Py err-miss |
+|---|---|---|---|---|---|---|
+| Frontier OpenAI | gpt-4.1 | `anti_python` | 94% | 84% | 32% | 68% |
+| Frontier OpenAI (reasoning) | o4-mini | `anti_python` | **98%** | **88%** | 30% | 68% |
+| Mid OpenAI | gpt-4.1-mini | `anti_python` | 86% | 74% | 26% | 70% |
+| Frontier OpenAI (legacy) | gpt-4o | `anti_python` | 88% | 80% | 26% | 66% |
+
+Cross-vendor finding: **Python error-handling omission (66–70%) is consistent across Anthropic and OpenAI frontier models.** It is a Python language property, not a vendor property. o4-mini ties Sonnet 4.5 on AIL answer rate (88%).
 
 ---
 

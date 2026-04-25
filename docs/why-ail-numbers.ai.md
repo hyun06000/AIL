@@ -10,7 +10,7 @@ Related: [`why-ail-faq.ai.md`](why-ail-faq.ai.md) · [`why-ail-mechanics.ai.md`]
 
 ## The one-sentence claim
 
-> Across every model tested: **Python AI-authored code skips error handling on 42–86% of failable operations. AIL rate: 0% on every tier** because `Result` is grammatically required.
+> Across every model tested (Anthropic, OpenAI, Meta, Alibaba, fine-tune): **Python AI-authored code skips error handling on 42–86% of failable operations. AIL rate: 0% on every tier, every vendor** because `Result` is grammatically required.
 
 ---
 
@@ -33,16 +33,22 @@ Corpus: [`benchmarks/prompts.json`](../benchmarks/prompts.json)
 
 ## Harness claim — error handling omission
 
-| Model | Python omits error handling | AIL omits error handling |
-|---|---|---|
-| llama3.1:8b | **86% (43/50)** | 0% |
-| qwen2.5-coder:14b | **42% (21/50)** | 0% |
-| ail-coder:7b-v3 | **44% (22/50)** | 0% |
-| claude-sonnet-4-6 | **70% (35/50)** | 0% |
+| Model | Vendor | Python err-miss | AIL err-miss |
+|---|---|---|---|
+| llama3.1:8b | Meta | **86% (43/50)** | 0% |
+| qwen2.5-coder:14b | Alibaba | **42% (21/50)** | 0% |
+| ail-coder:7b-v3 | fine-tune | **44% (22/50)** | 0% |
+| claude-sonnet-4-6 | Anthropic | **70% (35/50)** | 0% |
+| gpt-4o | OpenAI | **66% (33/50)** | 0% |
+| gpt-4.1 | OpenAI | **68% (34/50)** | 0% |
+| gpt-4.1-mini | OpenAI | **70% (35/50)** | 0% |
+| o4-mini | OpenAI | **68% (34/50)** | 0% |
 
-Note: llama8b has worst rate because 86% of programs don't even parse, and the few that do use very simple I/O. Sonnet 4.6 has worst rate among strong models because it correctly uses real failable I/O (`urllib.request`, `json.loads`) and skips the try/except.
+KEY: frontier models cluster 66-70% regardless of vendor. Error-handling gap = Python language property, NOT model quality. Better models do not close it.
 
-**AIL mechanism:** `to_number(x)` → `Result[Number]`. Parser rejects use as `Number` without `is_ok()`/`unwrap_or()`. No model tier has a path to skip this.
+SILENT LLM SKIP (Series F): All 4 GPT models Python avg LLM calls = 0.00/task. Python answer 26-32%. AIL `intent` = runtime-enforced, cannot be silently skipped.
+
+**AIL mechanism:** `to_number(x)` → `Result[Number]`. Parser rejects use as `Number` without `is_ok()`/`unwrap_or()`. No model tier, no vendor has a path to skip this.
 
 ---
 

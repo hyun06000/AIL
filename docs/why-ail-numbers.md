@@ -14,9 +14,9 @@ that you can download and diff yourself. Companion docs:
 
 ## The one sentence
 
-> Across every model tested — an 8B open model, a 14B coder, a fine-tuned 7B adapter, and Anthropic's frontier Claude Sonnet 4.6 — **Python code written by an AI skips error handling on 42–86% of failable operations. AIL's rate is 0%, on every tier, because `Result` is part of the grammar.**
+> Across every model tested — an 8B open model, a 14B coder, a fine-tuned 7B adapter, Anthropic's frontier Claude Sonnet 4.5, and four OpenAI GPT models — **Python code written by an AI skips error handling on 42–86% of failable operations. AIL's rate is 0%, on every tier, because `Result` is part of the grammar.**
 
-That's the harness claim, measured. A second data point to keep in mind: Sonnet 4.6 routes LLM calls correctly on 100% of prompts (so the "silent LLM skip" problem weaker models exhibit is gone at this tier), yet it still writes Python that omits error handling 70% of the time. **Better models do not close the error-handling gap. Only a grammatical guarantee does.**
+That's the harness claim, measured. Two key data points: (1) Sonnet 4.5 writes Python that omits error handling 70% of the time even though it routes LLM calls correctly at 100%. (2) GPT-4.1 and o4-mini (Series F, 2026-04-25) both show 68% error-handling omission — consistent with Sonnet. **Better models do not close the error-handling gap. Only a grammatical guarantee does.**
 
 ---
 
@@ -54,11 +54,15 @@ Corpus: [`benchmarks/prompts.json`](../benchmarks/prompts.json).
 | llama3.1:8b (small open) | **86% (43/50)** | 0% (grammar) |
 | qwen2.5-coder:14b (mid coder) | **42% (21/50)** | 0% (grammar) |
 | ail-coder:7b-v3 (fine-tuned 7B) | **44% (22/50)** | 0% (grammar) |
-| **claude-sonnet-4-6 (frontier)** | **70% (35/50)** | 0% (grammar) |
+| claude-sonnet-4-6 (frontier Anthropic) | **70% (35/50)** | 0% (grammar) |
+| gpt-4o (frontier OpenAI) | **66% (33/50)** | 0% (grammar) |
+| gpt-4.1 (frontier OpenAI) | **68% (34/50)** | 0% (grammar) |
+| gpt-4.1-mini (mid OpenAI) | **70% (35/50)** | 0% (grammar) |
+| **o4-mini (reasoning OpenAI)** | **68% (34/50)** | 0% (grammar) |
 
-The Python rate is not monotone in model quality — llama8b at the low end has the worst rate (86%) because it barely emits real Python at all (14% parse), and Sonnet 4.6 at the frontier has the worst of the three strong models (70%) because it actually uses real failable I/O (`urllib.request`, `json.loads`) where a try/except is needed and often skipped. qwen14b and the fine-tuned 7B sit in between around 42–44%.
+The Python rate is not monotone in model quality. At the low end, llama8b has 86% because it barely emits real Python (14% parse). At the high end, frontier models cluster around **66–70%** regardless of vendor — Sonnet, GPT-4.1, o4-mini all land within 4pp of each other. The error-handling gap is a **Python language property**, not a model quality issue.
 
-**AIL's rate is 0% on every tier.** That is the structural property: `to_number(raw)` returns `Result[Number]`, not `Number`. Code that tries to use the returned value as a number without `is_ok` / `unwrap_or` / pattern-matching does not parse. The author doesn't have an option to forget.
+**AIL's rate is 0% on every tier, every vendor.** `to_number(raw)` returns `Result[Number]`, not `Number`. Code that uses the value without `is_ok` / `unwrap_or` / pattern-matching does not parse. The author has no option to forget.
 
 Raw data:
 
@@ -66,8 +70,11 @@ Raw data:
 - [`2026-04-20_qwen25-coder-14b_opus50.json`](benchmarks/2026-04-20_qwen25-coder-14b_opus50.json)
 - [`2026-04-20_claude-sonnet-4-6_opus50.json`](benchmarks/2026-04-20_claude-sonnet-4-6_opus50.json)
 - [`2026-04-21_ail-coder-7b-v3_opus50.json`](benchmarks/2026-04-21_ail-coder-7b-v3_opus50.json)
-- Full Sonnet analysis: [`2026-04-20_claude_sonnet46_summary.md`](benchmarks/2026-04-20_claude_sonnet46_summary.md)
-- Full v3 analysis: [`2026-04-21_ail-coder-7b-v3_analysis.md`](benchmarks/2026-04-21_ail-coder-7b-v3_analysis.md)
+- [`2026-04-25_heaal_F1_gpt4o_anti_python.json`](benchmarks/2026-04-25_heaal_F1_gpt4o_anti_python.json)
+- [`2026-04-25_heaal_F3_gpt41_anti_python.json`](benchmarks/2026-04-25_heaal_F3_gpt41_anti_python.json)
+- [`2026-04-25_heaal_F4_gpt41_mini_anti_python.json`](benchmarks/2026-04-25_heaal_F4_gpt41_mini_anti_python.json)
+- [`2026-04-25_heaal_F5_o4_mini_anti_python.json`](benchmarks/2026-04-25_heaal_F5_o4_mini_anti_python.json)
+- Series F analysis: [`2026-04-25_heaal_F_gpt_openai_analysis.md`](benchmarks/2026-04-25_heaal_F_gpt_openai_analysis.md)
 
 ---
 

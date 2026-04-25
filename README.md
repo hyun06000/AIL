@@ -106,6 +106,20 @@ Claude Sonnet writing both AIL and Python through `ail ask`, no external tooling
 
 On long tasks with real HTTP and file I/O (10 tasks, E2 benchmark): **AIL and Python tie at 9/10 tasks passed.** But every Python program omitted error handling — one crashed with an unhandled HTTP 403. AIL's `Result` type made that crash impossible.
 
+### Does this hold for non-Anthropic models?
+
+Yes. Series F (2026-04-25) tested four OpenAI models with the same 50-prompt harness:
+
+| Model | AIL parse | AIL answer | Python answer | Python err-miss |
+|---|---|---|---|---|
+| gpt-4o | 88% | 80% | 26% | 66% |
+| gpt-4.1 | 94% | 84% | 32% | 68% |
+| gpt-4.1-mini | 86% | 74% | 26% | 70% |
+| **o4-mini** | **98%** | **88%** | 30% | 68% |
+| Claude Sonnet 4.5 (reference) | 94% | 88% | 92% | 70% |
+
+Two cross-vendor findings: (1) **Python error-handling omission (66–70%) is consistent across all GPT models** — this is a Python language property, not a model property. (2) **Silent LLM skip**: all four GPT models produced Python with average LLM calls = 0.00 per task — when asked to write Python for judgment tasks, they hardcode logic instead of calling the model, resulting in 26–32% Python answer rates. AIL's `intent` keyword is runtime-enforced and cannot be silently skipped.
+
 Full dashboards: [`docs/benchmarks/dashboards/`](docs/benchmarks/dashboards/) · Raw data: [`docs/benchmarks/`](docs/benchmarks/)
 
 ---
