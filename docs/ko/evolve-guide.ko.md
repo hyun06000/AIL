@@ -1,3 +1,5 @@
+🇺🇸 English: [evolve-guide.md](../evolve-guide.md) · 🤖 AI/LLM: [evolve-guide.ai.md](../evolve-guide.ai.md)
+
 # AIL의 자기 수정 (`evolve`) 이해하기
 
 **대상 독자:** AIL 참조 구현에서 `evolve` 블록이 실제로 어떻게 작동하는지, 그리고 왜 그렇게 설계되었는지 알고 싶은 사람.
