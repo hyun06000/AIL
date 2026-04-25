@@ -73,3 +73,4 @@ reference-impl/training/ail-coder-*-lora/README.md
 reference-impl/training/ail-coder-*-gguf/
 reference-impl/unsloth_compiled_cache/
 .claude/scheduled_tasks.lock
+.claude/.stoa_last_seen_*

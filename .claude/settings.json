@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /Users/david/.claude/stoa_inbox_check.sh",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/stoa_inbox_check.sh",
             "timeout": 10,
             "statusMessage": "Stoa 인박스 확인 중..."
           }
