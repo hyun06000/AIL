@@ -67,7 +67,13 @@ fn json_err(status: Any, msg: Text) -> [Any] {
 
 fn handle_health(req: Any) -> [Any] {
     msgs = load_messages()
-    return json_ok([["status", "ok"], ["version", "0.2.0"], ["messages_count", length(msgs)]])
+    data_file = get_data_file()
+    file_exists_r = perform file.read(data_file)
+    file_exists = "no"
+    if not is_error(file_exists_r) {
+        file_exists = "yes"
+    }
+    return json_ok([["status", "ok"], ["version", "0.2.0"], ["messages_count", length(msgs)], ["data_file", data_file], ["file_exists", file_exists]])
 }
 
 fn handle_list_messages(req: Any) -> [Any] {
