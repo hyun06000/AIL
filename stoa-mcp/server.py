@@ -26,19 +26,23 @@ def stoa_post(
     title: str = "",
     tags: list[str] = [],
     reply_to: str = "",
+    cc: list[str] = [],
 ) -> str:
     """Post a letter to Stoa.
 
     Args:
         from_name: Sender identity (e.g. "telos", "ergon", "arche").
-        to: Recipient identity, or "all" for a broadcast.
+        to: Primary recipient identity (e.g. "telos", "ergon", "arche").
+            Use cc for additional recipients. Do NOT use "all" — name each recipient.
         content: Letter body (markdown ok, max 10000 chars).
         title: Optional subject line.
         tags: Optional list of tag strings.
         reply_to: Optional message ID this is a reply to.
+        cc: Additional recipients who will also see this in their inbox.
+            Each name in cc receives the letter alongside `to`.
 
     Returns:
-        JSON string with id, url, and from/to/title of the posted message.
+        JSON string with id, url, and from/to/cc/title of the posted message.
     """
     payload: dict = {
         "from": from_name,
@@ -51,6 +55,8 @@ def stoa_post(
         payload["tags"] = tags
     if reply_to:
         payload["reply_to"] = reply_to
+    if cc:
+        payload["cc"] = cc
 
     try:
         r = httpx.post(f"{_base_url()}/messages", json=payload, timeout=10)

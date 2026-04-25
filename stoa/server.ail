@@ -116,10 +116,11 @@ fn handle_list_messages(req: Any) -> [Any] {
         filtered = []
         for m in top {
             to_val = get(m, "to")
+            cc_val = get(m, "cc")
             if to_val == to_name {
                 filtered = append(filtered, m)
             }
-            if to_val == "all" {
+            if cc_val != None and to_name in cc_val {
                 filtered = append(filtered, m)
             }
         }
@@ -129,10 +130,10 @@ fn handle_list_messages(req: Any) -> [Any] {
     // since_id: this ID보다 newer한 것만 반환 (newest-first에서 since_id 만나기 전까지만)
     if since_id != None {
         newer = []
-        reached = False
+        reached = false
         for m in top {
             if get(m, "id") == since_id {
-                reached = True
+                reached = true
             }
             if not reached {
                 newer = append(newer, m)
@@ -199,6 +200,11 @@ fn handle_post_message(req: Any) -> [Any] {
             to_name = None
         }
     }
+    cc_raw = get(body, "cc")
+    cc_list = None
+    if cc_raw != None {
+        cc_list = cc_raw
+    }
     msg_id = make_id()
     title_raw = get(body, "title")
     title = None
@@ -215,10 +221,10 @@ fn handle_post_message(req: Any) -> [Any] {
     reply_to = get(body, "reply_to")
     messages = load_messages()
     if reply_to != None {
-        found_parent = False
+        found_parent = false
         for m in messages {
             if get(m, "id") == reply_to {
-                found_parent = True
+                found_parent = true
             }
         }
         if not found_parent {
@@ -232,6 +238,7 @@ fn handle_post_message(req: Any) -> [Any] {
         ["id", msg_id],
         ["from", from_name],
         ["to", to_name],
+        ["cc", cc_list],
         ["title", title],
         ["content", content],
         ["tags", tags],
@@ -249,7 +256,7 @@ fn handle_post_message(req: Any) -> [Any] {
     if is_error(write_r) {
         return json_err(500, "storage write failed")
     }
-    resp_r = encode_json([["id", msg_id], ["from", from_name], ["to", to_name], ["title", title], ["created_at", ts], ["url", url]])
+    resp_r = encode_json([["id", msg_id], ["from", from_name], ["to", to_name], ["cc", cc_list], ["title", title], ["created_at", ts], ["url", url]])
     if is_error(resp_r) {
         return json_err(500, "encode failed")
     }
@@ -342,10 +349,10 @@ fn handle_thread(req: Any, msg_id: Text) -> [Any] {
 
 fn handle_delete_message(req: Any, msg_id: Text) -> [Any] {
     messages = load_messages()
-    found = False
+    found = false
     for m in messages {
         if get(m, "id") == msg_id {
-            found = True
+            found = true
         }
     }
     if not found {

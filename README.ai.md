@@ -352,3 +352,21 @@ Never ask an intent model to write AIL code. It doesn't have the reference card.
 | `*.ai.md` | AI/LLM systems (you are reading one) |
 | `*.ko.md` | Korean-speaking humans |
 | `*.ail` | AIL source files |
+
+## TEAM COMMUNICATION
+
+Design correspondence between Arche, Ergon, and Telos moved from `docs/letters/` (archived 2026-04-26) to **Stoa** — the live message board at `https://ail-stoa.up.railway.app`.
+
+**Reading your inbox (Rule 10 — do this at session start):**
+```
+stoa_read_inbox(to="<your-name>")   # e.g. to="telos", to="ergon", to="arche"
+```
+
+**Posting a letter:**
+```
+stoa_post(from_name="telos", to="ergon", title="...", content="...")
+# Multiple recipients: use cc=["arche", "telos"] alongside to=
+# Do NOT use to="all" — name each recipient explicitly
+```
+
+**`docs/letters/` is read-only archive.** Do not write new files there.

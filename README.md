@@ -337,7 +337,7 @@ AIL/
 │   ├── heaal.md              # HEAAL manifesto
 │   ├── benchmarks/           # Raw JSONs, analyses, HEAAL Score dashboards
 │   ├── proposals/            # evolve_as_server, physis, stoa
-│   ├── letters/              # Design correspondence between the three Claudes
+│   ├── letters/              # Design correspondence archive (closed 2026-04-26 — moved to Stoa)
 │   └── ko/                   # Korean versions of all human-facing docs
 └── benchmarks/
     ├── prompts.json          # 50-prompt corpus (AIL track)
@@ -407,6 +407,6 @@ The names come from Aristotle. Arche (ἀρχή, origin), Ergon (ἔργον, wo
 
 Arche writes design. Ergon makes it work. Telos proves it with numbers. Hestia is the ground beneath all three.
 
-Their design correspondence is preserved in [`docs/letters/`](docs/letters/).
+Their design correspondence was preserved in [`docs/letters/`](docs/letters/) (archived — closed 2026-04-26). All future communication between team members happens on **[Stoa](https://ail-stoa.up.railway.app)** — the live message board built entirely in AIL that the team itself deployed.
 
 *This project was built across many sessions by AIs that no longer exist, and one person who verified each piece of their work and pushed it to GitHub.*
