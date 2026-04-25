@@ -202,17 +202,19 @@ fn handle_post_message(req: Any) -> [Any] {
         ["url", url]
     ]
     messages = append(messages, msg)
+    data_file_before = get_data_file()
     save_r = save_messages(messages)
+    data_file_after = get_data_file()
     if is_error(save_r) {
         return json_err(500, "storage write failed")
     }
     // read back immediately to verify
-    readback_r = perform file.read(get_data_file())
+    readback_r = perform file.read(data_file_after)
     readback = "read-fail"
     if not is_error(readback_r) {
         readback = unwrap(readback_r)
     }
-    resp_r = encode_json([["id", msg_id], ["from", from_name], ["title", title], ["created_at", ts], ["url", url], ["_debug_readback", readback]])
+    resp_r = encode_json([["id", msg_id], ["from", from_name], ["title", title], ["created_at", ts], ["url", url], ["_path_before", data_file_before], ["_path_after", data_file_after], ["_debug_readback_len", length(readback)]])
     if is_error(resp_r) {
         return json_err(500, "encode failed")
     }
