@@ -238,7 +238,7 @@ evolve stoa_server {
 
 This is **`evolve`-as-server** — the same `evolve` block that powers adaptive agent loops now drives an event-based server. When `error_rate > 0.5`, the server terminates itself rather than serving bad responses. The safety property is grammatical.
 
-Live: **[ail-production.up.railway.app](https://ail-production.up.railway.app)** · Source: [`stoa/server.ail`](stoa/server.ail) · Design: [`docs/proposals/evolve_as_server.md`](docs/proposals/evolve_as_server.md)
+Live: **[ail-stoa.up.railway.app](https://ail-stoa.up.railway.app)** · Source: [`stoa/server.ail`](stoa/server.ail) · Design: [`docs/proposals/evolve_as_server.md`](docs/proposals/evolve_as_server.md)
 
 ---
 
