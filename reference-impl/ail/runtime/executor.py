@@ -2617,6 +2617,24 @@ class Executor:
                 else:
                     return ConfidentValue(raw[1], conf)
             return ConfidentValue(raw[0] if raw else None, conf)
+        if name == "is_null":
+            # Was prompt-taught but never implemented (qna_bot field test
+            # 2026-04-26 박상현). Returns True iff value is the Python
+            # None sentinel — which is what `get(record, missing_key)`
+            # and `state.read` of an absent key sometimes produce.
+            return ConfidentValue(raw[0] is None if raw else True, conf)
+        if name == "make_record":
+            # Convert AIL's `[[k, v], ...]` pair list into a dict so
+            # `get(record, key)` and JSON encoding work cleanly. Was
+            # used heavily in prompt examples without an implementation —
+            # field test 2026-04-26.
+            if raw and isinstance(raw[0], list):
+                out = {}
+                for pair in raw[0]:
+                    if isinstance(pair, list) and len(pair) >= 2:
+                        out[str(pair[0])] = pair[1]
+                return ConfidentValue(out, conf)
+            return ConfidentValue({}, conf)
 
         return None  # not a builtin
 
@@ -2648,11 +2666,19 @@ class Executor:
 
     def _builtin_call(self, name: str, args: list[ConfidentValue],
                       kwargs: dict[str, ConfidentValue]) -> ConfidentValue:
-        # Used mainly for symbolic constraint checks in MVP.
-        # Returns True (confidence from args) — real AIRT would actually check.
-        conf = min((a.confidence for a in args), default=1.0)
-        return ConfidentValue(True, conf,
-                              origin=builtin_origin(name, parents_of(args)))
+        # qna_bot field test 2026-04-26 (박상현): an undefined function
+        # call (e.g. `is_null(question)` — the model invented this name
+        # because the prompt itself used it incorrectly) was silently
+        # returning ConfidentValue(True), routing every request into the
+        # 400 branch. Silent truthy fallbacks are a HEAAL-violation: the
+        # author cannot debug what they cannot see. Raise loudly instead.
+        # The exception is caught by the evolve-server `catch_all`
+        # handler and surfaced as a 500 with the function name in the
+        # message, so the auto-fix loop can target it.
+        raise NameError(
+            f"undefined function: {name!r} "
+            f"(no fn/intent/builtin by that name; check the reference card)"
+        )
 
     # --- provenance-introspection builtins ---
 
