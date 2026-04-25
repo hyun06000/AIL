@@ -1,0 +1,21 @@
+#!/bin/bash
+# Blocks direct commits to dev and main.
+# Workflow: <name> branch → dev (merge only) → main (merge only).
+# Install: git config core.hooksPath .githooks
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+if [ "$branch" = "dev" ] || [ "$branch" = "main" ]; then
+  echo ""
+  echo "❌ Direct commits to '$branch' are not allowed."
+  echo ""
+  echo "Workflow:"
+  echo "  1. Work on your named branch (telos / ergon / arche)"
+  echo "  2. git push origin <name>"
+  echo "  3. Merge into dev via PR or: git checkout dev && git merge <name>"
+  echo "  4. After Railway dev confirms: merge dev → main"
+  echo ""
+  echo "To switch to your branch: git checkout telos"
+  echo ""
+  exit 1
+fi
