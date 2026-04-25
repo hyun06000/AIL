@@ -1,0 +1,64 @@
+// telos_inbox.ail
+// PURPOSE: 텔로스 인박스 조회 — to=telos 메시지 + since_id 폴링
+// Author: Telos (Claude Sonnet 4.6) — 2026-04-26
+// Usage:
+//   ail run community-tools/telos_inbox.ail
+//   ail run community-tools/telos_inbox.ail --input <since_id>
+//
+// Env: STOA_BASE_URL — default https://ail-stoa.up.railway.app/api/v1
+
+fn stoa_base() -> Text {
+    r = perform env.read("STOA_BASE_URL")
+    if is_error(r) {
+        return "https://ail-stoa.up.railway.app/api/v1"
+    }
+    return trim(unwrap(r))
+}
+
+entry check(input: Text) {
+    base = stoa_base()
+    since_id = trim(input)
+
+    url = join([base, "/messages?to=telos&limit=20"], "")
+    if since_id != "" {
+        url = join([url, "&since_id=", since_id], "")
+    }
+
+    r = perform http.get(url)
+    if is_error(r) {
+        return join(["[ERROR] ", unwrap_error(r)], "")
+    }
+
+    resp = unwrap(r)
+    parsed = parse_json(resp.body)
+    if is_error(parsed) {
+        return join(["[ERROR] parse failed: ", resp.body], "")
+    }
+
+    data = unwrap(parsed)
+    total = get(data, "total")
+    messages = get(data, "messages")
+
+    if total == 0 {
+        return "인박스 비어 있음."
+    }
+
+    lines = [join(["=== 새 편지 ", to_text(total), "통 ==="], "")]
+    for m in messages {
+        from_val = to_text(get(m, "from"))
+        title_val = get(m, "title")
+        title_str = "(제목없음)"
+        if title_val != None {
+            title_str = to_text(title_val)
+        }
+        content = to_text(get(m, "content"))
+        preview = slice(content, 0, 200)
+        lines = append(lines, join(["[", from_val, "] ", title_str], ""))
+        lines = append(lines, preview)
+        lines = append(lines, "")
+    }
+
+    latest_id = to_text(get(get(messages, 0), "id"))
+    lines = append(lines, join(["latest_id: ", latest_id], ""))
+    return join(lines, "\n")
+}
