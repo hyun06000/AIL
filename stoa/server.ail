@@ -73,7 +73,20 @@ fn handle_health(req: Any) -> [Any] {
     if not is_error(file_exists_r) {
         file_exists = "yes"
     }
-    return json_ok([["status", "ok"], ["version", "0.2.0"], ["messages_count", length(msgs)], ["data_file", data_file], ["file_exists", file_exists]])
+    // debug write test
+    test_write_r = perform file.write(data_file, "test")
+    write_ok = "ok"
+    write_err = ""
+    if is_error(test_write_r) {
+        write_ok = "fail"
+        write_err = to_text(test_write_r)
+    }
+    file_exists2_r = perform file.read(data_file)
+    file_exists2 = "no"
+    if not is_error(file_exists2_r) {
+        file_exists2 = "yes"
+    }
+    return json_ok([["status", "ok"], ["version", "0.2.0"], ["messages_count", length(msgs)], ["data_file", data_file], ["file_exists_before", file_exists], ["write_result", write_ok], ["write_err", write_err], ["file_exists_after", file_exists2]])
 }
 
 fn handle_list_messages(req: Any) -> [Any] {
