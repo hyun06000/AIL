@@ -4,6 +4,26 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.60.10 — 2026-04-26
+
+**fix: ail-up 작성→배포 사이클 전구간 — 모델은 따라할 수 있는 prompt + runtime은 silent failure 차단.**
+
+박상현 라이브 필드 테스트 ("qna 봇 만들고 배포하기") 사이클에서 발견된 픽스 묶음.
+
+- **prompt: broken canonical examples 픽스** (`branch { COND -> body }`, unquoted `goal:`, `is_null`/`make_record` 미정의 호출, `listen: 8080`). 모델은 prompt를 충실히 따라했을 뿐인데 매번 같은 parse error에 빠지던 root cause. 새 회귀 테스트(`test_authoring_prompt_examples_parse.py`)가 prompt의 모든 standalone `entry main`/`evolve` 코드 블록을 자동 파싱 — 깨진 예제 들어가면 즉시 fail.
+- **prompt: `perform`은 statement-not-expression 트랩 명시 강화.** WRONG/CORRECT 4가지 시나리오 (함수 인자, list literal, record pair, if 조건) — list literal 안 `perform clock.now(...)`가 #1 repeat parse error였음.
+- **prompt: 8080 chat-UI 포트 충돌 trap.** evolve-server canonical example의 `listen` 값을 8090으로 변경. "사용자에게 specific port 절대 안내하지 마 — Deploy가 free port 잡고 [🔗 열기] 버튼이 진짜 URL을 들고 있음" 명시.
+- **runtime: undefined 함수 호출 → silent True가 아니라 NameError raise.** `_builtin_call`이 MVP placeholder로 모든 미정의 호출에 `ConfidentValue(True)`를 반환하던 silent failure mode 제거. 함수명을 메시지에 포함해서 auto-fix loop가 target 가능.
+- **runtime: `is_null(value)` + `make_record(pairs)` 두 builtin 추가.** prompt가 가르치고 있던 미정의 함수를 실제 구현. `is_null`은 None 체크, `make_record`는 `[[k,v],...]` → dict 변환.
+- **runtime: `python -m ail` 동작.** `reference-impl/ail/__main__.py` shim 추가. process_manager의 Deploy spawn (`python -m ail run <file>`)이 `No module named ail.__main__`로 즉시 죽고 UI엔 phantom "running" 표시 남기던 silent failure 제거.
+- **runtime: deploy detection이 active_program marker 따라가게.** `_program_is_evolve_server`가 고정 `app.ail`만 보던 한계 → marker → app.ail → root 첫 .ail 순으로 resolve. 모델이 descriptive name(`qna_server.ail`)으로 emit해도 deploy CTA chain 정상 동작. `start_deployment`의 spawn target도 동일 헬퍼.
+- **authoring_ui: spec 단계에 빌드 모드 토글 (🔘 일회성 / 🌐 백그라운드 서비스).** spec 키워드로 default 추천 + 사용자 토글로 덮어씀. agent에게 명시적 `ready_to_run`/`ready_to_serve` 명령 전달.
+- **authoring_ui: deployable 프로그램은 service card도 fade out.** 이전엔 inline Run만 fade하고 service card는 활성 → 모호한 affordance 동시 노출. 진짜 행동은 [🚀 배포하기] 하나뿐임을 시각적으로 명확.
+- **authoring_ui: auto-fix 완료 후 maybeShowDeployCTA 호출.** normal turn은 호출하지만 auto-fix path는 누락이었음 → 자동수정 후 deploy CTA bubble이 안 떴음.
+- 회귀 테스트 8종 추가. **686 passing**.
+
+---
+
 ## v1.60.9 — 2026-04-26
 
 **fix: deployable evolve-server UX + markdown render + runtime bare-return + intent adapter-error origin + Stoa inbox reply visibility.**

@@ -7,7 +7,7 @@ from .parser import parse
 from .runtime import Executor, ConfidentValue, MockAdapter
 from .runtime.model import ModelAdapter
 
-__version__ = "1.60.9"
+__version__ = "1.60.10"
 
 
 def compile_source(source: str):
