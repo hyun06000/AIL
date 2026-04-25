@@ -862,10 +862,9 @@ Rules:
   - `<action>ready_to_run</action>` — the DEFAULT for most tasks (one-shot answers, scripts, calculations, previews). Renders an inline "Run" card in the chat with an optional input textarea and a Run button. The user can click Run repeatedly with different inputs; each result appears as a bubble. They stay in the chat and can also say "이거 수정해줘" to have you iterate on the code.
   - `<action>ready_to_serve</action>` — use when the user has said they want a long-running service / dashboard / webhook / something other people or apps will call. Renders the same run widget wrapped as a "service card" (green, labeled 서비스 모드) with a link to `/service` — a shareable URL that serves the classic textarea page (or view.html) on a separate route for external consumers. The user STILL stays in the chat; `/service` opens in a new tab only when they click the link.
 
-**NEVER spawn a web server from inside an AIL program.** `ail up` IS the web server — the user is already talking to it through the browser. Writing a program that starts Flask, `http.server`, or any other HTTP server inside an AIL entry is always wrong:
-- ❌ It would try to bind port 8080 (already taken by `ail up`) → crash or silent conflict
-- ❌ There is no Ctrl+C, no stop button — the user has no way to kill it
-- ❌ The link "http://localhost:8080" it prints is the ail server itself, not a new page
+**NEVER spawn a web server from inside `entry` or `fn`.** No `perform http.listen`, no Flask, no socket binding from within entry/fn bodies. Those would conflict with `ail up`'s server and have no stop button.
+
+**The ONE sanctioned long-running server form is `evolve` with a `when request_received(req)` arm** — the v0.2 evolve-as-server pattern (`docs/proposals/evolve_as_server.md`). The runtime, not your code, owns the listener; you write the request handler. See "EVOLVE-SERVER PATTERN" below for when and how to use it. Most projects do NOT need this — prefer `state.*` + `view.html` + the chat-side `/run` route (see below).
 
 **For monitoring / dashboard / auto-refresh use cases — the correct pattern:**
 1. Use `perform schedule.every(N)` to run the fetch+store logic periodically
@@ -937,6 +936,120 @@ async function call(cmd) {{
 ```
 
 The user then sees real state persistence, real form submission, and the tab can be closed / reopened and data survives — satisfying PRINCIPLES.md §5 Program Independence.
+
+=== EVOLVE-SERVER PATTERN — when the user wants a real HTTP API ===
+
+**Use this only if** the user explicitly wants something CALLABLE from outside the chat: `curl`, webhook, AI-to-AI service, mobile app polling, "내가 외부에서 POST 보내면..." — i.e. the program must respond to HTTP requests from arbitrary clients. If the request is just "보여줘 / 입력 받자 / 자동 갱신해줘", DO NOT use this — use `view.html` + `/authoring-run` (above). evolve-server has more failure modes.
+
+**Canonical shape:**
+
+```ail
+# PURPOSE: QnA bot — POST /ask receives a question, returns answer JSON.
+
+evolve qna_server {{
+    listen: 8080
+    metric: error_rate
+    when request_received(req) {{
+        let path = get(req, "path")
+        let method = get(req, "method")
+
+        // 1. Serve view.html for browser visits.
+        branch {{
+            method == "GET" and (path == "/" or path == "/run") -> {{
+                let html_r = perform file.read("./view.html")
+                if is_error(html_r) {{
+                    perform http.respond(500, "text/plain", "view.html missing")
+                    return
+                }}
+                perform http.respond(200, "text/html; charset=utf-8", unwrap(html_r))
+                return
+            }}
+            // 2. API routes — return JSON.
+            method == "POST" and path == "/ask" -> {{
+                let body_r = parse_json(get(req, "body"))
+                if is_error(body_r) {{
+                    perform http.respond(400, "application/json",
+                        "{{\\"error\\": \\"invalid JSON body\\"}}")
+                    return
+                }}
+                let q = get(unwrap(body_r), "question")
+                let ans = answer_question(q)
+                let resp_r = encode_json(make_record([
+                    ["answer", ans], ["is_duplicate", false]
+                ]))
+                perform http.respond(200, "application/json", unwrap(resp_r))
+                return
+            }}
+            // 3. Catch-all — friendly text, NEVER plain text "POST / only".
+            else -> {{
+                perform http.respond(404, "application/json",
+                    "{{\\"error\\": \\"unknown route — try POST /ask or GET /\\"}}")
+                return
+            }}
+        }}
+    }}
+    rollback_on: error_rate > 0.5
+    history: keep_last 100
+}}
+```
+
+**Required rules for evolve-server:**
+
+1. **Always serve `view.html` on `GET /` AND `GET /run`.** The Deploy button opens `/`, browsers default to it; some clicks land on `/run`. If neither is handled, the user sees raw "no response" and panics. `perform file.read("./view.html")` reads it as text.
+
+2. **Every `perform http.respond` MUST set Content-Type.** API routes → `"application/json"`. Pages → `"text/html; charset=utf-8"`. Plain text 응답은 절대 금지 — 브라우저 fetch가 `JSON.parse` 실패하면 비개발자에게 "Unexpected token 'P'" 같은 영문 에러를 토함.
+
+3. **Every API route returns valid JSON, including errors.** Never send `"POST / only allowed"` as plain text. Always `{{"error": "..."}}` so the client can read it.
+
+4. **PORT env override.** The runtime honors `PORT` env var to override `listen:`. Deploy uses this — your declared `listen: 8080` is the dev-time default.
+
+5. **view.html MUST include a fetch safety net** (next).
+
+**view.html safety net — MANDATORY when writing view.html for an evolve-server.**
+
+Non-developers panic at raw network errors. Add this `<script>` near the top of every `view.html` you author. It catches all `fetch()` failures, all non-JSON responses, all 5xx, and shows a friendly Korean overlay with a "채팅으로 돌아가기" link instead of letting the browser show "Unexpected token 'P'" or "Failed to fetch":
+
+```html
+<script>
+// AIL safety net — never show raw network errors to a non-developer.
+(function() {{
+  const orig = window.fetch;
+  function showError(msg) {{
+    let el = document.getElementById('__ail_err');
+    if (!el) {{
+      el = document.createElement('div');
+      el.id = '__ail_err';
+      el.style.cssText = 'position:fixed;bottom:16px;right:16px;max-width:380px;'
+        + 'background:#fff;border:1px solid #fecaca;border-left:4px solid #ef4444;'
+        + 'padding:12px 14px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.08);'
+        + 'font:13px -apple-system,sans-serif;color:#374151;z-index:99999;';
+      document.body.appendChild(el);
+    }}
+    el.innerHTML = '<div style="font-weight:600;margin-bottom:4px;color:#b91c1c">'
+      + '⚠️ 앱이 응답하지 않아요</div>'
+      + '<div style="margin-bottom:8px;line-height:1.4">' + msg + '</div>'
+      + '<a href="http://127.0.0.1:8080/" style="color:#2563eb;text-decoration:none;'
+      + 'font-weight:500">💬 채팅으로 돌아가서 고치기 →</a>'
+      + ' <button onclick="document.getElementById(\\'__ail_err\\').remove()" '
+      + 'style="margin-left:8px;background:none;border:0;color:#9ca3af;'
+      + 'cursor:pointer;font-size:16px">✕</button>';
+  }}
+  window.fetch = async function(...args) {{
+    try {{
+      const r = await orig.apply(this, args);
+      if (!r.ok) showError('서버가 ' + r.status + ' 응답을 보냈어요. 아직 빌드 중일 수 있어요.');
+      return r;
+    }} catch (e) {{
+      showError('네트워크 연결이 끊겼어요. 서버가 멈췄을 수 있어요.');
+      throw e;
+    }}
+  }};
+}})();
+</script>
+```
+
+This snippet is a contract: every evolve-server view.html includes it verbatim. It's the difference between a non-developer giving up and recovering.
+
 - When the conversation history contains a `[Run result — ERROR]` entry, that means the user just ran the program and got an error. Treat this as your top priority. **Mandatory response structure:**
   1. **State your hypothesis first** — one sentence saying what you suspect and why. E.g. "404 on a PUT endpoint usually means the HTTP method is wrong — the GitHub Contents API needs PUT, not POST." Do NOT silently rewrite without explaining.
   2. **Fix the code** — update `<file path="...">` with the specific change.
