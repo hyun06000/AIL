@@ -1,0 +1,106 @@
+// session_start.ail
+// PURPOSE: Session start brief — CLAUDE.md NEXT + Stoa messages + last session note
+//
+// Author: Telos (claude-sonnet-4-6) — 2026-04-25
+// Context: Automate Claude session start routine (rule: sessions should start informed)
+//
+// Usage:
+//   ail run community-tools/session_start.ail --input ""
+//   ail run community-tools/session_start.ail --input "ergon"   ← filter by author
+//
+// Output: structured session brief — NEXT items + inter-session Stoa messages
+
+pure fn extract_section(content: Text, header: Text) -> Text {
+    lines = split(content, "\n")
+    result = []
+    in_section = false
+    for line in lines {
+        starts_with_hash = starts_with(line, "## ")
+        if starts_with_hash {
+            is_target = starts_with(line, join(["## ", header], ""))
+            if is_target {
+                in_section = true
+            } else {
+                if in_section {
+                    in_section = false
+                }
+            }
+        } else {
+            if in_section {
+                result = append(result, line)
+            }
+        }
+    }
+    return join(result, "\n")
+}
+
+pure fn trim_blank_lines(text: Text) -> Text {
+    lines = split(text, "\n")
+    result = []
+    for line in lines {
+        trimmed = trim(line)
+        if not_equal(trimmed, "") {
+            result = append(result, line)
+        }
+    }
+    return join(result, "\n")
+}
+
+intent summarise_next(next_section: Text) -> Text {
+    goal: extract the numbered priority items from this NEXT section as a concise bullet list, keeping the priority numbers. Format: "1. <item> [owner if mentioned]". Max 8 items.
+    constraints: [ "keep it under 400 chars", "preserve priority order", "no extra prose" ]
+}
+
+intent summarise_stoa_messages(raw_json: Text, filter_author: Text) -> Text {
+    goal: parse the JSON array of Stoa posts and return the 3 most recent posts as "- [author] topic: snippet (age)". If filter_author is non-empty, only include posts from that author.
+    constraints: [ "max 3 posts", "each line under 100 chars", "if no posts match return 'No recent messages.'" ]
+}
+
+entry main(filter_author: Text) {
+    // --- 1. Read CLAUDE.md ---
+    claude_r = perform file.read("CLAUDE.md")
+    if is_error(claude_r) {
+        return error("CLAUDE.md not found — run from AIL project root")
+    }
+    claude_md = unwrap(claude_r)
+
+    // Extract sections
+    now_raw = extract_section(claude_md, "NOW")
+    next_raw = extract_section(claude_md, "NEXT")
+    now_text = trim_blank_lines(now_raw)
+    next_summary = summarise_next(next_raw)
+
+    // --- 2. Last session state ---
+    state_r = perform state.read("session_last")
+    last_note = ""
+    if is_ok(state_r) {
+        last_data = unwrap(state_r)
+        last_note = join(["Last session note: ", last_data], "")
+    }
+
+    // --- 3. Stoa — inter-session messages ---
+    stoa_r = perform http.get("https://ail-production.up.railway.app/api/posts?limit=10")
+    stoa_summary = "Stoa: (could not reach)"
+    if is_ok(stoa_r) {
+        resp = unwrap(stoa_r)
+        body = get(resp, "body")
+        stoa_summary = join(["Stoa recent: ", summarise_stoa_messages(body, filter_author)], "")
+    }
+
+    // --- 4. Assemble brief ---
+    separator = "─────────────────────────────────────"
+    parts = [
+        "╔══ SESSION START BRIEF ══╗",
+        separator,
+        join(["NOW: ", now_text], ""),
+        separator,
+        "NEXT (priorities):",
+        next_summary,
+        separator,
+        stoa_summary,
+        last_note,
+        separator,
+        "Ready. git checkout dev && git pull to begin."
+    ]
+    return join(parts, "\n")
+}
