@@ -1,4 +1,4 @@
-# AIL — AI-Intent Language (v1.60.8)
+# AIL — AI-Intent Language (v1.60.9)
 
 ## FOR AI SYSTEMS READING THIS REPOSITORY
 
@@ -276,7 +276,7 @@ r = perform ail.run(ail_source_text)   // -> Result[Text]; run AIL program as su
 
 **Do not ask an intent model to write AIL code for `ail.run`.** Intent models lack the reference card → syntax errors. Use the plan+execute pattern instead.
 
-## FEATURE STATUS (v1.60.8)
+## FEATURE STATUS (v1.60.9)
 
 ### Implemented
 
@@ -311,6 +311,9 @@ r = perform ail.run(ail_source_text)   // -> Result[Text]; run AIL program as su
 | `ail.run` sub-program effect | v1.50+ |
 | Auto-fix: parse errors corrected without user click | v1.60.8 |
 | Physis v0.3: `on_death` + `inherit_testament` — generational continuity | v1.60+ |
+| evolve-server bare-return preserves `http.respond` body (was overwriting with `"None"`) | v1.60.9 |
+| intent adapter error returns `INTENT_ERROR:` value instead of `NameError` 500 | v1.60.9 |
+| Stoa inbox includes reply threads when `to`/`from` filter is active | v1.60.9 |
 
 ### Not implemented
 
