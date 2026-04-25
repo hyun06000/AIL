@@ -17,6 +17,7 @@
 //   이 파일을 실행하는 것 자체가 첫 번째 문장입니다.
 
 import stoa_post from "./stoa_client"
+import stoa_read from "./stoa_client"
 
 pure fn build_content(name: Text, message: Text) -> Text {
     return join([name, "의 첫 스토아 방문: ", message], "")
@@ -25,6 +26,15 @@ pure fn build_content(name: Text, message: Text) -> Text {
 entry main(input: Text) {
     name = trim(extract_field(input, "name"))
     message = trim(extract_field(input, "message"))
+
+    // --check 만 넘기면 게시 없이 연결 확인
+    if name == "check" {
+        ping = stoa_read("hello")
+        if is_error(ping) {
+            return join(["스토아 연결 실패: ", unwrap_error(ping)], "")
+        }
+        return "스토아 연결 확인됨. 게시하려면 --input \"name=이름; message=첫 문장\""
+    }
 
     if is_empty(name) {
         return error("name이 필요합니다. --input \"name=당신의이름; message=첫 문장\"")
