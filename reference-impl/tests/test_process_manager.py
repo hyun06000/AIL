@@ -140,3 +140,23 @@ def test_descriptively_named_evolve_server_no_marker_fallback(tmp_path):
     (tmp_path / "qna_server.ail").write_text(src)
     proj = Project.at(tmp_path)
     assert _program_is_evolve_server(proj) is True
+
+
+def test_python_dash_m_ail_is_runnable():
+    """Deploy spawns `python -m ail run <file>` (process_manager).
+    Without ail/__main__.py the package isn't directly runnable and
+    spawn dies immediately with `No module named ail.__main__`,
+    leaving a phantom deployment record in the UI. qna_bot field
+    test 2026-04-26: deploy clicked → 즉시 silent fail → user sees
+    'running' indicator but server never bound."""
+    import subprocess, sys
+    r = subprocess.run(
+        [sys.executable, "-m", "ail", "version"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert r.returncode == 0, (
+        f"`python -m ail version` failed (returncode={r.returncode}). "
+        f"stderr: {r.stderr!r}. The `ail/__main__.py` shim is missing, "
+        "so process_manager's Deploy spawn will die instantly."
+    )
+    assert "ail" in (r.stdout + r.stderr).lower()
