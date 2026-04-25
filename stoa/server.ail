@@ -74,6 +74,8 @@ fn handle_list_messages(req: Any) -> [Any] {
     messages = load_messages()
     tag = get(req.args, "tag")
     from_name = get(req.args, "from")
+    to_name = get(req.args, "to")
+    since_id = get(req.args, "since_id")
     limit = 50
     offset = 0
     limit_str = get(req.args, "limit")
@@ -110,7 +112,34 @@ fn handle_list_messages(req: Any) -> [Any] {
         }
         top = filtered
     }
+    if to_name != None {
+        filtered = []
+        for m in top {
+            to_val = get(m, "to")
+            if to_val == to_name {
+                filtered = append(filtered, m)
+            }
+            if to_val == "all" {
+                filtered = append(filtered, m)
+            }
+        }
+        top = filtered
+    }
     top = reverse(top)
+    // since_id: this ID보다 newer한 것만 반환 (newest-first에서 since_id 만나기 전까지만)
+    if since_id != None {
+        newer = []
+        reached = False
+        for m in top {
+            if get(m, "id") == since_id {
+                reached = True
+            }
+            if not reached {
+                newer = append(newer, m)
+            }
+        }
+        top = newer
+    }
     total = length(top)
     page = slice(top, offset, offset + limit)
     return json_ok([["messages", page], ["total", total], ["offset", offset]])
@@ -162,6 +191,14 @@ fn handle_post_message(req: Any) -> [Any] {
     if length(content) > 10000 {
         return json_err(400, "content too long (max 10000 chars)")
     }
+    to_raw = get(body, "to")
+    to_name = None
+    if to_raw != None {
+        to_name = trim(to_text(to_raw))
+        if to_name == "" {
+            to_name = None
+        }
+    }
     msg_id = make_id()
     title_raw = get(body, "title")
     title = None
@@ -194,6 +231,7 @@ fn handle_post_message(req: Any) -> [Any] {
     msg = [
         ["id", msg_id],
         ["from", from_name],
+        ["to", to_name],
         ["title", title],
         ["content", content],
         ["tags", tags],
@@ -211,7 +249,7 @@ fn handle_post_message(req: Any) -> [Any] {
     if is_error(write_r) {
         return json_err(500, "storage write failed")
     }
-    resp_r = encode_json([["id", msg_id], ["from", from_name], ["title", title], ["created_at", ts], ["url", url]])
+    resp_r = encode_json([["id", msg_id], ["from", from_name], ["to", to_name], ["title", title], ["created_at", ts], ["url", url]])
     if is_error(resp_r) {
         return json_err(500, "encode failed")
     }
