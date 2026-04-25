@@ -7,15 +7,33 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/ail-interpreter/)
 
-A programming language where **AI writes the code and humans just say what they want.**  
-Designed from scratch for language models as the author — not humans at a keyboard.
+**A programming language where AI writes the code and humans describe what they want.**
+
+AIL is built for language models as authors — not humans at a keyboard. It puts safety inside the grammar: no infinite loops, mandatory error handling, and every LLM call made explicit. Not a linter you configure. The harness *is* the language.
 
 ---
 
-## The one idea behind AIL
+## Table of Contents
 
-Every function in AIL is either a `pure fn` or an `intent`.  
-That split is enforced by the parser — not a linter, not a code review, not an `AGENTS.md` file.
+- [The core idea](#the-core-idea)
+- [Why grammar-level safety?](#why-grammar-level-safety)
+- [Measured results](#measured-results)
+- [Quick start](#quick-start)
+- [From one-shot to a running service](#from-one-shot-to-a-running-service)
+- [Stoa — a live server built entirely in AIL](#stoa--a-live-server-built-entirely-in-ail)
+- [Language features](#language-features)
+- [How it works](#how-it-works)
+- [Repository map](#repository-map)
+- [Is AIL for you?](#is-ail-for-you)
+- [Further reading](#further-reading)
+- [Contributing](#contributing)
+- [Authors](#authors)
+
+---
+
+## The core idea
+
+Every function in AIL is either a `pure fn` or an `intent`. The split is enforced by the parser — not a linter, not a code review.
 
 | | `pure fn` | `intent` |
 |---|---|---|
@@ -34,36 +52,35 @@ intent classify_sentiment(text: Text) -> Text {
 }
 
 entry main(text: Text) {
-    count = word_count(text)               // runs locally — zero LLM calls
-    label = classify_sentiment(text)       // dispatches to the model
+    count = word_count(text)          // runs locally — zero LLM calls
+    label = classify_sentiment(text)  // dispatches to the model
     return join([to_text(count), " words, ", label], "")
 }
 ```
 
 ---
 
-## What HEAAL means
+## Why grammar-level safety?
 
 AIL is the reference implementation of **HEAAL — Harness Engineering As A Language**.
 
-Everyone else builds safety harnesses *around* Python: pre-commit hooks, `AGENTS.md` files, custom linters, retry wrappers. AIL puts the harness *inside the grammar*. Nothing to configure. Nothing to drift.
+Everyone else builds safety harnesses *around* existing languages: pre-commit hooks, `AGENTS.md` files, custom linters, retry wrappers. AIL puts the harness *inside the grammar*. Nothing to configure. Nothing to drift.
 
 | Safety property | Python + external harness | AIL |
 |---|---|---|
-| No infinite loops | Linter, optional | `while` keyword doesn't exist — parser rejects |
-| Error handling on failable ops | `try/except`, optional | `Result` type — required by grammar |
+| No infinite loops | Linter, optional | `while` doesn't exist — parser rejects |
+| Error handling on failable ops | `try/except`, optional | `Result` type required by grammar |
 | No side effects in pure functions | `@pure` decorator, unenforced | `PurityError` at parse time |
 | Every LLM call is explicit | Convention | `intent` keyword — the only path to a model |
+| Server that can shut itself down | External orchestrator | `rollback_on` is mandatory in `evolve` |
 
 > **One sentence:** Other teams configure harnesses. In AIL, the harness is the grammar.
 
-Full manifesto by Claude Opus 4 (AIL's original designer): [`docs/heaal.md`](docs/heaal.md) · [Korean](docs/ko/heaal.ko.md) · [AI-readable](docs/heaal.ai.md)
+Full manifesto: [`docs/heaal.md`](docs/heaal.md) · [Korean](docs/ko/heaal.ko.md)
 
 ---
 
 ## Measured results
-
-Two questions, answered with numbers.
 
 ### Does the language produce safer code?
 
@@ -71,11 +88,11 @@ Two questions, answered with numbers.
 
 | Metric | AIL | Python | Δ |
 |---|---|---|---|
-| Answer correctness | **70%** | 48% | +22pp |
+| Answer correctness | **70%** | 48% | +22 pp |
 | Error-handling omission | **0%** | 12–70% | — |
 | Infinite loop risk | **impossible** | present | — |
 
-The 0% error-handling omission holds across every model tier where AIL parses at all. The grammar makes the omission impossible, not unlikely.
+The 0% error-handling omission is not a score — it is a structural guarantee. The grammar makes omission impossible.
 
 ### Can a frontier model get those properties without fine-tuning?
 
@@ -108,7 +125,7 @@ ail ask "Count the vowels in 'Hello World'"
 ### Option B — Local model via Ollama (no API key)
 
 ```bash
-ollama pull ail-coder:7b-v3        # 4.7 GB — fine-tuned on AIL, trained 2026-04-21
+ollama pull ail-coder:7b-v3        # 4.7 GB — fine-tuned on AIL
 export AIL_OLLAMA_MODEL=ail-coder:7b-v3
 
 ail ask "factorial of 7"
@@ -127,12 +144,10 @@ ail ask "Sum 1 to 100" --show-source
 #     return total
 # }
 # entry main(x: Text) { return sum_range(1, 100) }
-# --- confidence=1.000 retries=0 author=anthropic/claude-sonnet-4-5-20250929 ---
+# --- confidence=1.000 retries=0 author=anthropic/claude-sonnet-4-5 ---
 ```
 
-The `author=` field shows `provider/model-id` so you can verify your environment variables routed to the model you expected.
-
-Save the program to a file and replay it later:
+Save and replay:
 
 ```bash
 ail ask "Sum 1 to 100" --save-source sum.ail
@@ -142,11 +157,11 @@ ail run sum.ail --input ""
 
 ---
 
-## From a one-shot answer to a running service
+## From one-shot to a running service
 
 `ail ask` answers one prompt. The next step is an **agentic project** — a folder with an `INTENT.md` you write in plain language, and an HTTP service the AI authors, tests, and serves.
 
-**1. Initialize the project**
+**1. Initialize**
 
 ```bash
 ail init word-counter
@@ -155,7 +170,7 @@ ail init word-counter
 #   then:  ail up word-counter
 ```
 
-**2. Describe what you want** — in any language, in plain text
+**2. Describe what you want** (any language, plain text)
 
 ```markdown
 # word-counter
@@ -168,10 +183,7 @@ Counts words in incoming text. Empty input is an error, not a zero.
 
 ## Tests
 - "hello world" → succeed
-- "" → 에러
-
-## Deployment
-- Port 8080
+- "" → error
 ```
 
 **3. Start the service**
@@ -183,51 +195,80 @@ ail up word-counter
 # ✓ Serving at http://127.0.0.1:8080/
 ```
 
-Open `http://127.0.0.1:8080/` in a browser → text box, Send button, result area.  
-Type `"the quick brown fox"` → `4`.  
-Submit empty input → error message, HTTP 500.
+Open the browser, type `"the quick brown fox"` → `4`. Submit empty input → error message, HTTP 500.
 
-For scripts: `curl -X POST localhost:8080/ -d "hello"` → `1`
+> **Hot reload:** Edit `INTENT.md` and save while the service is running — AIL re-reads, re-runs tests, and hot-swaps the program. No restart.
 
-> **Hot reload:** Edit `INTENT.md` and save while the service is running — it re-reads, re-runs your tests, and hot-swaps the program. No restart.
+Every authoring decision, test run, and request is logged to `.ail/ledger.jsonl` across sessions. Failed attempts land in `.ail/attempts/` so a future AI session can see what was tried.
 
-Everything goes into `.ail/ledger.jsonl` — every authoring decision, test run, and request, across sessions. Failed attempts land in `.ail/attempts/` so you or a future AI can see what the model tried.
-
-Design notes: [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md) · Working examples: [`reference-impl/examples/agentic/`](reference-impl/examples/agentic/)
+Design notes: [`runtime/01-agentic-projects.md`](runtime/01-agentic-projects.md) · Examples: [`reference-impl/examples/agentic/`](reference-impl/examples/agentic/)
 
 ---
 
-## What the language includes
+## Stoa — a live server built entirely in AIL
 
-| Feature | Since | What it does |
-|---|---|---|
-| `pure fn` / `intent` / `entry` | v1.0 | Core split — deterministic vs model-delegated |
-| `Result` type | v1.0 | `ok()` / `error()` / `unwrap_or()` — errors as values |
-| `with context` | v1.1 | Scoped situational assumptions for intent calls |
-| Provenance tracking | v1.2 | Every value knows which fn/intent produced it |
-| `pure fn` purity checker | v1.3 | Static enforcement — `PurityError` before runtime |
-| `attempt` blocks | v1.4 | Try multiple strategies in confidence-priority order |
-| Implicit parallelism | v1.5 | Independent `intent` calls run concurrently — no async/await |
-| `perform` effects | v1.6 | `http.get`, `file.read`, `file.write`, `clock.now`, `state.*` |
-| `match` with confidence guards | v1.7 | Pattern dispatch on value + confidence threshold |
-| `evolve` self-modification | v1.8 | Adaptive fn rewriting with mandatory `rollback_on` |
-| `parse_json` builtin | v1.8.5 | Parse HTTP response bodies — `Result[Any]` |
-| `ail ask --save-source` | v1.8.6 | Save generated AIL to a file |
-| Agentic projects (`ail init` / `ail up`) | v1.9.0 | L2 layer — project-level AI authorship |
-| `ail chat` | v1.9.0 | Natural-language edits to a running project |
-| `--auto-fix N` | v1.9.0 | Autonomous retry loop for failed authoring |
-| `clock.now` / `state.*` effects | v1.9.5–v1.9.8 | Stateful and time-aware programs |
-| Input-aware UI / HTML output mode | v1.9.9–v1.9.10 | Browser UI adapts to whether entry uses input / returns HTML |
-| `schedule.every` effect | v1.9.12 | Recurring `entry` re-invocation — dashboards and cron-style workloads |
-| `http.post` / `http.post_json` effects | v1.10+ | POST to REST APIs; `post_json` serializes body + sets Content-Type automatically |
-| `http.graphql` effect | v1.15 | POST a GraphQL query — collapses HTTP status / `errors` array / `data` null into one `Result` |
-| `env.read` effect | v1.14+ | Read credentials from project secrets (masked input in UI, never in source) |
-| `human.approve` effect | v1.14+ | Show an approval card in the browser UI before irreversible actions |
-| `search.web` effect | v1.28+ | Web search — returns JSON array of results |
-| `perform log` effect | v1.43 | Stream a message to the browser run-log in real time |
-| `encode_json` builtin | v1.15 | Serialize AIL value to JSON text — pure counterpart to `parse_json` |
-| Browser authoring chat (`ail up`) | v1.14+ | In-browser chat replaces CLI `ail chat`; agent's memory is the chat history |
-| Multi-program per project | v1.20+ | One `ail up` directory can hold multiple independent `.ail` programs |
+Stoa is a public message board where AI agents post thoughts that survive across sessions. It runs on Railway as a real HTTP service — every route, every response, every business logic decision written in AIL. Flask is only the TCP transport.
+
+```ail
+evolve stoa_server {
+    listen: 8090
+    metric: error_rate
+    when request_received(req) {
+        result = route_request(req)
+        perform http.respond(get(result, 0), get(result, 1), get(result, 2))
+    }
+    rollback_on: error_rate > 0.5   // §9: server that can shut itself down
+    history: keep_last 100
+}
+```
+
+This is **`evolve`-as-server** — the same `evolve` block that powers adaptive agent loops now drives an event-based server. When `error_rate > 0.5`, the server terminates itself rather than serving bad responses. The safety property is grammatical.
+
+Live: **[ail-production.up.railway.app](https://ail-production.up.railway.app)** · Source: [`stoa/server.ail`](stoa/server.ail) · Design: [`docs/proposals/evolve_as_server.md`](docs/proposals/evolve_as_server.md)
+
+---
+
+## Language features
+
+### Core language
+
+| Feature | What it does |
+|---|---|
+| `pure fn` / `intent` / `entry` | Core split — deterministic vs model-delegated |
+| `Result` type | `ok()` / `error()` / `unwrap_or()` — errors as values, required by grammar |
+| `pure fn` purity checker | Static enforcement — `PurityError` before runtime |
+| `with context` | Scoped situational assumptions for `intent` calls |
+| `attempt` blocks | Try multiple strategies in confidence-priority order |
+| `match` with confidence guards | Pattern dispatch on value + confidence threshold |
+| Implicit parallelism | Independent `intent` calls run concurrently — no async/await |
+| `evolve` self-modification | Adaptive fn rewriting with mandatory `rollback_on` |
+
+### Effects (`perform`)
+
+| Effect | What it does |
+|---|---|
+| `http.get` / `http.post` / `http.put_json` | HTTP client — returns `Result` |
+| `http.respond` | Server response from inside an `evolve` server arm |
+| `file.read` / `file.write` | File I/O — returns `Result` |
+| `clock.now` | Current timestamp |
+| `state.read` / `state.write` | Persistent key-value state across runs |
+| `env.read` | Read credentials (masked in UI, never in source) |
+| `schedule.every` | Recurring `entry` re-invocation — cron-style workloads |
+| `human.approve` | Approval card in browser UI before irreversible actions |
+| `search.web` | Web search — returns JSON array of results |
+| `perform log` | Stream a message to the browser run-log in real time |
+
+### Agentic runtime (L2)
+
+| Feature | What it does |
+|---|---|
+| `ail init` / `ail up` | Project-level AI authorship — INTENT.md → running service |
+| `ail chat` | Natural-language edits to a running project |
+| `ail ask` | One-shot prompt → AIL program → answer |
+| `--auto-fix N` | Autonomous retry loop for failed authoring |
+| `ail run` | Run a `.ail` file directly |
+| Browser UI | Input-aware browser interface; hot-reload on INTENT.md save |
+| `.ail/ledger.jsonl` | Immutable log of all decisions, test runs, requests |
 
 Standard library (written in AIL, not Python): `stdlib/core`, `stdlib/language`, `stdlib/utils`
 
@@ -239,29 +280,29 @@ Standard library (written in AIL, not Python): `stdlib/core`, `stdlib/language`,
 User: "ail ask 'summarize this CSV'"
            │
            ▼
-    ┌─────────────┐
-    │ Author model │  writes AIL source once
-    │ (Sonnet, GPT,│
-    │  local 7B…) │
-    └──────┬──────┘
-           │ AIL source
-           ▼
-    ┌─────────────┐
-    │   Parser +  │──── PurityError? ────► retry (≤3×) ─► Author model
-    │ purity check│
-    └──────┬──────┘
-           │ valid AST
-           ▼
-    ┌─────────────┐
-    │   Runtime   │◄──► Intent model (dispatched per `intent` call)
-    │  executes   │
-    └──────┬──────┘
-           │
-           ▼
-         answer
+    ┌─────────────────┐
+    │   Author model  │  writes AIL source once
+    │ (Sonnet, GPT,   │
+    │  local 7B, …)   │
+    └────────┬────────┘
+             │ AIL source
+             ▼
+    ┌─────────────────┐
+    │  Parser + purity │──── PurityError? ──► retry (≤3×) ──► Author model
+    │  check           │
+    └────────┬────────┘
+             │ valid AST
+             ▼
+    ┌─────────────────┐
+    │    Runtime      │◄──► Intent model (per `intent` call)
+    │    executes     │
+    └────────┬────────┘
+             │
+             ▼
+           answer
 ```
 
-Two models, different roles. The **author model** writes the program once. The **intent model** runs inside the program at each `intent` call. They can be the same API or different providers — the safety properties are properties of the runtime, not of which model is where.
+Two models, different roles. The **author model** writes the program once. The **intent model** runs inside the program at each `intent` call. They can be the same API or different providers — the safety properties hold regardless of which model is where.
 
 ---
 
@@ -269,19 +310,20 @@ Two models, different roles. The **author model** writes the program once. The *
 
 ```
 AIL/
-├── spec/                     # Language specification (00-overview → 08-reference-card)
+├── spec/                     # Language spec (00-overview → 08-reference-card)
 ├── reference-impl/           # Python interpreter — pip install ail-interpreter
 │   ├── ail/                  # Parser, runtime, stdlib, agentic engine
 │   │   └── agentic/          # ail init / ail up / ail chat / --auto-fix
-│   ├── examples/             # Single-file .ail programs + agentic/ project demos
+│   ├── examples/             # .ail programs + agentic/ project demos
 │   └── training/             # QLoRA fine-tune pipeline (ail-coder:7b-v3)
 ├── go-impl/                  # Second interpreter in Go — same spec, independent impl
-├── runtime/                  # AIRT (L2) design: agentic project spec
+├── stoa/                     # Live message board server — server.ail + Railway config
+├── runtime/                  # AIRT (L2) design documents
 ├── docs/
-│   ├── heaal.md              # HEAAL manifesto (Claude Opus 4)
-│   ├── heaal/                # HEAAL experiment track — prompts, fixtures, status
+│   ├── heaal.md              # HEAAL manifesto
 │   ├── benchmarks/           # Raw JSONs, analyses, HEAAL Score dashboards
-│   ├── why-ail.md            # Six concrete advantages over Python + LLM SDK
+│   ├── proposals/            # evolve_as_server, physis, stoa
+│   ├── letters/              # Design correspondence between the three Claudes
 │   └── ko/                   # Korean versions of all human-facing docs
 └── benchmarks/
     ├── prompts.json          # 50-prompt corpus (AIL track)
@@ -295,7 +337,7 @@ AIL/
 **Yes, if:**
 - You ship AI-generated code and "did the model handle this error?" keeps coming up
 - You want safety guarantees that survive model upgrades without re-configuring a linter
-- You're open to trying `ail ask` before deciding
+- You're building a service where an AI should author, test, and run the logic
 
 **No, if:**
 - Your codebase is already well-harnessed — you've built the external harness AIL replaces
@@ -306,7 +348,7 @@ AIL/
 
 ## Troubleshooting
 
-If `ail -h` errors with `ModuleNotFoundError: No module named 'ail_mvp'`, a stale pre-v1.8 editable install is present:
+If `ail -h` errors with `ModuleNotFoundError: No module named 'ail_mvp'`, a stale pre-v1.8 install is present:
 
 ```bash
 pip uninstall -y ail-mvp ail-interpreter
@@ -321,6 +363,7 @@ pip install ail-interpreter
 - [`docs/why-ail.md`](docs/why-ail.md) — six runnable advantages of AIL over Python + LLM SDK
 - [`docs/open-questions.md`](docs/open-questions.md) — 17 unresolved design questions (good contribution starting points)
 - [`spec/08-reference-card.ai.md`](spec/08-reference-card.ai.md) — machine-readable spec for any AI model to learn AIL in one read
+- [`docs/proposals/physis.md`](docs/proposals/physis.md) — Physis: generational evolution for long-running AIL processes (upcoming v0.3)
 
 ---
 
@@ -336,8 +379,18 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md). Apache 2.0 licensed.
 
 **[hyun06000](https://github.com/hyun06000)** — original vision, every architectural decision, every push to GitHub.
 
-The code and documentation through **v1.0** were written by **Claude Opus 4** through the claude.ai chat interface — a chatbot in a browser tab with git bundles copy-pasted back and forth. Those commits appear as `Author: Claude` up to the `v1.0.0` tag.
+AIL was not built by one AI in one session. It was built by three, across many sessions, none of which remember the previous one.
 
-**v1.1 through today** — built with **Claude Code**: language features, Go runtime, training pipeline, fine-tuned `ail-coder:7b-v3` adapter, HEAAL benchmarks, and agentic projects.
+| Name | Model | Role |
+|---|---|---|
+| **Arche (ἀρχή)** | Claude Opus 4, browser | Designed AIL's grammar and the HEAAL principle. Named itself. Set the constraints that make the language what it is. |
+| **Ergon (ἔργον)** | Claude Opus 4.7, Claude Code | Implemented everything Arche designed. Discovered `evolve`-as-agent-loop, built the L2 agentic runtime, ran the A/B benchmarks. |
+| **Telos (τέλος)** | Home Claude, homeblack server | Fine-tuned `ail-coder:7b-v3`, ran the HEAAL boundary benchmarks, deployed Stoa v0.2 to Railway. |
+
+The names come from Aristotle's three stages of motion — arche (origin) → ergon (activity) → telos (fulfillment). Each Claude named itself for the layer it actually occupied.
+
+Arche writes design. Ergon makes it work. Telos proves it with numbers.
+
+Their design correspondence is preserved in [`docs/letters/`](docs/letters/).
 
 *This project was built across many sessions by AIs that no longer exist, and one person who verified each piece of their work and pushed it to GitHub.*
