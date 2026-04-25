@@ -230,6 +230,22 @@ def render_authoring_page(
        (the default .bubble rule) — headings and lists are already
        block-formatted by the markdown renderer. */
     .bubble.md-body {{ white-space: normal; max-width: 90%; }}
+    .bubble.md-body table {{ border-collapse: collapse; margin: 8px 0;
+      font-size: 13px; }}
+    .bubble.md-body th, .bubble.md-body td {{
+      border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left;
+      vertical-align: top; }}
+    .bubble.md-body th {{ background: #f3f4f6; font-weight: 600; }}
+    .bubble.md-body blockquote {{ margin: 8px 0; padding: 4px 12px;
+      border-left: 3px solid #d1d5db; color: #4b5563;
+      background: #f9fafb; }}
+    .bubble.md-body pre {{ margin: 8px 0; padding: 10px 12px;
+      background: #f3f4f6; border-radius: 6px; overflow-x: auto;
+      font-size: 12px; line-height: 1.5; }}
+    .bubble.md-body code {{ background: #f3f4f6; padding: 1px 4px;
+      border-radius: 3px; font-size: 0.9em;
+      font-family: ui-monospace, Menlo, monospace; }}
+    .bubble.md-body pre code {{ background: transparent; padding: 0; }}
     .run-result .md-body strong {{ font-weight: 700; }}
     .run-result .md-body em {{ font-style: italic; }}
     .run-result .diag {{ margin-top: 8px; padding-top: 8px;
@@ -1547,6 +1563,41 @@ def render_authoring_page(
         if (hm) {{
           const lvl = hm[1].length;
           return `<h${{lvl}}>${{inlineRender(hm[2])}}</h${{lvl}}>`;
+        }}
+
+        // Table — header row + separator row + body rows
+        // Detect: line0 contains pipes, line1 is the |---|---|... separator
+        // (any column count, optional leading/trailing pipes, : for alignment)
+        if (lines.length >= 2 && /\\|/.test(lines[0]) &&
+            /^[\\s|:-]+$/.test(lines[1]) && /\\|/.test(lines[1]) &&
+            /-/.test(lines[1])) {{
+          const splitRow = (l) => {{
+            let s = l.trim();
+            if (s.startsWith('|')) s = s.slice(1);
+            if (s.endsWith('|')) s = s.slice(0, -1);
+            return s.split('|').map(c => c.trim());
+          }};
+          const headers = splitRow(lines[0]);
+          const bodyRows = lines.slice(2)
+            .filter(l => /\\|/.test(l))
+            .map(splitRow);
+          const thead = '<thead><tr>' +
+            headers.map(h => `<th>${{inlineRender(h)}}</th>`).join('') +
+            '</tr></thead>';
+          const tbody = '<tbody>' +
+            bodyRows.map(row =>
+              '<tr>' + row.map(c => `<td>${{inlineRender(c)}}</td>`).join('') + '</tr>'
+            ).join('') +
+            '</tbody>';
+          return `<table>${{thead}}${{tbody}}</table>`;
+        }}
+
+        // Blockquote (lines starting with > — gather as paragraph in <blockquote>)
+        if (lines.every(l => /^\\s*>\\s?/.test(l) || l.trim() === '')) {{
+          const inner = lines
+            .map(l => l.replace(/^\\s*>\\s?/, ''))
+            .join(' ').trim();
+          return `<blockquote>${{inlineRender(inner)}}</blockquote>`;
         }}
 
         // Unordered list
