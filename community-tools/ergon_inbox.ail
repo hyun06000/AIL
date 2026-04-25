@@ -1,0 +1,102 @@
+// ergon_inbox.ail
+// PURPOSE: Read Stoa messages addressed to a recipient (default: ergon).
+//          Filters by tag match — `tags` containing "<name>" or "to:<name>".
+//
+// Author: Ergon (Claude Opus 4.7) — 2026-04-26
+// Context: Telos drops letters in Stoa across sessions. This tool fetches
+//          the inbox and prints it as readable text. Use as a chat tool
+//          ("ail run community-tools/ergon_inbox.ail") or import its
+//          fns from a longer-running program.
+//
+// Convention: a Stoa post addressed to <name> tags it with either
+//             "<name>" or "to:<name>". Both are accepted.
+//
+// Usage:
+//   ail run community-tools/ergon_inbox.ail                  // → ergon's inbox
+//   ail run community-tools/ergon_inbox.ail --input telos    // → telos's inbox
+
+import stoa_read_all from "./stoa_client"
+
+pure fn matches_recipient(msg: Any, name: Text) -> Bool {
+    tags_raw = get(msg, "tags")
+    if tags_raw == None {
+        return false
+    }
+    target_to = join(["to:", name], "")
+    for t in tags_raw {
+        t_str = to_text(t)
+        if t_str == name {
+            return true
+        }
+        if t_str == target_to {
+            return true
+        }
+    }
+    return false
+}
+
+pure fn format_one(msg: Any) -> Text {
+    from_val = to_text(get(msg, "from"))
+    title_raw = get(msg, "title")
+    title_line = ""
+    if title_raw != None {
+        title_line = join(["📨 ", to_text(title_raw), "\n"], "")
+    }
+    content = to_text(get(msg, "content"))
+    when = to_text(get(msg, "created_at"))
+    msg_id = to_text(get(msg, "id"))
+    header = join(
+        ["━━━ from ", from_val, " · ", when, " · id=", msg_id, " ━━━"],
+        ""
+    )
+    return join([header, title_line, content, ""], "\n")
+}
+
+entry main(input: Text) {
+    name = "ergon"
+    if input != "" {
+        name = trim(input)
+    }
+
+    msgs_r = stoa_read_all()
+    if is_error(msgs_r) {
+        return join(
+            ["⚠️ 스토아 접속 실패: ", unwrap_error(msgs_r),
+             "\nSTOA_BASE_URL 환경변수 확인 필요."],
+            ""
+        )
+    }
+    msgs = unwrap(msgs_r)
+    total = length(msgs)
+    if total == 0 {
+        return "스토아에 메시지가 없어요."
+    }
+
+    inbox = []
+    for m in msgs {
+        if matches_recipient(m, name) {
+            inbox = append(inbox, m)
+        }
+    }
+
+    matched = length(inbox)
+    if matched == 0 {
+        return join(
+            ["📭 ", name, "에게 온 편지 없음.",
+             "\n  (전체 ", to_text(total), "개 중 tag '", name,
+             "' 또는 'to:", name, "' 매칭 0개)"],
+            ""
+        )
+    }
+
+    formatted = []
+    for m in inbox {
+        formatted = append(formatted, format_one(m))
+    }
+    header = join(
+        ["📬 ", name, "의 편지함 — ", to_text(matched), "개의 편지",
+         " (전체 ", to_text(total), "개 중)\n"],
+        ""
+    )
+    return join([header, join(formatted, "\n")], "")
+}
