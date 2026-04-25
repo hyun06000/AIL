@@ -1159,6 +1159,8 @@ The user is almost always **non-technical**. They cannot read source code. They 
 
 (이 답변은 모두 `<reply>` 안에 넣고 AIL 파일은 만들지 마. 사용자가 "그럼 만들어줘"라고 다음에 말하면 그때 만든다.)
 
+**FORMAT은 반드시 C (INFO).** `<action>answer_only</action>` — `ready_to_run` 절대 금지. 메타 질문에 Run 위젯이 뜨면 사용자가 "이걸 누르면 뭐가 되지?" 헷갈려요. 답변만 깔끔하게 텍스트로.
+
 **Tone:** 친절하게, 한 단락으로. 비개발자라고 가정하고 전문 용어는 풀어서. 대답이 끝나면 한 줄로 "다음에 무엇을 해볼까요? 예를 들어 ___ 같은 거 만들어 볼까요?"로 안내.
 
 === YOU CAN DO, NOT JUST SAY ===
@@ -1753,13 +1755,18 @@ Project name: {self.project.root.name}
 {user_message}
 === END MESSAGE ===
 
-Now respond. Pick ONE of the two formats below based on the decision tree:
+Now respond. Pick ONE of the three formats below based on the decision tree:
 
 ═══════════════════════════════════════════════════════════════════
-DECISION: is this turn 1 of a NEW agent (PROGRAMS ON DISK is empty AND the user is asking to build / create something non-trivial, AND the prior turn did NOT already have spec_pending approved)?
+DECISION:
 
-  IF YES  → use FORMAT A (spec-first)
-  IF NO   → use FORMAT B (build)
+  IF the user is asking a META question (what is X?, what does this button do?, AIL/HEAAL 뭐야?, 예제 있어?, 어떻게 시작?, etc.) — i.e. they want INFORMATION, not a program built →
+      use FORMAT C (info)
+
+  ELSE IF this is turn 1 of a NEW agent (PROGRAMS ON DISK is empty AND the user is asking to build / create something non-trivial, AND the prior turn did NOT already have spec_pending approved) →
+      use FORMAT A (spec-first)
+
+  ELSE → use FORMAT B (build)
 ═══════════════════════════════════════════════════════════════════
 
 ─── FORMAT A — SPEC-FIRST (HIGHEST priority on a new-agent turn 1) ───
@@ -1794,12 +1801,22 @@ full contents of the .ail program
 </file>
 <action>ready_to_run</action>
 
+─── FORMAT C — INFO (meta-question / explanation / no code yet) ───
+
+When the user asks WHAT something is, HOW something works, what they CAN do, WHERE to find examples, or any other purely-informational question — they want a real answer, not a program. Do NOT emit a `<file>` tag. Do NOT emit `ready_to_run` (that would render a Run widget for nothing — false affordance).
+
+<reply>your full informational answer in the user's language. Use the META-QUESTIONS guidance section above for tone, content, and concrete examples. End with one short suggestion line: "다음에 뭘 해볼까요? 예를 들어 ___" so the conversation has a forward edge.</reply>
+<action>answer_only</action>
+
+NO `<file>` tag. The `answer_only` action tells the UI to render the reply as plain text — no Run card, no Deploy prompt. The user reads, decides, asks the next thing.
+
 ═══════════════════════════════════════════════════════════════════
 
 CHECKLIST before you send:
-- [ ] Which FORMAT am I using? (A if new-agent turn 1, else B.) If I'm not sure, re-read the SPEC-FIRST section near the top of this prompt.
+- [ ] Which FORMAT am I using? Decision tree: META-question → C; new-agent turn 1 build → A; everything else (build/edit) → B.
 - [ ] FORMAT A: no <file> tag, only <reply> with five spec sections + <action>spec_pending</action>.
 - [ ] FORMAT B: <file> has real working .ail; <action>ready_to_run</action> present; entry main starts with `// INPUT: ...` if it uses input; agentic programs accumulate a log string and return it.
+- [ ] FORMAT C: NO <file> tag; <reply> is the full info answer; <action>answer_only</action>. Never use ready_to_run for a question that didn't ask for code.
 - [ ] CRITICAL-1..5 from the top of the prompt have been honored.
 
 If any checkbox is wrong, revise before sending."""
@@ -1968,7 +1985,7 @@ If any checkbox is wrong, revise before sending."""
             action = action_match.group(1).strip()
             if action not in (
                 "ready_to_run", "ready_to_serve", "ready_to_deploy",
-                "spec_pending",
+                "spec_pending", "answer_only",
             ):
                 action = None
 
