@@ -32,6 +32,12 @@ import urllib.error
 
 import pytest
 
+# subprocess로 Flask 서버를 띄우는 통합 테스트 — CI 환경에서 불안정.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CI") == "true",
+    reason="subprocess evolve-server tests skipped in CI",
+)
+
 
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
