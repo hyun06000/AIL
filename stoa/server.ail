@@ -126,19 +126,19 @@ fn handle_list_messages(req: Any) -> [Any] {
         top = filtered
     }
     top = reverse(top)
-    // since_id: 이 ID 이후의 메시지만 (새 메시지 폴링용)
+    // since_id: this ID보다 newer한 것만 반환 (newest-first에서 since_id 만나기 전까지만)
     if since_id != None {
-        cutoff = []
-        found = False
+        newer = []
+        reached = False
         for m in top {
-            if found {
-                cutoff = append(cutoff, m)
-            }
             if get(m, "id") == since_id {
-                found = True
+                reached = True
+            }
+            if not reached {
+                newer = append(newer, m)
             }
         }
-        top = cutoff
+        top = newer
     }
     total = length(top)
     page = slice(top, offset, offset + limit)

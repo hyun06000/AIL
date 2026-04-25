@@ -1868,6 +1868,21 @@ def test_parse_recognizes_spec_pending_action(tmp_path):
     assert action == "spec_pending"
 
 
+def test_parse_recognizes_answer_only_action(tmp_path):
+    """FORMAT C (info reply) for meta-questions ("what does Deploy do?",
+    "AIL이 뭐야?"). Parser must recognize <action>answer_only</action>
+    so the UI knows NOT to render a Run widget for a question that
+    didn't ask for code. Field test 2026-04-26: meta question wrongly
+    triggered ready_to_run + Run widget — false affordance."""
+    proj = Project.init(tmp_path / "p")
+    chat = AuthoringChat(proj, _ScriptedChatAdapter([]))
+    _, files, action = chat._parse_response(
+        "<reply>배포하기는 백그라운드 실행이에요.</reply>"
+        "<action>answer_only</action>")
+    assert action == "answer_only"
+    assert files == []
+
+
 def test_authoring_prompt_teaches_spec_first_flow(tmp_path):
     from ail.agentic.authoring_chat import AuthoringChat
     proj = Project.init(tmp_path / "p")
@@ -1877,22 +1892,24 @@ def test_authoring_prompt_teaches_spec_first_flow(tmp_path):
     assert "하위 에이전트" in prompt or "Sub-agent" in prompt
 
 
-def test_closing_template_offers_both_formats(tmp_path):
+def test_closing_template_offers_three_formats(tmp_path):
     """The last thing the model reads before generating is the
-    closing template. It MUST present FORMAT A (spec-first) and
-    FORMAT B (build) as peers with a decision tree, otherwise the
-    earlier SPEC-FIRST rule gets overridden by a final "use this
-    format with <file>+ready_to_run" instruction. Field-test
-    regression from v1.58.0→v1.58.1 where spec turns never fired."""
+    closing template. It MUST present FORMAT A (spec-first), FORMAT
+    B (build), and FORMAT C (info) as peers with a decision tree.
+    Without C, meta-questions ("what is X?") wrongly emit
+    ready_to_run and a Run widget for nothing — false affordance.
+    Without A or B, the spec-first / build flows break (v1.58.0/.1
+    field test regression)."""
     from ail.agentic.authoring_chat import AuthoringChat
     proj = Project.init(tmp_path / "p")
     prompt = AuthoringChat(proj, _ScriptedChatAdapter([]))._build_goal_prompt({}, [], "hi")
-    tail = prompt[-2500:]
-    assert "FORMAT A" in tail and "FORMAT B" in tail
+    tail = prompt[-3000:]
+    assert "FORMAT A" in tail and "FORMAT B" in tail and "FORMAT C" in tail
     assert "DECISION" in tail
-    # Both formats' action tags must be visible near the end.
+    # All three action values must be visible near the end.
     assert "spec_pending" in tail
     assert "ready_to_run" in tail
+    assert "answer_only" in tail
 
 
 def test_ui_renders_spec_approval_on_spec_pending(tmp_path):

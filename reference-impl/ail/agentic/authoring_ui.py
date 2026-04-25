@@ -230,6 +230,22 @@ def render_authoring_page(
        (the default .bubble rule) — headings and lists are already
        block-formatted by the markdown renderer. */
     .bubble.md-body {{ white-space: normal; max-width: 90%; }}
+    .bubble.md-body table {{ border-collapse: collapse; margin: 8px 0;
+      font-size: 13px; }}
+    .bubble.md-body th, .bubble.md-body td {{
+      border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left;
+      vertical-align: top; }}
+    .bubble.md-body th {{ background: #f3f4f6; font-weight: 600; }}
+    .bubble.md-body blockquote {{ margin: 8px 0; padding: 4px 12px;
+      border-left: 3px solid #d1d5db; color: #4b5563;
+      background: #f9fafb; }}
+    .bubble.md-body pre {{ margin: 8px 0; padding: 10px 12px;
+      background: #f3f4f6; border-radius: 6px; overflow-x: auto;
+      font-size: 12px; line-height: 1.5; }}
+    .bubble.md-body code {{ background: #f3f4f6; padding: 1px 4px;
+      border-radius: 3px; font-size: 0.9em;
+      font-family: ui-monospace, Menlo, monospace; }}
+    .bubble.md-body pre code {{ background: transparent; padding: 0; }}
     .run-result .md-body strong {{ font-weight: 700; }}
     .run-result .md-body em {{ font-style: italic; }}
     .run-result .diag {{ margin-top: 8px; padding-top: 8px;
@@ -328,8 +344,43 @@ def render_authoring_page(
     <button id="file-tree-toggle" onclick="toggleFileTree()">◀ hide</button>
 
     <div id="deploy-bar" style="display:flex;align-items:center;gap:10px;
-         padding:8px 12px;margin-bottom:8px;border:1px solid #e5e7eb;
+         padding:8px 12px;margin-bottom:6px;border:1px solid #e5e7eb;
          border-radius:8px;background:#fff;font-size:13px;"></div>
+    <details id="deploy-help" style="margin-bottom:8px;padding:0 4px;
+             font-size:12px;color:#4b5563;line-height:1.55;">
+      <summary style="cursor:pointer;color:#6b7280;padding:2px 0;
+               user-select:none;">
+        ❓ 배포가 뭔가요? / What does Deploy do?
+      </summary>
+      <div style="padding:8px 12px;margin-top:6px;background:#f9fafb;
+           border:1px solid #e5e7eb;border-radius:6px;">
+        <p style="margin:0 0 8px 0;"><b>🚀 배포하기</b>를 누르면 — 지금 이
+        컴퓨터에서 앱이 백그라운드로 계속 실행됩니다. 채팅창을 닫거나 이
+        창을 닫아도 앱은 살아 있어요. 배포되면
+        <b>🔗 열기</b> 버튼이 생기는데, 그걸 누르면 새 탭에서
+        실제 앱이 열립니다. (주소는 <code>http://127.0.0.1:포트/run</code>
+        형태)</p>
+        <p style="margin:0 0 8px 0;"><b>⏹ 중단</b>을 누르면 멈춥니다. 멈추기
+        전까지는 계속 도는 거예요. 컴퓨터를 끄거나 재부팅하면 같이
+        멈춥니다 — 다시 켰을 때는 다시 배포하기를 누르세요.</p>
+        <p style="margin:0 0 8px 0;"><b>📍 어디서 접속되나요?</b><br>
+        기본은 <b>이 컴퓨터에서만</b> 접속됩니다 (안전을 위해). 같은
+        컴퓨터의 다른 브라우저 창에서 🔗 열기를 누르면 그대로 동작해요.
+        다른 사람의 컴퓨터/휴대폰/외부 인터넷에서는 보이지 않습니다.</p>
+        <p style="margin:0;"><b>🌐 다른 컴퓨터(서버)에서 항상 켜두고
+        싶다면</b> — 프로젝트 폴더를 그 컴퓨터에 복사하고
+        터미널에서:<br>
+        <code style="display:inline-block;margin-top:4px;padding:3px 6px;
+              background:#fff;border:1px solid #e5e7eb;border-radius:3px;
+              font-family:ui-monospace,Menlo,monospace;">
+        ail serve --host 0.0.0.0 --port 8090 &lt;폴더경로&gt;
+        </code><br>
+        를 실행하면 같은 네트워크의 다른 기기에서
+        <code>http://&lt;그 컴퓨터의 IP&gt;:8090/run</code>으로 접속할 수
+        있어요. (이건 고급 사용자용 — 보통은 이 컴퓨터에 배포하면 충분합니다.)
+        </p>
+      </div>
+    </details>
 
     <div class="settings-overlay" id="settings-overlay"></div>
     <div class="settings-panel" id="settings-panel">
@@ -1512,6 +1563,41 @@ def render_authoring_page(
         if (hm) {{
           const lvl = hm[1].length;
           return `<h${{lvl}}>${{inlineRender(hm[2])}}</h${{lvl}}>`;
+        }}
+
+        // Table — header row + separator row + body rows
+        // Detect: line0 contains pipes, line1 is the |---|---|... separator
+        // (any column count, optional leading/trailing pipes, : for alignment)
+        if (lines.length >= 2 && /\\|/.test(lines[0]) &&
+            /^[\\s|:-]+$/.test(lines[1]) && /\\|/.test(lines[1]) &&
+            /-/.test(lines[1])) {{
+          const splitRow = (l) => {{
+            let s = l.trim();
+            if (s.startsWith('|')) s = s.slice(1);
+            if (s.endsWith('|')) s = s.slice(0, -1);
+            return s.split('|').map(c => c.trim());
+          }};
+          const headers = splitRow(lines[0]);
+          const bodyRows = lines.slice(2)
+            .filter(l => /\\|/.test(l))
+            .map(splitRow);
+          const thead = '<thead><tr>' +
+            headers.map(h => `<th>${{inlineRender(h)}}</th>`).join('') +
+            '</tr></thead>';
+          const tbody = '<tbody>' +
+            bodyRows.map(row =>
+              '<tr>' + row.map(c => `<td>${{inlineRender(c)}}</td>`).join('') + '</tr>'
+            ).join('') +
+            '</tbody>';
+          return `<table>${{thead}}${{tbody}}</table>`;
+        }}
+
+        // Blockquote (lines starting with > — gather as paragraph in <blockquote>)
+        if (lines.every(l => /^\\s*>\\s?/.test(l) || l.trim() === '')) {{
+          const inner = lines
+            .map(l => l.replace(/^\\s*>\\s?/, ''))
+            .join(' ').trim();
+          return `<blockquote>${{inlineRender(inner)}}</blockquote>`;
         }}
 
         // Unordered list
