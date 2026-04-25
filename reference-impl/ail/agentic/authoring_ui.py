@@ -528,18 +528,33 @@ def render_authoring_page(
     renderTokenWidget();
     document.body.appendChild(tokenWidget);
 
-    // Deploy bar — PRINCIPLES.md §5. Chat-side button for background
-    // "ail serve" subprocess management. Poll status on load, refresh
-    // after deploy/stop actions. The UI mirrors what a non-developer
-    // expects: no terminal, just two buttons that flip state.
+    // Deploy bar — PRINCIPLES.md §5. Only relevant for projects that
+    // declare a long-running independent agent (evolve-server). For
+    // single-shot programs (dispatcher + view.html, scripts) the
+    // chat's Run widget is the sufficient surface — Deploy here just
+    // adds noise + false affordance. Field test 2026-04-26: a Deploy
+    // button pinned at top makes non-devs feel "I should press this"
+    // even when there's nothing to deploy.
     const deployBar = document.getElementById('deploy-bar');
+    const deployHelp = document.getElementById('deploy-help');
     async function refreshDeployBar() {{
       deployBar.innerHTML = '';
       let rec = null;
+      let deployable = false;
       try {{
         const r = await fetch('/authoring-deploy/status');
-        if (r.ok) rec = await r.json();
+        if (r.ok) {{
+          const body = await r.json();
+          rec = body && body.deployment ? body.deployment : null;
+          deployable = !!(body && body.deployable);
+        }}
       }} catch (e) {{ /* ignore */ }}
+      // Hide bar entirely if not deployable AND not deployed —
+      // single-shot project, no live process. No reason to show.
+      const shouldShow = !!rec || deployable;
+      deployBar.style.display = shouldShow ? 'flex' : 'none';
+      if (deployHelp) deployHelp.style.display = shouldShow ? '' : 'none';
+      if (!shouldShow) return;
       if (rec) {{
         const badge = document.createElement('span');
         badge.textContent = '🟢 배포 중';
@@ -1546,9 +1561,21 @@ def render_authoring_page(
         return `\x00FENCED${{idx}}\x00`;
       }});
 
+      // 1b. Force heading and hr lines to be their own blocks — fixes the
+      // common LLM output where headings have no blank line before/after.
+      // Without this, `## 목적\\n사용자가...\\n## 다음` collapses into one
+      // paragraph and only the first heading renders.
+      text = text.replace(/(^|\\n)(#{1,6} [^\\n]+)/g, '$1\\n$2\\n');
+      text = text.replace(/(^|\\n)(---+)(?=\\n|$)/g, '$1\\n$2\\n');
+
       // 2. Split into blocks by blank lines
       const blocks = text.split(/\\n{{2,}}/);
-      const rendered = blocks.map(block => {{
+      const rendered = blocks.map(rawBlock => {{
+        // Trim block-leading/trailing newlines left over from the
+        // heading-isolation pre-pass — otherwise lines[0] is empty
+        // and headings render as paragraphs.
+        const block = rawBlock.replace(/^\\n+|\\n+$/g, '');
+        if (!block) return '';
         // Restore fenced placeholders
         if (/^\x00FENCED\\d+\x00$/.test(block.trim())) {{
           return fenced[parseInt(block.match(/\\d+/)[0])];
@@ -1558,8 +1585,8 @@ def render_authoring_page(
 
         const lines = block.split('\\n');
 
-        // Heading (# at start of block's first line)
-        const hm = lines[0].match(/^(#{1,3})\\s+(.+)/);
+        // Heading (# at start of block's first line) — h1..h6
+        const hm = lines[0].match(/^(#{1,6})\\s+(.+)/);
         if (hm) {{
           const lvl = hm[1].length;
           return `<h${{lvl}}>${{inlineRender(hm[2])}}</h${{lvl}}>`;
