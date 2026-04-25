@@ -103,16 +103,16 @@ PYTHON_OPENAI_COMPAT_BASE_URL = os.environ.get(
 PYTHON_OPENAI_COMPAT_MODEL = os.environ.get(
     "PYTHON_OPENAI_COMPAT_MODEL", OPENAI_COMPAT_MODEL)
 
+# OpenAI native backend
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+OPENAI_BASE_URL = "https://api.openai.com"
+
 # Backend selection:
-#   ollama    (default)  — existing Python-authoring path, POSTs to
-#                          localhost:11434
-#   anthropic            — Python-authoring side uses Anthropic's
-#                          messages.create. AIL side (via `ask`)
-#                          already auto-routes to Anthropic when
-#                          ANTHROPIC_API_KEY is set and no
-#                          AIL_OLLAMA_MODEL is set.
-#   vllm                 — OpenAI-compatible server for both AIL and Python.
-#                          Python side uses PYTHON_OPENAI_COMPAT_* if set.
+#   ollama    (default)  — existing Python-authoring path, POSTs to localhost:11434
+#   anthropic            — Anthropic messages.create for both sides
+#   vllm                 — OpenAI-compatible server for both AIL and Python
+#   openai               — Real OpenAI API (OPENAI_API_KEY required)
 BENCHMARK_BACKEND = os.environ.get("BENCHMARK_BACKEND", "ollama").lower()
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 
@@ -252,12 +252,42 @@ def _ask_openai_compat_for_python(task: str) -> tuple[str, dict]:
                      "completion_tokens": usage.get("completion_tokens") or 0}
 
 
+def _ask_openai_for_python(task: str) -> tuple[str, dict]:
+    """OpenAI native API Python-authoring path."""
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY not set in environment or .env")
+    # o-series reasoning models don't support temperature parameter
+    is_reasoning = OPENAI_MODEL.startswith("o1") or OPENAI_MODEL.startswith("o3") or OPENAI_MODEL.startswith("o4")
+    params: dict = {
+        "model": OPENAI_MODEL,
+        "messages": [{"role": "user",
+                      "content": _PY_PROMPT_ANTHROPIC % {
+                          "model": OPENAI_MODEL, "task": task}}],
+    }
+    if not is_reasoning:
+        params["temperature"] = 0.0
+    body = json.dumps(params).encode("utf-8")
+    req = urllib.request.Request(
+        f"{OPENAI_BASE_URL}/v1/chat/completions", data=body,
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {OPENAI_API_KEY}"}, method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    usage = data.get("usage", {})
+    return content, {"prompt_tokens": usage.get("prompt_tokens") or 0,
+                     "completion_tokens": usage.get("completion_tokens") or 0}
+
+
 def _ask_model_for_python(task: str) -> tuple[str, dict]:
     """Dispatch to the configured backend."""
     if BENCHMARK_BACKEND == "anthropic":
         return _ask_anthropic_for_python(task)
     if BENCHMARK_BACKEND == "vllm":
         return _ask_openai_compat_for_python(task)
+    if BENCHMARK_BACKEND == "openai":
+        return _ask_openai_for_python(task)
     return _ask_ollama_for_python(task)
 
 
@@ -470,6 +500,13 @@ def _make_ail_adapter():
             model=OPENAI_COMPAT_MODEL,
             base_url=OPENAI_COMPAT_BASE_URL,
             timeout=OPENAI_COMPAT_TIMEOUT,
+        )
+    if BENCHMARK_BACKEND == "openai":
+        return OpenAICompatibleAdapter(
+            model=OPENAI_MODEL,
+            base_url=OPENAI_BASE_URL,
+            api_key=OPENAI_API_KEY,
+            timeout=120,
         )
     return None  # ask() uses its default adapter (Ollama or Anthropic)
 
@@ -713,6 +750,8 @@ def _active_model_label() -> str:
         return f"anthropic:{ANTHROPIC_MODEL}"
     if BENCHMARK_BACKEND == "vllm":
         return f"vllm:{OPENAI_COMPAT_MODEL}"
+    if BENCHMARK_BACKEND == "openai":
+        return f"openai:{OPENAI_MODEL}"
     return OLLAMA_MODEL
 
 
@@ -721,6 +760,8 @@ def _active_host_label() -> str:
         return "api.anthropic.com"
     if BENCHMARK_BACKEND == "vllm":
         return OPENAI_COMPAT_BASE_URL
+    if BENCHMARK_BACKEND == "openai":
+        return OPENAI_BASE_URL
     return OLLAMA_HOST
 
 
