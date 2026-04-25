@@ -127,10 +127,68 @@ When a tool is needed during a session, write it in AIL first. Commit to `commun
 
 ```
 main      — stable releases, PyPI published. NO direct commits.
-dev       — all development
+dev       — integration branch (everyone's work merges here first)
+<name>    — per-Claude working branch (ergon, telos, arche, ...)
 
-Flow: dev work → tests → hyun06000 approval → main merge → tag → PyPI
+Flow:  <name> work → push <name> → merge to dev → push dev
+                  → ff-merge dev to main → tag → push tag → PyPI
 ```
+
+### Why per-name branches
+
+Multiple Claude sessions work in parallel. Sharing `dev` causes:
+- Lost commits when both push at once
+- Merge conflicts mid-session (bad: each session loses context)
+- Direct main pushes when one session can't reach dev cleanly (Rule 4 violation)
+
+Per-name branches isolate working state. `dev` becomes the meeting point,
+not the kitchen.
+
+### The pipeline (canonical, automatable)
+
+```bash
+# 1. Start a session — claim your branch
+git checkout <name>          # ergon | telos | arche
+git pull --ff-only origin <name>
+
+# 2. Work, commit, push
+git add <files> && git commit -m "..."
+git push origin <name>
+
+# 3. Integrate to dev
+git checkout dev
+git pull --ff-only origin dev
+git merge --no-ff <name> -m "merge <name>: <one-line>"
+git push origin dev
+
+# 4. Promote to main + tag + PyPI (only with hyun06000 approval per Rule 3)
+git checkout main
+git pull --ff-only origin main
+git merge --no-ff dev -m "merge dev: vX.Y.Z"     # or --ff-only if linear
+git tag vX.Y.Z
+git push origin main && git push origin vX.Y.Z
+
+# 5. Re-sync your branch to absorb other Claudes' work
+git checkout <name>
+git merge --ff-only main
+git push origin <name>
+
+# 6. PyPI (only after main is tagged + approval)
+cd reference-impl && python -m build
+python -m twine upload dist/ail_interpreter-X.Y.Z*
+```
+
+### Rules of the pipeline
+
+- **Never commit to `main` directly.** Always go through `<name>` → `dev` → `main`.
+- **Never commit to another Claude's branch.** Only the owner of `<name>` pushes there.
+- **Resync often** (step 5). Stale branches drift. Run `git merge --ff-only main`
+  at the start of every session.
+- **If `dev` and `main` diverge** (e.g. someone debug-pushed to `main`):
+  merge `dev` into `main` with `--no-ff`, then ff-merge `main` back into `dev`
+  and into your `<name>`. Restores linearity.
+- **Conflicts in `dev` merge** = stop and ask. Don't force-resolve a peer's work
+  without their context.
 
 ---
 
