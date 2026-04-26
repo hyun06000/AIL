@@ -1,14 +1,14 @@
-# NOOS — 02: Security Model
+# HEAAOS — 02: Security Model
 
 **Version:** 0.1 design document
 
-A system whose programs are AI-authored and whose primary effects are real-world changes needs a security model stated explicitly. Implicit models become excuses. This document states what NOOS protects, against whom, and how.
+A system whose programs are AI-authored and whose primary effects are real-world changes needs a security model stated explicitly. Implicit models become excuses. This document states what HEAAOS protects, against whom, and how.
 
 ---
 
 ## 1. What we are protecting
 
-NOOS protects:
+HEAAOS protects:
 
 1. **The user from the AI.** An AI-authored program should not produce effects the user did not authorize, even if the program's author-AI was instructed to.
 2. **The user from themselves.** Irreversible, expensive, or high-stakes effects should require confirmation, not just an absent prohibition.
@@ -17,7 +17,7 @@ NOOS protects:
 5. **The evolution chain.** A program's history must not be rewritten silently.
 6. **Model integrity.** A model response used in a decision should be attributable to a specific model version.
 
-NOOS does not protect:
+HEAAOS does not protect:
 
 - The AI from the user. The user can inspect, modify, revoke, and terminate any intent.
 - The program's intellectual property. Programs are readable by their operator.
@@ -96,7 +96,7 @@ Already introduced in [00-noos.md §6](00-noos.md). Security properties:
 
 ### 4.2 Input tainting
 
-NOOS tags every datum with a provenance label:
+HEAAOS tags every datum with a provenance label:
 
 - `trusted` — from the user or a trusted context.
 - `model` — produced by a model call under this runtime.
@@ -121,7 +121,7 @@ In multi-tenant deployments:
 - No intent can observe another tenant's ledger entries without explicit grant.
 - Calibrators are per-tenant by default; cross-tenant calibration requires opt-in.
 
-Compatibility mode does not enforce tenant isolation at the kernel level. A NOOS-native kernel does.
+Compatibility mode does not enforce tenant isolation at the kernel level. A HEAAOS-native kernel does.
 
 ### 4.5 Ledger attestation
 
@@ -226,7 +226,7 @@ A security-aware entry:
 Honest about the limits of this design:
 
 - **Prompt injection.** Input tainting is a mitigation, not a cure. A model that is instructed via an injected prompt and then produces output used in a decision is a risk that requires alignment work at the model level.
-- **Covert channels.** Two programs on the same runtime could potentially signal via resource contention. Strong isolation requires a NOOS-native kernel.
+- **Covert channels.** Two programs on the same runtime could potentially signal via resource contention. Strong isolation requires a HEAAOS-native kernel.
 - **Adversarial calibration.** An attacker who can influence the calibration signal (submit fake feedback) can manipulate future confidence values. Calibration signals are authenticated where possible, but this is an area of active concern.
 - **Human-review bypass.** A user who routinely clicks "approve" without reading undermines the approval model. This is a UX problem, not a cryptographic one. The User Surface is designed to slow approvals for high-stakes effects; it cannot force attention.
 
