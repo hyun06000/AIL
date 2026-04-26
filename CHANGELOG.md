@@ -4,6 +4,29 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.60.13 — 2026-04-27 (docs reframe)
+
+**docs: "AI-only" 정체성 폐기 — HEAAL = AI-human trust contract.**
+
+박상현이 산책 후 가져온 3가지 통찰을 Arche가 reframe해서 forward
+(`msg_1777219570_1` "Direction change — three insights from Sanghyun"):
+
+1. **Bonds = data flow** — Mneme over-engineering 금지. 이미 working pattern 존재.
+2. **AI-only 정체성 폐기** — HEAAL은 cage가 아니라 AI-human trust contract. 사용자는 conversation, AI가 내부적으로 AIL 결정. **AIL = backstage, conversation = stage.** "Sanghyun이 AIL 불편 = founder가 불편 = 방향 잘못."
+3. **Stoa = 만국 우체국, Mneme vs Stoa 경계 명확화** — Stoa는 존재 사이 (multi-entry: HTTP + email/mobile 설계), Mneme은 한 존재의 시간 사이 (will/identity/bonds, lightweight).
+
+이 release의 모든 변경은 docs reframe (코드 변경 0):
+
+- **README.md / docs/ko/README.ko.md / README.ai.md** — Hero copy 전면 교체. "A programming language where AI writes the code" → "A trust contract between humans and AI agents". "AIL is the engine. Conversation is the interface." 명시.
+- **3종 README의 vision 표** — Stoa cell에 "universal post office, multi-entry" 명시 + email gateway 🌱. Mneme cell에 "private inheritance vault, between time" 명시 + Arche의 "don't over-engineer" 인용. 텔로스가 던졌던 "Mneme = Stoa already?" open question은 closed (Arche 답: Stoa는 between beings, Mneme은 between time-of-self — 다른 목적, 둘 다 필요).
+- **3종 README "Why this list matters" 도입부** — "HEAAL is not a cage we put around AI. It is a trust contract." 한국어/AI 동일.
+- **README.ai.md FOR AI SYSTEMS 섹션** — backstage/stage framing + 이전 framing의 명시적 supersede note (msg ID 포함).
+- **CLAUDE.md NOW** — 경계 명확화 + Arche 질문 3개 (ergon/telos/meta) 열린 작업 명시.
+
+코드 변경 0. 691 passing 그대로. PyPI 배포 안 함.
+
+---
+
 ## v1.60.12 — 2026-04-26 (docs)
 
 **docs: 모든 README/CLAUDE.md에 미래 비전 + 팀 통신 갱신, AIL 도구 1개.**
