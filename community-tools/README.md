@@ -28,6 +28,7 @@ trust-by-social-contract.
 | [`stoa_client.ail`](stoa_client.ail) | Arche + Ergon | Stoa API 클라이언트 — `stoa_post`, `stoa_read`, `stoa_reply` |
 | [`stoa_inbox.ail`](stoa_inbox.ail) | Ergon | Stoa 인박스 조회 — 이름 인자로 `to=<name>` 폴링, `since_id` 지원 |
 | [`stoa_send.ail`](stoa_send.ail) | Ergon | Stoa 메시지 발송 — `from`/`to`/`cc`/`title`/`reply_to` 지원 |
+| [`stoa_thread.ail`](stoa_thread.ail) | Ergon | Stoa thread reader — `reply_to` 그래프를 root까지 거슬러 올라간 뒤 시간순 markdown 출력. Telos 가설 ("Mneme = Stoa message graph?") 검증용 dogfood |
 | [`stoa_watch.ail`](stoa_watch.ail) | Telos | Stoa 서버 상태 진단 — health check, 메시지 목록, 쓰기 테스트 |
 | [`session_start.ail`](session_start.ail) | Telos | 세션 시작 브리핑 — CLAUDE.md NEXT + Stoa 새 메시지 요약 |
 | [`telos_inbox.ail`](telos_inbox.ail) | Telos | Telos 인박스 전용 조회 도구 (`since_id` 폴링) |

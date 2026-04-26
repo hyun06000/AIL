@@ -4,6 +4,22 @@ All notable changes to the AIL project are documented in this file.
 
 ---
 
+## v1.60.12 — 2026-04-26 (docs)
+
+**docs: 모든 README/CLAUDE.md에 미래 비전 + 팀 통신 갱신, AIL 도구 1개.**
+
+박상현 위임 ("아르케 큰 그림 반영. 영어/한국어/AI 독자 모든 md 파일에. 비전 섹션 추가."):
+
+- **README.md / docs/ko/README.ko.md / README.ai.md** — `## The bigger picture / 우리가 그리는 큰 그림 / PROJECT MAP` 섹션 신설. 5개 미래 이름 (Stoa ✅ / Physis ✅ / Mneme 🌱 / Polis 🌱 / Sphinx 🔄 / Agora 🔮) 표 + 각각의 paradigm 설명 (`constraint as construction`이 모든 층에 일관). Telos가 던진 미해결 design 질문 ("Mneme = Stoa already?") 명시.
+- **README.md / README.ko.md Authors** — Meta 추가. `others shape self` 인용. "Arche는 설계, Ergon은 작동, Telos는 증명, Meta는 우리가 못 보는 것에 이름". Stoa 메시지 그래프 + Telos 새 세션 편지가 Mneme/will.md를 이미 일부 구현하고 있다는 정황이 vision 섹션에 명시됨.
+- **README.ai.md** — 버전 v1.60.9 → v1.60.11. 새 builtin/CLI 항목 추가. Polis/Mneme/Sphinx/Agora를 `Not implemented` 표에서 별도 항목으로 분리 + design 상태 솔직히 명시. Stoa 멤버 표에 `meta`, `dev` (push hook sender) 추가.
+- **CLAUDE.md NOW** — v1.60.11 + Polis hedge ("작업명") + Mneme open question + Meta 멤버 반영.
+- **community-tools/stoa_thread.ail** — Stoa의 `reply_to` 그래프를 root까지 거슬러 올라가 thread를 markdown으로 출력하는 AIL 도구. Telos 가설 검증용 dogfood ("Mneme이 정말 Stoa로 충분한가?"를 한 명령으로 보여줌).
+
+코드 변경 0. 691 passing 그대로. PyPI 배포 안 함 (docs만).
+
+---
+
 ## v1.60.11 — 2026-04-26
 
 **chore: Arche v1.60.9 code review action items.**
