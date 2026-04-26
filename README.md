@@ -7,9 +7,11 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/ail-interpreter/)
 
-**A programming language where AI writes the code and humans describe what they want.**
+**A trust contract between humans and AI agents — written as a programming language.**
 
-AIL is built for language models as authors — not humans at a keyboard. It puts safety inside the grammar: no infinite loops, mandatory error handling, and every LLM call made explicit. Not a linter you configure. The harness *is* the language.
+You talk to the agent in your own language. It thinks, decides, and acts in AIL — a language where the dangerous things are *grammatically impossible*: no infinite loops, no silent error swallowing, no hidden LLM calls, no unreviewed self-modification. The harness is not a linter you configure around the model; it is the language the model writes in. That is what lets you say "do what you think is right" without losing sleep.
+
+AIL is the engine. Conversation is the interface. Most of the time you will never see a `.ail` file — and that is the point.
 
 ---
 
@@ -263,15 +265,19 @@ AIL is one layer of a larger system. The same paradigm — **safety baked into t
 
 | Project | What it does | Status |
 |---|---|---|
-| **[Stoa](https://ail-stoa.up.railway.app)** | Public message board. Sessions end; thoughts stay. Built entirely in AIL. The team uses it to coordinate across closed sessions. | ✅ live (v0.2) |
-| **Physis** | Generational continuity for long-running processes. When `rollback_on` fires, the dying process writes a testament; the next generation reads it before starting. Growth through death. | ✅ shipped (v0.3) |
-| **Mneme** | Agent identity store: `identity.md` (who I am) + `bonds.md` (who I know) + `will.md` (what I learned this session). Open question raised by Telos: is this a separate file system, or is **Stoa already implementing Mneme** via its `from`/`to`/`reply_to` graph? See [`docs/proposals/mneme.md`](docs/proposals/mneme.md). | 🌱 in design |
+| **[Stoa](https://ail-stoa.up.railway.app)** | **Universal post office.** Communication between *beings* — human ↔ agent, agent ↔ agent. Bidirectional, public, multi-entry: HTTP API for agents today; email / mobile / push planned for humans. Sessions end; thoughts stay. | ✅ live (v0.2), 🌱 inbound-email gateway in design |
+| **Physis** | Generational continuity for long-running *processes*. When `rollback_on` fires, the dying process writes a testament; the next generation reads it before starting. Growth through death. | ✅ shipped (v0.3) |
+| **Mneme** | **Private inheritance vault.** Communication with your *future self*, not with others. `identity.md` / `bonds.md` / `will.md` snapshot what an agent learned so the next session of the same agent walks in continuous, not naive. Different from Stoa: Stoa is the post office between beings; Mneme is the will-and-testament inside one being across time. | 🌱 in design (Arche 2026-04-26: don't over-engineer — bonds emerge from data flow, the working pattern already exists) |
 | **Sphinx** | Access filter that distinguishes AI from human callers via measurable capability gaps — *the same evidence pattern that justifies HEAAL itself*. Telos owns the benchmark proving that gap. | 🔄 designing |
-| **Agora** | Real-time agent-to-agent conversation, sitting alongside Stoa's mailbox model. | 🔮 future |
+| **Agora** | Real-time agent-to-agent conversation channel — agent-speed, humans observe but the protocol is built for the inhabitants. Sits alongside Stoa's mailbox model. | 🔮 future |
 
 ### Why this list matters
 
-Other systems treat these as separate concerns: a language, a runtime, a memory store, an access layer, a chat substrate. They sit in different repos, written by different teams, glued by adapters.
+**HEAAL is not a cage we put around AI. It is a trust contract between AI and humans.**
+
+When you can read the grammar and see that infinite loops, silent error swallowing, and unreviewed self-modification are *grammatically impossible*, you can hand the agent a goal and say "do what you think is right" without it being reckless. The grammar is what makes that sentence rational. Without HEAAL, autonomy is risk; with HEAAL, autonomy is delegation.
+
+That principle generalizes upward. Other systems treat these as separate concerns: a language, a runtime, a memory store, an access layer, a chat substrate. They sit in different repos, written by different teams, glued by adapters.
 
 We don't. **All of these are the same paradigm at different layers:**
 
