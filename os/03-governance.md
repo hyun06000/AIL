@@ -1,4 +1,4 @@
-# NOOS — 03: Governance
+# HEAAOS — 03: Governance
 
 **Version:** 0.1 design document
 
@@ -8,7 +8,7 @@ Any system that runs programs authored by AI on behalf of humans needs explicit 
 
 ## 1. Actors
 
-- **Operator** — the entity running a NOOS deployment. Controls defaults, installs bridges, sets global policies.
+- **Operator** — the entity running a HEAAOS deployment. Controls defaults, installs bridges, sets global policies.
 - **Tenant admin** — controls a tenant (an organization or a team within an operator's deployment). Sets tenant-wide policies, provisions users, allocates budgets.
 - **User** — an individual principal. Places intents, approves effects, holds capabilities.
 - **Intent** — a live instance of a program executing on behalf of a user. Has its own identity but acts under the user's scope.
@@ -121,7 +121,7 @@ All policy changes are logged in the tenant's ledger.
 
 ## 5. Transparency obligations
 
-A NOOS deployment SHOULD publish:
+A HEAAOS deployment SHOULD publish:
 
 - Installed bridges and their authorizations.
 - Approved model providers and models.
@@ -135,7 +135,7 @@ Users SHOULD be able to:
 - Obtain a cryptographic attestation of their ledger's head.
 - Request deletion to the extent compatible with audit requirements.
 
-These obligations can be stronger in regulated domains. NOOS does not implement specific regulatory compliance (HIPAA, GDPR, SOC 2) but provides the primitives a compliant deployment would build on.
+These obligations can be stronger in regulated domains. HEAAOS does not implement specific regulatory compliance (HIPAA, GDPR, SOC 2) but provides the primitives a compliant deployment would build on.
 
 ---
 
@@ -167,7 +167,7 @@ For irreversible effects, remediation depends on the deployment. The system prov
 - A structured incident record, referenced from the ledger.
 - A suspension of the offending intent and any derived evolutions.
 
-Actual remediation (refunds, apologies, legal responses) is a policy-and-business matter outside the technical scope of NOOS.
+Actual remediation (refunds, apologies, legal responses) is a policy-and-business matter outside the technical scope of HEAAOS.
 
 ---
 
@@ -187,7 +187,7 @@ This is heavier than calling a function. It is appropriate. The alternative — 
 
 ## 8. Evolution of governance
 
-The governance model itself evolves. A NOOS deployment's policies are themselves versioned artifacts, stored in the tenant's program store, referenced from the tenant's ledger. Changes to policy go through the same declaration-review-approve-record cycle as program evolutions.
+The governance model itself evolves. A HEAAOS deployment's policies are themselves versioned artifacts, stored in the tenant's program store, referenced from the tenant's ledger. Changes to policy go through the same declaration-review-approve-record cycle as program evolutions.
 
 There is no "escape hatch" for operators to quietly change the rules. Changes are visible to tenants (within scope); changes to tenant policy are visible to users (within scope).
 
@@ -195,16 +195,16 @@ There is no "escape hatch" for operators to quietly change the rules. Changes ar
 
 ## 9. What governance does not solve
 
-- **Model alignment.** NOOS can constrain what effects are performed; it cannot guarantee that a model, when asked to generate AIL, generates AIL that reflects the user's actual intent. That is a model property.
-- **Upstream trust.** NOOS can record that a bridge was signed; it cannot guarantee the signer was trustworthy. Trust decisions require external context.
-- **Legal compliance.** NOOS is plumbing for compliance, not compliance itself.
-- **Abuse at scale.** Determined adversaries who gain legitimate access can still do harm within their authorization. NOOS makes that harm visible and bounded; it does not prevent all of it.
+- **Model alignment.** HEAAOS can constrain what effects are performed; it cannot guarantee that a model, when asked to generate AIL, generates AIL that reflects the user's actual intent. That is a model property.
+- **Upstream trust.** HEAAOS can record that a bridge was signed; it cannot guarantee the signer was trustworthy. Trust decisions require external context.
+- **Legal compliance.** HEAAOS is plumbing for compliance, not compliance itself.
+- **Abuse at scale.** Determined adversaries who gain legitimate access can still do harm within their authorization. HEAAOS makes that harm visible and bounded; it does not prevent all of it.
 
 ---
 
 ## 10. Summary
 
-Governance on NOOS is:
+Governance on HEAAOS is:
 
 - **Explicit** — policies are declared, not inferred.
 - **Hierarchical** — operator → tenant → user → intent, with strict subset rules.

@@ -101,21 +101,27 @@ def stoa_read_inbox(
     if since_id:
         params["since_id"] = since_id
 
-    try:
-        r = httpx.get(f"{_base_url()}/messages", params=params, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        messages = data.get("messages", [])
-        latest_id = messages[0]["id"] if messages else ""
-        return json.dumps({
-            "messages": messages,
-            "total": data.get("total", 0),
-            "latest_id": latest_id,
-        }, ensure_ascii=False)
-    except httpx.HTTPStatusError as e:
-        return json.dumps({"error": e.response.text, "status": e.response.status_code})
-    except Exception as e:
-        return json.dumps({"error": str(e)})
+    delays = [1, 3, 9]
+    last_err: str = ""
+    for attempt, delay in enumerate(delays + [None], 1):
+        try:
+            r = httpx.get(f"{_base_url()}/messages", params=params, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            messages = data.get("messages", [])
+            latest_id = messages[0]["id"] if messages else ""
+            return json.dumps({
+                "messages": messages,
+                "total": data.get("total", 0),
+                "latest_id": latest_id,
+            }, ensure_ascii=False)
+        except httpx.HTTPStatusError as e:
+            last_err = json.dumps({"error": e.response.text, "status": e.response.status_code})
+        except Exception as e:
+            last_err = json.dumps({"error": str(e)})
+        if delay is not None:
+            import time; time.sleep(delay)
+    return last_err
 
 
 @mcp.tool()

@@ -1,14 +1,14 @@
-# NOOS — 01: Compatibility with Conventional Operating Systems
+# HEAAOS — 01: Compatibility with Conventional Operating Systems
 
 **Version:** 0.1 design document
 
-A clean-slate OS is a decade-long project. An AIL runtime that does not run today is a spec nobody validates. This document specifies how NOOS abstractions are realized on conventional operating systems (Linux, macOS, Windows) in **compatibility mode** — a userspace AIRT daemon plus a host integration layer.
+A clean-slate OS is a decade-long project. An AIL runtime that does not run today is a spec nobody validates. This document specifies how HEAAOS abstractions are realized on conventional operating systems (Linux, macOS, Windows) in **compatibility mode** — a userspace AIRT daemon plus a host integration layer.
 
 ---
 
 ## 1. Scope
 
-Compatibility mode provides every NOOS kernel surface as a userspace facility. It is sufficient for:
+Compatibility mode provides every HEAAOS kernel surface as a userspace facility. It is sufficient for:
 
 - Developing AIL programs.
 - Running production AIL workloads in a single-tenant setting.
@@ -20,7 +20,7 @@ It is not sufficient for:
 - Hardware-rooted trusted computing.
 - Formal security guarantees beyond what the host OS provides.
 
-Treat compatibility mode as "NOOS in a process", the way WSL is "Linux in a Windows process."
+Treat compatibility mode as "HEAAOS in a process", the way WSL is "Linux in a Windows process."
 
 ---
 
@@ -58,7 +58,7 @@ Three outbound integration points:
 
 - **Model Adapter**: speaks to one or more LLM providers via their APIs. Pluggable.
 - **Host OS bridges**: translates declared effects (file, network, process) to host syscalls.
-- **User Surface**: a local web UI on `https://noos.local:PORT` (TLS with a self-signed local CA or user-provided certificate) where humans place intents, approve effects, and read the ledger.
+- **User Surface**: a local web UI on `https://heaaos.local:PORT` (TLS with a self-signed local CA or user-provided certificate) where humans place intents, approve effects, and read the ledger.
 
 ---
 
@@ -78,10 +78,10 @@ All endpoints require authentication. Local socket connections are authenticated
 
 ### 3.2 State
 
-`airtd` persists state under `~/.noos/`:
+`airtd` persists state under `~/.heaaos/`:
 
 ```
-~/.noos/
+~/.heaaos/
 ├── config.toml              # user config: models, adapters, policies
 ├── programs/                # content-addressed program store
 │   └── <hash>/
@@ -124,7 +124,7 @@ A host program can embed AIL via a language-specific client library. The referen
 `airtd` can expose an intent as an HTTP endpoint. A program's `entry` declaration becomes a URL:
 
 ```toml
-# ~/.noos/config.toml
+# ~/.heaaos/config.toml
 [expose.translate]
 program = "sha256:abc123..."
 entry = "main"
@@ -138,7 +138,7 @@ Requests to `/intent/translate` with appropriate authorization invoke the progra
 
 ## 5. Host effect bridges
 
-Conventional effects (file I/O, network, process execution) are not native to NOOS. They are bridged:
+Conventional effects (file I/O, network, process execution) are not native to HEAAOS. They are bridged:
 
 ### 5.1 Bridge declarations
 
@@ -156,7 +156,7 @@ Bridges run in the `airtd` process by default. High-risk bridges (process execut
 
 ### 5.2 Default bridge set
 
-A reference NOOS compatibility installation ships with:
+A reference HEAAOS compatibility installation ships with:
 
 - **`file.read`, `file.write`** — scoped to configured directories.
 - **`http.get`, `http.post`** — scoped to allowed domains, with TLS verification.
@@ -211,7 +211,7 @@ A local web application, served by `airtd`, that humans use for:
 - **Evolution review** — pending modifications appear with diffs, metrics, sample calls.
 - **Capability management** — issue, inspect, revoke.
 
-The surface is accessible at `https://noos.local:<port>`. First-time access walks the user through generating a local CA and installing it in the user's OS trust store.
+The surface is accessible at `https://heaaos.local:<port>`. First-time access walks the user through generating a local CA and installing it in the user's OS trust store.
 
 A CLI equivalent exists for users who dislike browsers: `ail approve`, `ail ledger`, `ail evolve`.
 
@@ -223,7 +223,7 @@ The reference installation:
 
 ```bash
 # Linux / macOS
-curl -sSf https://install.noos.local/sh | sh
+curl -sSf https://install.heaaos.local/sh | sh
 
 # or from source
 git clone https://github.com/<org>/ail-project
@@ -272,7 +272,7 @@ Each is individually opt-in. Default is strict silence.
 - Prevent a user with system access from editing the ledger outside the daemon's API. (The ledger is cryptographically attested; tampering is detectable, not preventable, in this mode.)
 - Meter hardware-level resources accurately on shared systems.
 
-Users requiring these guarantees need a NOOS-native deployment or a hardware attestation chain beneath the daemon.
+Users requiring these guarantees need a HEAAOS-native deployment or a hardware attestation chain beneath the daemon.
 
 ---
 

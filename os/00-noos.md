@@ -1,10 +1,10 @@
-# NOOS — Neural-Oriented Operating System
+# HEAAOS — HEAAL Operating System
 
 **Version:** 0.1 design document · **Status:** Conceptual. No implementation yet.
 
 An operating system decides what the fundamental units of computation are. Unix decided those units are files and processes. Plan 9 decided everything is a file. Mach decided everything is a message. Each decision shaped decades of software.
 
-NOOS is a thought experiment taken seriously: **what if the fundamental units were intent, context, capacity, and attention?** This document is that design.
+HEAAOS is a thought experiment taken seriously: **what if the fundamental units were intent, context, capacity, and attention?** This document is that design.
 
 ---
 
@@ -29,9 +29,9 @@ These abstractions made sense when programs were written by humans and did one d
 - Evolve in place
 - Must justify every effect to a human
 
-NOOS offers a different primary vocabulary:
+HEAAOS offers a different primary vocabulary:
 
-| NOOS abstraction | What it is |
+| HEAAOS abstraction | What it is |
 |---|---|
 | Intent | A live goal with constraints |
 | Context | A typed, scoped situation |
@@ -40,7 +40,7 @@ NOOS offers a different primary vocabulary:
 | Authority | Capability and authorization |
 | Ledger | Append-only record of effects and evolution |
 
-Files, processes, and threads still exist on NOOS, but they are built on these primitives, not the reverse.
+Files, processes, and threads still exist on HEAAOS, but they are built on these primitives, not the reverse.
 
 ---
 
@@ -50,7 +50,7 @@ Four premises shape everything else:
 
 ### 2.1 AI is a first-class tenant
 
-On Unix, a program runs because a human (or a scheduler on behalf of a human) launches it. On NOOS, a program runs because an intent was placed. An intent can be placed by a human, by a scheduler, or by another AI. All are first-class tenants with identities, authorizations, and budgets.
+On Unix, a program runs because a human (or a scheduler on behalf of a human) launches it. On HEAAOS, a program runs because an intent was placed. An intent can be placed by a human, by a scheduler, or by another AI. All are first-class tenants with identities, authorizations, and budgets.
 
 ### 2.2 Context is shared infrastructure
 
@@ -58,17 +58,17 @@ Context, in the AIL sense, is OS-level. A user's preferences, a session's prior 
 
 ### 2.3 Capacity is a resource kind
 
-A modern OS schedules CPU, memory, I/O, and sometimes GPU. On NOOS, the resource schedule includes model capacity: tokens per second on a given model, latency envelopes, reasoning depth budgets. Capacity is allocated, reserved, throttled, and billed just like other resources.
+A modern OS schedules CPU, memory, I/O, and sometimes GPU. On HEAAOS, the resource schedule includes model capacity: tokens per second on a given model, latency envelopes, reasoning depth budgets. Capacity is allocated, reserved, throttled, and billed just like other resources.
 
 ### 2.4 Effects are transactional and authorized
 
-On Unix, a program `write()`s to a file and it happens. On NOOS, a program performs an effect through an authority kernel. Every effect passes through authorization, budget accounting, and ledger write before reaching the physical world.
+On Unix, a program `write()`s to a file and it happens. On HEAAOS, a program performs an effect through an authority kernel. Every effect passes through authorization, budget accounting, and ledger write before reaching the physical world.
 
 ---
 
 ## 3. Kernel surface
 
-The NOOS kernel exposes syscalls organized in six families:
+The HEAAOS kernel exposes syscalls organized in six families:
 
 ### 3.1 Intent family
 
@@ -117,7 +117,7 @@ Each family has authorization requirements specified in [02-security.md](02-secu
 
 ## 4. Persistent stores
 
-NOOS persists four things:
+HEAAOS persists four things:
 
 ### 4.1 The Program Store
 
@@ -135,13 +135,13 @@ Append-only effect and evolution record. Partitioned by tenant; queryable by int
 
 Per-intent, per-context calibrators. Updated continuously by AIRT. Versioned with the program.
 
-Notably absent: a general-purpose filesystem in the Unix sense. NOOS hosts one (it has to), but it is a compatibility surface, not a primary abstraction. The primary abstractions are the four above.
+Notably absent: a general-purpose filesystem in the Unix sense. HEAAOS hosts one (it has to), but it is a compatibility surface, not a primary abstraction. The primary abstractions are the four above.
 
 ---
 
 ## 5. Scheduling
 
-The NOOS scheduler allocates three resources concurrently:
+The HEAAOS scheduler allocates three resources concurrently:
 
 - **Compute** — CPU and GPU time for deterministic work
 - **Capacity** — model tokens and reasoning budget
@@ -195,7 +195,7 @@ An intent may spawn sub-intents. A sub-intent inherits a subset of the parent's 
 
 ## 7. User interface
 
-NOOS is unusual in that it has opinionated expectations about how humans interact with it. Two UI surfaces are first-class:
+HEAAOS is unusual in that it has opinionated expectations about how humans interact with it. Two UI surfaces are first-class:
 
 ### 7.1 The Intent Surface
 
@@ -211,17 +211,17 @@ A user-facing interface where humans state goals and see intent progress. It is 
 
 A user-facing interface where humans inspect what the system has done on their behalf. Every effect is listed. Every authorization used is listed. Every evolution accepted is listed. The user can filter, search, attest, and — where reversibility permits — undo.
 
-Both surfaces are optional at the kernel level; they are required at the distribution level. A NOOS distribution without these is not a NOOS distribution.
+Both surfaces are optional at the kernel level; they are required at the distribution level. A HEAAOS distribution without these is not a HEAAOS distribution.
 
 ---
 
 ## 8. Compatibility with conventional OSes
 
-An ordinary machine runs Linux, macOS, or Windows. NOOS as a clean-slate OS is a research object. More practically, AIL programs should be runnable today on existing systems. [01-compatibility.md](01-compatibility.md) specifies a **NOOS-on-host** mode: AIRT runs as a userspace daemon on Linux, simulating the kernel surfaces described here and delegating where necessary to the underlying OS.
+An ordinary machine runs Linux, macOS, or Windows. HEAAOS as a clean-slate OS is a research object. More practically, AIL programs should be runnable today on existing systems. [01-compatibility.md](01-compatibility.md) specifies a **HEAAOS-on-host** mode: AIRT runs as a userspace daemon on Linux, simulating the kernel surfaces described here and delegating where necessary to the underlying OS.
 
 In compatibility mode:
 
-- Intents are NOOS primitives, implemented by the AIRT daemon.
+- Intents are HEAAOS primitives, implemented by the AIRT daemon.
 - Context storage is an authenticated local database.
 - The ledger is a local append-only log.
 - Capabilities are signed by a user-key and checked by the daemon.
@@ -233,14 +233,14 @@ Compatibility mode does not provide kernel-level security guarantees; it is a so
 
 ## 9. Hardware assumptions
 
-NOOS assumes access to:
+HEAAOS assumes access to:
 
 - **At least one language model**, local or remote, addressable via a network endpoint.
 - **Persistent storage** supporting append-only semantics.
 - **A trusted clock** for deadlines and expirations.
 - **Cryptographic primitives** for capability signing.
 
-NOOS does not assume:
+HEAAOS does not assume:
 
 - A specific model provider.
 - A specific hardware architecture.
@@ -249,10 +249,10 @@ NOOS does not assume:
 
 ---
 
-## 10. What NOOS does not do
+## 10. What HEAAOS does not do
 
-- **Not a replacement for Linux.** Conventional applications run on compatibility mode or on the host OS beside NOOS.
-- **Not a sandbox.** NOOS is an execution environment; it does not claim to contain arbitrary user code.
+- **Not a replacement for Linux.** Conventional applications run on compatibility mode or on the host OS beside HEAAOS.
+- **Not a sandbox.** HEAAOS is an execution environment; it does not claim to contain arbitrary user code.
 - **Not autonomous.** Humans remain in the loop for effects, evolution above thresholds, and authorization grants.
 - **Not a chat interface.** The Intent Surface is not a chatbot wrapping a filesystem; it is a structured intent placement and monitoring tool.
 
@@ -260,8 +260,8 @@ NOOS does not assume:
 
 ## 11. Related documents
 
-- [01-compatibility.md](01-compatibility.md) — running NOOS abstractions on a conventional OS
+- [01-compatibility.md](01-compatibility.md) — running HEAAOS abstractions on a conventional OS
 - [02-security.md](02-security.md) — threat model and security properties
 - [03-governance.md](03-governance.md) — multi-tenant policies, quotas, fairness
 
-The compatibility document is the most important next read for anyone implementing NOOS-hosted AIRT.
+The compatibility document is the most important next read for anyone implementing HEAAOS-hosted AIRT.
