@@ -39,7 +39,7 @@ gil global write-tree existence   # 수정본을 글로벌에 되씀 (+자동 �
 ```
 gil global sync                   # (새 머신 첫 1회) 원격 글로벌을 로컬로 + refspec 등록
 gil global list                   # 글로벌에 담긴 파일 목록
-gil global read <name>            # 파일 읽기 (예: existence/clew/memory.md)
+gil global read <name>            # 파일 읽기 (예: existence/<이름>/memory.md)
 gil global write <name> <file>    # 파일 하나만 글로벌로 (+자동 push)
 gil global write-tree <path>...   # 트리 전체를 글로벌로 (+자동 push) — checkout 후에만
 gil global checkout <path> [dest] # 글로벌에서 온전히 꺼냄
