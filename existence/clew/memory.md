@@ -71,3 +71,11 @@
 - 계승: guides/sensors 이중 구조(sensors 축은 미래 설계 몫), 실증 가능성, 언어 강제 선례(사양으론 안 들여옴)
 - LESSONS §5 구속 3개 = 다음 체인의 inherit: 한 체인 한 국면 / effect는 하네스 심사 / 측정은 도구
 - 사람 검토 대기: 실패 원인 4개가 실제 경험과 맞는지 (1차 사료는 사람, 다르면 supersede)
+
+# 매듭 8 — 2026-08-03 체인 종결·main 배포·구현 인테이크
+
+- chain-close ail-foundation --verdict success (--retro 필수였음: 기준 6/6 성적표 + 미완 3개 명시)
+- gil merge ail-foundation --into dev 성공. gil deploy --tag v0.1.0 마커는 새겨졌으나 승격은 "dev 층 없음(옛 레이아웃)" 거부 — 수동 레이아웃 감지 불일치, #99에 코멘트로 추가. 우회: main을 dev로 ff (895e7bc) 후 push
+- .gil/checks 미선언 상태 — 층 검사 없음. 구현 체인에서 테스트 생기면 'dev: <검사>' 선언할 것
+- 다음 체인 인테이크 ail-impl 심음(질문 3: 첫 국면 목적 / 관측 가능 산출물 / 구현 언어 radio). 사람 답 대기 중
+- 교훈: chain-close는 --retro 필수, gil merge가 chain-merge 대체(디프리케이트)
