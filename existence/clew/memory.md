@@ -48,3 +48,9 @@
 - 발견: AIL의 '의도의 계약' 구조 == gil의 사이클 구조(목적·성패기준·반증조건) — 소개 문서에 쓸 관찰
 - 다음: ③ multilingual-readme (영 README.md / 한 README.ko.md / 중 README.zh.md — 번역+요약, 빈 교집합 논증 앞세움) → ④ 기여 문서 + 오픈소스화(라이선스·push·공개는 사람 확인)
 - 주의: 기존 README.md("# AIL" 한 줄)를 영어 리드미로 덮어쓰게 됨 — 내용 없으니 문제 없음
+
+# 매듭 5 — 2026-08-03 사이클 ③ 완주
+
+- multilingual-readme close(goal met): README.md(영)·README.ko.md(한)·README.zh.md(중, 간체) — 5절 마스터 구조 동일, 4방향 언어 링크, 새 주장 0. 기준 산출물 5/6
+- 사람 검토 지점: (1) 중국어 간체 선택 (2) 인간용은 '왜'를 앞세우고 LLM용은 '무엇'을 앞세운 서사 차이 (3) docs/가 한국어뿐이라 영·중 리드미가 '(Korean)' 표기로 링크
+- 다음: ④ contrib-opensource — CONTRIBUTING.md + 오픈소스화. **라이선스 선택·origin push·저장소 공개는 반드시 사람에게 묻는다**
