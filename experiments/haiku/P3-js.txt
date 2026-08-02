@@ -1,0 +1,50 @@
+function processJobs(jobs, budget = 10) {
+  let operationsUsed = 0;
+  let done = 0;
+  let failed = 0;
+  let failedJobs = [];
+
+  for (let i = 0; i < jobs.length; i++) {
+    const job = jobs[i];
+    const cost = job.operations || 1;
+
+    if (operationsUsed + cost > budget) {
+      break;
+    }
+
+    operationsUsed += cost;
+
+    try {
+      if (job.execute()) {
+        done++;
+      } else {
+        failed++;
+        failedJobs.push(job);
+      }
+    } catch (error) {
+      failed++;
+      failedJobs.push(job);
+    }
+  }
+
+  const remaining = jobs.length - done - failed;
+
+  return {
+    done,
+    failed,
+    remaining,
+    failedJobs
+  };
+}
+
+const jobs = [
+  { id: 1, operations: 2, execute: () => true },
+  { id: 2, operations: 3, execute: () => false },
+  { id: 3, operations: 2, execute: () => true },
+  { id: 4, operations: 2, execute: () => true },
+  { id: 5, operations: 3, execute: () => false },
+  { id: 6, operations: 1, execute: () => true },
+];
+
+const result = processJobs(jobs);
+console.log(result);

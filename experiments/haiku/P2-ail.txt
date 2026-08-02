@@ -1,0 +1,77 @@
+task analyzeSalaryCSV(csvText) {
+  goal compute average salary per department from CSV data
+  done result contains deptAverages map and skippedCount integer
+  never fs shell
+
+  let lines = split(csvText, "\n")
+  let processed = processLines(lines, 0, {}, 0)
+  let averages = computeAverages(processed.depts)
+
+  return {
+    deptAverages averages,
+    skippedCount processed.skipped
+  }
+}
+
+task processLines(lines, index, depts, skipped) {
+  goal recursively process each CSV line and accumulate statistics
+  done all lines processed with aggregated department data
+  never fs shell
+
+  if index >= len(lines) {
+    return { depts depts, skipped skipped }
+  }
+
+  let line = lines[index]
+  let fields = split(line, ",")
+
+  if len(fields) != 3 {
+    return processLines(lines, index + 1, depts, skipped + 1)
+  }
+
+  let salary = toNumber(trim(fields[2]))
+
+  if salary == null {
+    return processLines(lines, index + 1, depts, skipped + 1)
+  }
+
+  let dept = trim(fields[1])
+  let existing = depts[dept]
+
+  if existing == null {
+    let depts[dept] = { total salary, count 1 }
+  } else {
+    let depts[dept] = {
+      total existing.total + salary,
+      count existing.count + 1
+    }
+  }
+
+  return processLines(lines, index + 1, depts, skipped)
+}
+
+task computeAverages(depts) {
+  goal convert department totals and counts to average salaries
+  done all departments have calculated average values
+  never fs shell
+
+  let keys = objKeys(depts)
+  return buildAverages(keys, 0, depts, {})
+}
+
+task buildAverages(keys, index, depts, averages) {
+  goal recursively compute averages for each department
+  done all department averages calculated
+  never fs shell
+
+  if index >= len(keys) {
+    return averages
+  }
+
+  let dept = keys[index]
+  let data = depts[dept]
+  let avg = data.total / data.count
+  let averages[dept] = avg
+
+  return buildAverages(keys, index + 1, depts, averages)
+}

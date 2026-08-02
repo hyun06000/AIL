@@ -1,0 +1,98 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"time"
+)
+
+type Response struct {
+	Ok    bool   `json:"ok"`
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+type JSONData struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func fetchJSON(url string) Response {
+	maxRetries := 3
+	timeout := 5 * time.Second
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<uint(attempt)) * time.Second
+			time.Sleep(backoff)
+		}
+
+		client := &http.Client{
+			Timeout: timeout,
+		}
+
+		resp, err := client.Get(url)
+		if err != nil {
+			if attempt == maxRetries-1 {
+				return Response{
+					Ok:    false,
+					Error: fmt.Sprintf("failed to fetch: %v", err),
+				}
+			}
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if err != nil {
+			if attempt == maxRetries-1 {
+				return Response{
+					Ok:    false,
+					Error: fmt.Sprintf("failed to read body: %v", err),
+				}
+			}
+			continue
+		}
+
+		var data JSONData
+		err = json.Unmarshal(body, &data)
+		if err != nil {
+			if attempt == maxRetries-1 {
+				return Response{
+					Ok:    false,
+					Error: fmt.Sprintf("failed to parse JSON: %v", err),
+				}
+			}
+			continue
+		}
+
+		return Response{
+			Ok:    true,
+			Name:  data.Name,
+			Email: data.Email,
+		}
+	}
+
+	return Response{
+		Ok:    false,
+		Error: "max retries exceeded",
+	}
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: program <url>")
+		return
+	}
+
+	url := os.Args[1]
+	result := fetchJSON(url)
+
+	jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+	fmt.Println(string(jsonBytes))
+}
