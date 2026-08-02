@@ -40,3 +40,11 @@
 - git commit-tree 로 전체 재그리기: 대문 끝 직후 'dev 층 개설' 마커 → intake 4커밋 → chain-root → s1/s2 분기 → 척추, 전부 재부모화(tree·메시지·author 보존). 브랜치는 update-ref 로 재지정, 옛 커밋 prune. fsck 0.
 - 새 SHA: chain-root 7304252, s1 0113907, s2 e3fafdd, close 0086e74, dev 끝 420c1fd, 마커 a80b0b1
 - 이슈 2건 등록: #98(migrate supersede 버그), #99(fsck 층 검사 누락 + 수동 복구 절차)
+
+# 매듭 4 — 2026-08-03 사이클 ② 완주 + 뷰어 이슈
+
+- 이슈 #100 등록 (뷰어 레인 라벨 오독: 실존 않는 브랜치명 명명, dev 칩 끝점만, global ref가 main 레일에 섞임)
+- 사이클 ② ail-concept close(goal met): docs/AIL.md(의도의 계약 3요소 = 목적·성공조건·금지 경계, 버리는것/얻는것, H1~H4 대응, 미설계 영역 §5) + README.ai.md(LLM 진입점 5절). 코드 예시 0개 유지 — 문법 발명 금지 제약 지킴
+- 발견: AIL의 '의도의 계약' 구조 == gil의 사이클 구조(목적·성패기준·반증조건) — 소개 문서에 쓸 관찰
+- 다음: ③ multilingual-readme (영 README.md / 한 README.ko.md / 중 README.zh.md — 번역+요약, 빈 교집합 논증 앞세움) → ④ 기여 문서 + 오픈소스화(라이선스·push·공개는 사람 확인)
+- 주의: 기존 README.md("# AIL" 한 줄)를 영어 리드미로 덮어쓰게 됨 — 내용 없으니 문제 없음
