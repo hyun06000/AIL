@@ -106,3 +106,11 @@
 - 패인 3(다음 사이클의 지도): ①유한 반복 구문 부재→재귀 우회·태스크 분열(3슬롯 의례 곱하기) ②again 의미 불명→4벌 수동 언롤 ③done 키워드가 결과 필드명과 충돌
 - 실질 경쟁자는 JS. 다음: 문법 수정(each 반복, again 명시, 예약어 정책) 사람 승인 → 카드 수정 → 동일 15회 재실험
 - 연구 자산은 사이클 브랜치에만 산다(체인 브랜치 트리에 없음) — 새 사이클 열면 git checkout <이전 사이클 브랜치> -- docs experiments 로 승계
+
+# 매듭 12 — 2026-08-03 야간 자율주행 (사람 취침, 전권 위임)
+
+- 재대결(haiku-experiment 재분기 s6~s9): 승인 수정 3건 반영 카드 → AIL 3문제 평균 198토큰, Python −43%·JS −37%, 4언어 전승. v1(+13%)→v2(−43%) — 패인 진단이 옳았음의 교차 증거. close(goal met, fail 잎과 success 잎 공존)
+- parser-skeleton 사이클: rustup 설치(공식·사용자 로컬), parser/ Rust 크레이트 — 렉서+재귀 하강, cargo test 8/8 (3슬롯 누락·while·again forever 거부 / each·bareword·예약어 키 수용). ail-check CLI. Haiku v2 생성물 판정: P1 OK, P2 OK(경고 D2·D4), P3 REJECT(let done = 0 — 예약어 변수명, 신규 D8). BNF 초안 + 결정 목록 D1~D8 (docs/spec/bnf-draft.md). close(goal met)
+- 아침 브리핑 인터뷰 상정: 소감 + 핵심 결정 3(D2 done 판정식 강제 / D8 예약어 위치 기반 / D4 바인딩 의미론). 나머지 D는 bnf-draft.md
+- 다음 순서(합의된 next_design): 결정 반영 → limit 구조화 → 문제군 N≥10 확대 실험(통과율×토큰 2축) → 체인 기준 판정·chain-close 검토
+- 주의: 사이클 브랜치 간 자산 승계는 git checkout <이전 브랜치> -- experiments docs. rebranch(s1bN 브랜치)는 s1 시점 트리라 승계 필수
