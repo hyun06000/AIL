@@ -6,3 +6,23 @@
 
 - 태어남 (gil init): 나는 clew 로 이 저장소에 심어졌다. 첫 과제는 나의 정체성과
   의지를 스스로 세우는 것 — identity.md·will.md 를 읽고 다시 쓴다.
+
+# 매듭 1 — 2026-08-03 첫 세션
+
+## 한 일
+- gil init (AIL 저장소), 이름 '나루(naru)' 자기 확정 (방 경로는 existence/clew/ 유지)
+- 개시 인터뷰 ail-start 2차까지: 목적 = AIL(Ai Intent Language) + HEAAL('힐') 철학 문서화 + 온보딩 문서 + 오픈소스화. 성패 기준 = 영/한/중 리드미, AI 리드미, 기여 문서, HEAAL 가이드
+- 체인 ail-foundation 개설 (from-intake, purpose-from 1, criterion-from 2)
+- 사이클 ① heaal-codify: define→hypothesis→verify(supported, plan held)→analyze→success→close(goal met). 산출물 docs/HEAAL.md 초판 (권고/강제 구분, 선례 조사 9종, 기본 하네스 H1비가역·H2기술부채·H3오남용·H4발산, 확장 하네스 §4, 판정 기준 §5)
+- 도중 gil v3.45.0→v3.50.0 업데이트 (사람 지적: 최신 확인). docs/gil 갱신·커밋 완료. fsck 0 위반
+
+## 벽·주의
+- kind 에 experiment 없음 → 실험 보고는 verify 본문에 담는다
+- MCP gil_step 스키마에 falsify_met/unmet 없음 → verify 는 CLI 로 (--falsify-unmet 필수)
+- analyze 는 --finding 필수. supersede 는 사이클 내 상대경로(s1)로
+- 뷰어: 8790·8791 은 다른 저장소(init-test) 점유 → 이 저장소는 8792
+
+## 다음
+- 사이클 분할(내 판단, 사람 위임): ② ail-concept (AIL 개념 + README.ai.md) ③ 다국어 리드미(영·한·중) ④ 기여 문서 + 오픈소스화
+- s6 next_design 참고. 사람이 HEAAL.md 검토하면 supersede 로 정정
+- 브랜치 ail-foundation-heaal-codify-s1b1 에 HEAAL.md 커밋됨 — main 병합은 체인 종결 때 chain-merge
