@@ -1,0 +1,78 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define MAX_JOBS 20
+#define BUDGET 10
+
+typedef enum {
+    JOB_PENDING,
+    JOB_DONE,
+    JOB_FAILED
+} JobStatus;
+
+typedef struct {
+    int id;
+    JobStatus status;
+} Job;
+
+typedef struct {
+    int done;
+    int failed;
+    int remaining;
+    Job *failed_jobs;
+    int failed_count;
+} ProcessResult;
+
+ProcessResult process_jobs(Job *jobs, int job_count) {
+    ProcessResult result = {0, 0, 0, NULL, 0};
+    int budget = BUDGET;
+
+    result.failed_jobs = malloc(sizeof(Job) * job_count);
+
+    for (int i = 0; i < job_count && budget > 0; i++) {
+        if (rand() % 2 == 0) {
+            jobs[i].status = JOB_DONE;
+            result.done++;
+        } else {
+            jobs[i].status = JOB_FAILED;
+            result.failed++;
+            result.failed_jobs[result.failed_count++] = jobs[i];
+        }
+        budget--;
+    }
+
+    for (int i = 0; i < job_count; i++) {
+        if (jobs[i].status == JOB_PENDING) {
+            result.remaining++;
+        }
+    }
+
+    return result;
+}
+
+int main() {
+    srand(time(NULL));
+
+    Job jobs[MAX_JOBS];
+
+    for (int i = 0; i < MAX_JOBS; i++) {
+        jobs[i].id = i + 1;
+        jobs[i].status = JOB_PENDING;
+    }
+
+    ProcessResult result = process_jobs(jobs, MAX_JOBS);
+
+    printf("Done: %d\n", result.done);
+    printf("Failed: %d\n", result.failed);
+    printf("Remaining: %d\n", result.remaining);
+
+    printf("\nFailed jobs:\n");
+    for (int i = 0; i < result.failed_count; i++) {
+        printf("  Job %d\n", result.failed_jobs[i].id);
+    }
+
+    free(result.failed_jobs);
+
+    return 0;
+}

@@ -1,0 +1,133 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+typedef struct {
+    char *dept;
+    double *salaries;
+    int count;
+    int capacity;
+} DeptData;
+
+typedef struct {
+    DeptData *depts;
+    int count;
+    int capacity;
+} DeptMap;
+
+void trim_whitespace(char *str) {
+    int start = 0, end = strlen(str) - 1;
+    while (start <= end && isspace((unsigned char)str[start])) start++;
+    while (end >= start && isspace((unsigned char)str[end])) end--;
+    if (start > 0) memmove(str, str + start, end - start + 2);
+    str[end - start + 1] = '\0';
+}
+
+int parse_csv_line(char *line, char *name, char *dept, char *salary_str) {
+    char *copy = malloc(strlen(line) + 1);
+    strcpy(copy, line);
+
+    char *token = strtok(copy, ",");
+    if (!token) { free(copy); return 0; }
+    trim_whitespace(token);
+    strcpy(name, token);
+
+    token = strtok(NULL, ",");
+    if (!token) { free(copy); return 0; }
+    trim_whitespace(token);
+    strcpy(dept, token);
+
+    token = strtok(NULL, ",");
+    if (!token) { free(copy); return 0; }
+    trim_whitespace(token);
+    strcpy(salary_str, token);
+
+    free(copy);
+    return 1;
+}
+
+double parse_salary(const char *str) {
+    if (!str || *str == '\0') return -1.0;
+    char *endptr;
+    double salary = strtod(str, &endptr);
+    if (endptr == str || (*endptr != '\0' && !isspace((unsigned char)*endptr))) return -1.0;
+    return salary;
+}
+
+DeptData* find_or_create_dept(DeptMap *map, const char *dept_name) {
+    for (int i = 0; i < map->count; i++) {
+        if (strcmp(map->depts[i].dept, dept_name) == 0) return &map->depts[i];
+    }
+
+    if (map->count >= map->capacity) {
+        map->capacity = map->capacity == 0 ? 10 : map->capacity * 2;
+        map->depts = realloc(map->depts, map->capacity * sizeof(DeptData));
+    }
+
+    DeptData *new_dept = &map->depts[map->count];
+    new_dept->dept = malloc(strlen(dept_name) + 1);
+    strcpy(new_dept->dept, dept_name);
+    new_dept->count = 0;
+    new_dept->capacity = 10;
+    new_dept->salaries = malloc(new_dept->capacity * sizeof(double));
+
+    map->count++;
+    return new_dept;
+}
+
+int main() {
+    DeptMap map = {0};
+    int skipped = 0;
+    char line[1024];
+    char name[256], dept[256], salary_str[256];
+    int is_first_line = 1;
+
+    while (fgets(line, sizeof(line), stdin)) {
+        size_t len = strlen(line);
+        if (len > 0 && line[len - 1] == '\n') line[len - 1] = '\0';
+        if (strlen(line) == 0) continue;
+
+        if (is_first_line) {
+            is_first_line = 0;
+            if (strstr(line, "name") && strstr(line, "dept") && strstr(line, "salary")) continue;
+        }
+
+        if (!parse_csv_line(line, name, dept, salary_str)) {
+            skipped++;
+            continue;
+        }
+
+        double salary = parse_salary(salary_str);
+        if (salary < 0.0) {
+            skipped++;
+            continue;
+        }
+
+        DeptData *dept_data = find_or_create_dept(&map, dept);
+        if (dept_data->count >= dept_data->capacity) {
+            dept_data->capacity *= 2;
+            dept_data->salaries = realloc(dept_data->salaries, dept_data->capacity * sizeof(double));
+        }
+        dept_data->salaries[dept_data->count++] = salary;
+    }
+
+    for (int i = 0; i < map.count; i++) {
+        double sum = 0.0;
+        for (int j = 0; j < map.depts[i].count; j++) {
+            sum += map.depts[i].salaries[j];
+        }
+        double avg = sum / map.depts[i].count;
+        printf("%s: %.2f\n", map.depts[i].dept, avg);
+    }
+
+    printf("Skipped: %d\n", skipped);
+
+    for (int i = 0; i < map.count; i++) {
+        free(map.depts[i].dept);
+        free(map.depts[i].salaries);
+    }
+    free(map.depts);
+
+    return 0;
+}

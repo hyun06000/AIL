@@ -1,0 +1,61 @@
+function analyzeSalaries(csvText) {
+  const lines = csvText.trim().split('\n');
+  const deptData = {};
+  let skippedCount = 0;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    // Skip empty lines and header
+    if (!trimmedLine || trimmedLine.toLowerCase() === 'name,dept,salary') {
+      continue;
+    }
+
+    const fields = trimmedLine.split(',').map(f => f.trim());
+
+    // Validate row format
+    if (fields.length !== 3) {
+      skippedCount++;
+      continue;
+    }
+
+    const [name, dept, salaryStr] = fields;
+
+    // Validate salary is a number
+    const salary = parseFloat(salaryStr);
+    if (isNaN(salary) || salaryStr === '') {
+      skippedCount++;
+      continue;
+    }
+
+    // Track salary data per department
+    if (!deptData[dept]) {
+      deptData[dept] = [];
+    }
+    deptData[dept].push(salary);
+  }
+
+  // Calculate averages
+  const averages = {};
+  for (const dept in deptData) {
+    const salaries = deptData[dept];
+    const sum = salaries.reduce((acc, sal) => acc + sal, 0);
+    averages[dept] = sum / salaries.length;
+  }
+
+  return {
+    averages,
+    skipped: skippedCount
+  };
+}
+
+// Example usage:
+const csvText = `name,dept,salary
+Alice,Engineering,80000
+Bob,Sales,60000
+Charlie,Engineering,90000
+David,invalid
+Eve,Sales,70000`;
+
+const result = analyzeSalaries(csvText);
+console.log(result);

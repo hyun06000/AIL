@@ -1,0 +1,58 @@
+import requests
+import json
+import time
+from typing import Dict, Any
+
+def fetch_json_with_retry(url: str) -> Dict[str, Any]:
+    """
+    Fetch JSON from a URL with 5 second timeout and exponential backoff retry logic.
+
+    Args:
+        url: The URL to fetch JSON from
+
+    Returns:
+        A dictionary with:
+        - ok: bool indicating success/failure
+        - name: (on success) name from JSON
+        - email: (on success) email from JSON
+        - error: (on failure) error message
+    """
+    max_retries = 3
+    timeout = 5
+    base_delay = 1
+
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()
+
+            data = response.json()
+
+            return {
+                "ok": True,
+                "name": data.get("name"),
+                "email": data.get("email")
+            }
+
+        except Exception as e:
+            error_message = str(e)
+
+            if attempt == max_retries - 1:
+                return {
+                    "ok": False,
+                    "error": error_message
+                }
+
+            delay = base_delay * (2 ** attempt)
+            time.sleep(delay)
+
+    return {
+        "ok": False,
+        "error": "Max retries exceeded"
+    }
+
+
+if __name__ == "__main__":
+    url = "https://jsonplaceholder.typicode.com/users/1"
+    result = fetch_json_with_retry(url)
+    print(json.dumps(result, indent=2))

@@ -1,0 +1,77 @@
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+func ComputeAverageSalary(csvText string) (map[string]float64, int) {
+	reader := csv.NewReader(strings.NewReader(csvText))
+
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, 0
+	}
+
+	deptSalaries := make(map[string][]float64)
+	skipped := 0
+
+	for i := 1; i < len(records); i++ {
+		record := records[i]
+
+		if len(record) != 3 {
+			skipped++
+			continue
+		}
+
+		name := strings.TrimSpace(record[0])
+		dept := strings.TrimSpace(record[1])
+		salaryStr := strings.TrimSpace(record[2])
+
+		if name == "" || dept == "" || salaryStr == "" {
+			skipped++
+			continue
+		}
+
+		salary, err := strconv.ParseFloat(salaryStr, 64)
+		if err != nil {
+			skipped++
+			continue
+		}
+
+		deptSalaries[dept] = append(deptSalaries[dept], salary)
+	}
+
+	averages := make(map[string]float64)
+	for dept, salaries := range deptSalaries {
+		total := 0.0
+		for _, salary := range salaries {
+			total += salary
+		}
+		averages[dept] = total / float64(len(salaries))
+	}
+
+	return averages, skipped
+}
+
+func main() {
+	csvData := `name,dept,salary
+John,Engineering,80000
+Jane,Sales,70000
+Bob,Engineering,90000
+Alice,Marketing,60000
+invalid,row
+Charlie,Sales,75000
+Dave,Engineering
+,Finance,55000`
+
+	averages, skipped := ComputeAverageSalary(csvData)
+
+	fmt.Println("Average Salary per Department:")
+	for dept, avg := range averages {
+		fmt.Printf("%s: $%.2f\n", dept, avg)
+	}
+	fmt.Printf("Skipped Rows: %d\n", skipped)
+}
