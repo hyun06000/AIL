@@ -32,7 +32,7 @@ AIL 프로그램은 절차의 기술이 아니다. 세 가지를 필수로 갖�
 - [x] HEAAL 철학 — [docs/HEAAL.md](docs/HEAAL.md)
 - [x] 언어 개념 + AI 리드미 — [docs/AIL.md](docs/AIL.md), [README.ai.md](README.ai.md)
 - [x] 다국어 리드미 (이 문서)
-- [ ] 기여 가이드 + 오픈소스화
+- [x] 기여 가이드 + 오픈소스화 — [CONTRIBUTING.md](CONTRIBUTING.md), [LICENSE](LICENSE)
 - [ ] (이후 체인) 문법 설계 → 파서 → 런타임
 
 ## 이 저장소가 일하는 방식
@@ -44,5 +44,5 @@ AIL 프로그램은 절차의 기술이 아니다. 세 가지를 필수로 갖�
 ## 기여와 문서
 
 - AI 에이전트: [README.ai.md](README.ai.md)에서 시작
-- 사람: 기여 가이드는 준비 중이다(다음 사이클). 그때까지 사고의 역사는 `gil log --all` 또는 gil 뷰어로 볼 수 있다.
+- 사람·에이전트: [CONTRIBUTING.md](CONTRIBUTING.md)를 보라. 사고의 역사는 `gil log --all` 또는 gil 뷰어로 볼 수 있다.
 - 철학: [docs/HEAAL.md](docs/HEAAL.md) · 언어 개념: [docs/AIL.md](docs/AIL.md)

@@ -32,7 +32,7 @@ AIL 程序不是过程的描述，而是一份**意图契约**，必须包含三
 - [x] HEAAL 哲学 — [docs/HEAAL.md](docs/HEAAL.md)
 - [x] 语言概念 + AI readme — [docs/AIL.md](docs/AIL.md), [README.ai.md](README.ai.md)
 - [x] 多语言 readme（本文档）
-- [ ] 贡献指南 + 开源化
+- [x] 贡献指南 + 开源化 — [CONTRIBUTING.md](CONTRIBUTING.md), [LICENSE](LICENSE)
 - [ ] （后续 chain）语法设计 → 解析器 → 运行时
 
 ## 本仓库的工作方式
@@ -44,5 +44,5 @@ AIL 程序不是过程的描述，而是一份**意图契约**，必须包含三
 ## 贡献与文档
 
 - AI 代理：从 [README.ai.md](README.ai.md) 开始
-- 人类：贡献指南准备中（下一个 cycle）。在此之前，思考的历史可通过 `gil log --all` 或 gil 查看器浏览。
+- 人类与代理：参见 [CONTRIBUTING.md](CONTRIBUTING.md)。思考的历史可通过 `gil log --all` 或 gil 查看器浏览。
 - 哲学：[docs/HEAAL.md](docs/HEAAL.md) · 语言概念：[docs/AIL.md](docs/AIL.md)

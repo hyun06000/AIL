@@ -32,7 +32,7 @@ A program missing any of the three does not parse. And what it discards is exact
 - [x] HEAAL philosophy — [docs/HEAAL.md](docs/HEAAL.md)
 - [x] Language concept + AI readme — [docs/AIL.md](docs/AIL.md), [README.ai.md](README.ai.md)
 - [x] Multilingual readmes (this document)
-- [ ] Contribution guide + open-sourcing
+- [x] Contribution guide + open-sourcing — [CONTRIBUTING.md](CONTRIBUTING.md), [LICENSE](LICENSE)
 - [ ] (future chains) grammar design → parser → runtime
 
 ## How this repository works
@@ -44,5 +44,5 @@ Note the symmetry: a gil cycle demands purpose, success criteria, and falsificat
 ## Contributing & documents
 
 - AI agents: start at [README.ai.md](README.ai.md)
-- Humans: a contribution guide is in progress (next cycle). Until then, the thinking history is browsable via `gil log --all` or the gil viewer.
+- Humans & agents: see [CONTRIBUTING.md](CONTRIBUTING.md). The thinking history is browsable via `gil log --all` or the gil viewer.
 - Philosophy: [docs/HEAAL.md](docs/HEAAL.md) · Language concept: [docs/AIL.md](docs/AIL.md)

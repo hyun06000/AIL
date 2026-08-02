@@ -50,14 +50,14 @@ capability·효과)를 따로 가졌다. 그 교집합 — 언어 안의 강제�
 5. 끝나면 `gil memory append` 로 다음 세션에 넘길 매듭을 남겨라
 
 규칙의 요체: **사람의 답이 기준이다. 실패한 가지를 지우지 마라. 데모 사이클을 만들지 마라.**
-상세: `docs/gil/` · 사람 기여자용 문서는 준비 중이다 (체인 기준 산출물 '기여를 위한 문서').
+상세: `docs/gil/` · 기여 규칙 전문: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 5. 현재 상태와 다음
 
 - [x] HEAAL 철학 성문화 — `docs/HEAAL.md` (사이클 heaal-codify)
 - [x] AIL 개념 + 이 문서 — `docs/AIL.md`, `README.ai.md` (사이클 ail-concept)
-- [ ] 다국어 리드미 (영·한·중)
-- [ ] 기여 문서 + 오픈소스화
+- [x] 다국어 리드미 (영·한·중) — `README.md`, `README.ko.md`, `README.zh.md` (사이클 multilingual-readme)
+- [x] 기여 문서 + 오픈소스화 — CONTRIBUTING.md, LICENSE(MIT)
 - [ ] (이후 체인) 문법 설계 → 파서 → 런타임
 
 판단의 근거가 궁금하면 `gil log --all` — 벽에 부딪힌 자리까지 다 있다.
