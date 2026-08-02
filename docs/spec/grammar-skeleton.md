@@ -6,11 +6,11 @@
 ## 0. 형태 한눈에
 
 ```
-intent fetchUser(url) {
+task fetchUser(url) {
   goal profile
   done profile.name != none
-  forbid [fs, shell]
-  budget 2000 tokens, 5 s
+  never [fs, shell]
+  limit 2000 tokens, 5 s
   again 3 wait 2
   let data = http.get(url).json
   return { ok, name data.name, email data.email }
@@ -36,7 +36,7 @@ intent fetchUser(url) {
 |---|---|---|
 | 목적 | `goal` | 무엇을 이루려는가 |
 | 성공 조건 | `done` | 무엇이 관측되면 달성인가 (판정 가능식) |
-| 금지 경계 | `forbid` | 쓸 수 없는 capability 목록 (기본 전면 금지, 명시 허용은 `uses`) |
+| 금지 경계 | `never` | 쓸 수 없는 capability 목록 (기본 전면 금지, 명시 허용은 `uses`) |
 
 ## 2. 키워드 — 전수 실측으로 선별
 
@@ -44,17 +44,17 @@ intent fetchUser(url) {
 
 | 슬롯 | 통과 후보 (전부 1토큰) | 초안 채택 |
 |---|---|---|
-| 계약 선언 | contract, task, aim, act | `intent`* |
+| 계약 선언 | contract, task, aim, act | `task` ✅ |
 | 목적 | goal, target, want | `goal` |
 | 성공 조건 | done, success, check, expect, until | `done` |
-| 금지 | never, ban, without | `forbid`* |
+| 금지 | never, ban, without | `never` ✅ |
 | 효과 | effect, perform, does, uses, with | `uses` |
-| 예산 | limit, cost, cap | `budget`* |
+| 예산 | limit, cost, cap | `limit` ✅ |
 | 실패 처리 | fail, catch, else, or | `fail` |
 | 재시도 | again, repeat, attempt | `again` |
 | 반환 / 바인딩 / 조건 / 매칭 | return / let / if / match | 그대로 |
 
-\* **반직관 발견**: `intent`·`forbid`·`budget`은 단독 측정에선 일부 계열 2토큰이지만, **공백 뒤(실사용 위치)에서는 최신 4계열 전부 1토큰**이다. 키워드는 항상 공백/개행 뒤에 오므로 초안은 의미 충실도를 택해 이들을 유지했다 — 단, 엄격 기준(단독까지 1토큰)을 원하면 `task`·`never`·`limit`으로 교체 가능. **사람 결정 사항.** 또 하나: `retry`는 deepseek 공백 뒤 2토큰이라 탈락 — `again` 채택.
+✅ **사람 결정(4차 인터뷰)**: 엄격 1토큰 기준 채택 — `task`·`never`·`limit`. 반직관 발견(키워드 비용은 문맥형으로 잰다)은 기록으로 유지. 또 하나: `retry`는 deepseek 공백 뒤 2토큰이라 탈락 — `again` 채택.
 
 ## 3. 원칙 7 반영 지점
 
@@ -70,9 +70,9 @@ intent fetchUser(url) {
 
 ## 4. H1~H4 대응 (방향)
 
-- **H1 비가역**: `forbid` 기본 전면 금지 + `uses`의 명시 capability만 허용
+- **H1 비가역**: `never` 기본 전면 금지 + `uses`의 명시 capability만 허용
 - **H2 기술부채**: `fail` 슬롯 없는 실패 가능 계약은 파싱 실패 — 에러를 버리려면 `fail return …`으로 버렸다고 선언해야 함
-- **H3 오남용**: LLM 호출은 `uses llm`을 선언한 계약에서만 (판정 규칙은 미설계 — 보수적 허용 목록 예정)
+- **H3 오남용**: **결정론적으로 풀리는 문제에서는 LLM콜이 절대 일어나지 않는다**(사람 확정, 4차 인터뷰). LLM 호출은 `uses llm`을 선언한 계약에서만 — 판정은 보수적 허용 목록으로
 - **H4 발산**: `budget` 필수화 후보 — 루프·재시도(`again`)는 유한 횟수 리터럴만 허용, `while` 부재
 
 ## 5. 미설계로 남는 것
