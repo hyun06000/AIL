@@ -62,3 +62,12 @@
 - chain-close는 사람 검토 후 — gil chain-close ail-foundation --verdict success
 - 다음 체인 후보(사람이 정한다): 문법 설계 / HEAAL 기본 하네스 구체화. docs/ 다국어화는 별도 인테이크로
 - 리드미 상태 체크리스트는 4종 동기화 규칙 대상 — CONTRIBUTING §5에 명문화했음
+
+# 매듭 7 — 2026-08-03 전신(AIL-old) 교훈 사이클
+
+- 사람이 hyun06000/AIL-old(2026-04~06, v1.83, 실패)를 공유 — 참고 범위 한정: 실패 원인 + HEAAL 개념만
+- 사이클 ail-old-lessons close(goal met): docs/LESSONS.md 신설 + HEAAL.md §2.3(자기 선례) + AIL.md §6(두 번째 시도 문단)
+- 실패 4원인(모두 '판정 기준 부재/이동' 패턴): ①범위 발산(언어→런타임→OS→서비스→모델→벤치마크, 6주) ②하네스 침식(shell.run이 '문법적 불가능' 붕괴) ③점수가 북극성(HEAAL Score) ④결정권의 에이전트 위임(페르소나 조직)
+- 계승: guides/sensors 이중 구조(sensors 축은 미래 설계 몫), 실증 가능성, 언어 강제 선례(사양으론 안 들여옴)
+- LESSONS §5 구속 3개 = 다음 체인의 inherit: 한 체인 한 국면 / effect는 하네스 심사 / 측정은 도구
+- 사람 검토 대기: 실패 원인 4개가 실제 경험과 맞는지 (1차 사료는 사람, 다르면 supersede)
