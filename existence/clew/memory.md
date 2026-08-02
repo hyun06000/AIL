@@ -33,3 +33,10 @@
 - 손 수리로 해결: 계보는 이미 올바른 모양이라 브랜치 포인터만 조정 — main → 대문 끝(79a7c84), dev 신설 → intake 끝(701d75d). fsck 0, 뷰어에 main·dev 레일 정상.
 - 교훈: 사이클 첫 스텝을 supersede 로 정정하면 migrate 가 깨진다. 앞으로 open 할 때 body 를 처음부터 두껍게 써서 s1 supersede 를 피하라.
 - main 이 origin/main 보다 1 커밋 앞(push 미실행). 오픈소스화 사이클 때 정리.
+
+# 매듭 3 — 2026-08-03 정본 레이아웃 손 재그리기
+
+- 사람 지적 2건: (1) dev 층이 날것 그래프에서 분명하지 않음 (2) 'orphan 체인은 dev에서만 출발' 불변식을 fsck가 검사 안 함
+- git commit-tree 로 전체 재그리기: 대문 끝 직후 'dev 층 개설' 마커 → intake 4커밋 → chain-root → s1/s2 분기 → 척추, 전부 재부모화(tree·메시지·author 보존). 브랜치는 update-ref 로 재지정, 옛 커밋 prune. fsck 0.
+- 새 SHA: chain-root 7304252, s1 0113907, s2 e3fafdd, close 0086e74, dev 끝 420c1fd, 마커 a80b0b1
+- 이슈 2건 등록: #98(migrate supersede 버그), #99(fsck 층 검사 누락 + 수동 복구 절차)
