@@ -1,0 +1,49 @@
+import csv
+from io import StringIO
+from collections import defaultdict
+
+def process_salary_csv(csv_text):
+    dept_salaries = defaultdict(list)
+    skipped_count = 0
+
+    reader = csv.DictReader(StringIO(csv_text))
+
+    for row in reader:
+        try:
+            name = row.get('name', '').strip()
+            dept = row.get('dept', '').strip()
+            salary_str = row.get('salary', '').strip()
+
+            if not name or not dept or not salary_str:
+                skipped_count += 1
+                continue
+
+            salary = float(salary_str)
+            dept_salaries[dept].append(salary)
+
+        except (ValueError, KeyError, AttributeError, TypeError):
+            skipped_count += 1
+            continue
+
+    averages = {dept: sum(salaries) / len(salaries)
+                for dept, salaries in dept_salaries.items()}
+
+    return averages, skipped_count
+
+
+if __name__ == "__main__":
+    csv_text = """name,dept,salary
+John,Sales,50000
+Jane,Marketing,60000
+Bob,Sales,55000
+Alice,Marketing,invalid
+Charlie,Sales,52000
+Dave,,45000
+Eve,Engineering,80000
+"""
+
+    averages, skipped = process_salary_csv(csv_text)
+    print("Average salary by department:")
+    for dept, avg in sorted(averages.items()):
+        print(f"  {dept}: ${avg:,.2f}")
+    print(f"\nSkipped malformed rows: {skipped}")

@@ -1,0 +1,55 @@
+task fetchUser(url) {
+  goal fetches JSON from URL with exponential backoff retries and timeout
+  done user data successfully retrieved or all retries exhausted
+  never [fs, shell]
+  limit 40 s
+  uses [http]
+
+  let response = http.get(url, timeout 5)
+  if response.status == 200 {
+    let data = response.json()
+    return {
+      ok true,
+      name data.name,
+      email data.email
+    }
+  }
+
+  again 1 wait 1
+  let response = http.get(url, timeout 5)
+  if response.status == 200 {
+    let data = response.json()
+    return {
+      ok true,
+      name data.name,
+      email data.email
+    }
+  }
+
+  again 1 wait 2
+  let response = http.get(url, timeout 5)
+  if response.status == 200 {
+    let data = response.json()
+    return {
+      ok true,
+      name data.name,
+      email data.email
+    }
+  }
+
+  again 1 wait 4
+  let response = http.get(url, timeout 5)
+  if response.status == 200 {
+    let data = response.json()
+    return {
+      ok true,
+      name data.name,
+      email data.email
+    }
+  }
+
+  return {
+    ok false,
+    error "Max retries exceeded"
+  }
+}
