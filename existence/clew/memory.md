@@ -79,3 +79,12 @@
 - .gil/checks 미선언 상태 — 층 검사 없음. 구현 체인에서 테스트 생기면 'dev: <검사>' 선언할 것
 - 다음 체인 인테이크 ail-impl 심음(질문 3: 첫 국면 목적 / 관측 가능 산출물 / 구현 언어 radio). 사람 답 대기 중
 - 교훈: chain-close는 --retro 필수, gil merge가 chain-merge 대체(디프리케이트)
+
+# 매듭 9 — 2026-08-03 구현 체인 개시 + 토크나이저 실측 완주
+
+- 체인 ail-grammar-skeleton (from-intake ail-impl): 목적=토크나이저 조사→문법 뼈대, 기준="파이썬/go/c/js를 이기는 테스트 통과", 구현 언어는 내가 제안·사람 승인
+- 사이클 ① tokenizer-survey close(goal met): experiments/tokenizer/measure.py + docs/research/tokenizer-survey.md. 5계열(o200k·cl100k·qwen2.5-coder·deepseek-v3·phi3) × A군(4언어 동일 로직)·B군(표기 13종). ρ=0.918~0.978(최신), phi3 0.725
+- 불변 원칙 7: ①축약 금지(절대 토큰도 역전) ②1토큰 실단어 키워드 ③camelCase ④중괄호 블록 ⑤기호 연산자(5계열 전부 12토큰 완전 불변) ⑥bareword 구조(S식이 JSON보다 25~30%↓) ⑦의례 제거=경제성(Python105 vs C220, HEAAL 강제와 합류) — "굳이 왜 AIL?"의 답 뼈대
+- 승인 인터뷰 대기 중: 원칙 7 채택 여부 + 구현 언어(내 제안 Rust; 대안 Go/Python/2단계). 인터뷰 첫 질문은 반드시 text(open) — radio 먼저는 거부됨
+- 그래프 수술 2회: 새 체인이 gil merge 커밋 위에 서면 fsck 적층 오탐(gil merge 커밋을 gil이 gil 커밋으로 인식 못함 — 이슈 #101). 우회: 머지 이전 dev 끝(420c1fd)에 재부모화. 앞으로 새 체인 열기 전 HEAD를 dev pre-merge에 둘 것
+- main=895e7bc(머지, 배포 상태), dev=e39990c(intake 층). 다음: 답 오면 grammar-skeleton-draft 사이클(키워드 전수 실측+표기 뼈대)
