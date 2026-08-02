@@ -1,0 +1,23 @@
+task fetchJsonWithRetry(url) {
+  goal Fetch JSON from URL with 5 second timeout and automatic retries on failure
+  done Returns object with ok true and name/email extracted, or ok false with error message
+  never [fs]
+  uses [http]
+  again 3 wait 2
+
+  let response = http.get(url, timeout 5)
+
+  if response.ok {
+    let json = response.json()
+    return {
+      ok true,
+      name json.name,
+      email json.email
+    }
+  } else {
+    fail return {
+      ok false,
+      error response.error
+    }
+  }
+}

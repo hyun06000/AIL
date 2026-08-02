@@ -1,0 +1,12 @@
+[package]
+name = "ail-parser"
+version = "0.0.1"
+edition = "2021"
+
+[[bin]]
+name = "ail-check"
+path = "src/main.rs"
+
+[lib]
+name = "ail_parser"
+path = "src/lib.rs"

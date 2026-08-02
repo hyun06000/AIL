@@ -1,0 +1,39 @@
+task averageSalaryPerDept(csvText) {
+  goal "Compute average salary per department from CSV data"
+  done "Returns map of department to average salary and count of skipped malformed rows"
+  never [shell, fs]
+
+  let lines = csvText.split("\n")
+  let deptStats = {}
+  let skippedCount = 0
+
+  each line in lines {
+    if line != "" {
+      let fields = line.split(",")
+      if fields.length == 3 {
+        let dept = fields[1]
+        let salaryStr = fields[2]
+
+        if isNumber(salaryStr) {
+          let salary = toNumber(salaryStr)
+          if deptStats[dept] == nil {
+            deptStats[dept] = { total 0, count 0 }
+          }
+          deptStats[dept].total = deptStats[dept].total + salary
+          deptStats[dept].count = deptStats[dept].count + 1
+        } else {
+          skippedCount = skippedCount + 1
+        }
+      } else {
+        skippedCount = skippedCount + 1
+      }
+    }
+  }
+
+  let averages = {}
+  each dept in deptStats {
+    averages[dept] = deptStats[dept].total / deptStats[dept].count
+  }
+
+  return { averages averages, skipped skippedCount }
+}
