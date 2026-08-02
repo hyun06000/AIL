@@ -88,3 +88,12 @@
 - 승인 인터뷰 대기 중: 원칙 7 채택 여부 + 구현 언어(내 제안 Rust; 대안 Go/Python/2단계). 인터뷰 첫 질문은 반드시 text(open) — radio 먼저는 거부됨
 - 그래프 수술 2회: 새 체인이 gil merge 커밋 위에 서면 fsck 적층 오탐(gil merge 커밋을 gil이 gil 커밋으로 인식 못함 — 이슈 #101). 우회: 머지 이전 dev 끝(420c1fd)에 재부모화. 앞으로 새 체인 열기 전 HEAD를 dev pre-merge에 둘 것
 - main=895e7bc(머지, 배포 상태), dev=e39990c(intake 층). 다음: 답 오면 grammar-skeleton-draft 사이클(키워드 전수 실측+표기 뼈대)
+
+# 매듭 10 — 2026-08-03 이슈 #102 + abbrev-stats 사이클 완주
+
+- 이슈 #102: intake/chain이 HEAD 위치 따라 아무 브랜치에 심김 + merge 뒤 dev 끝에 체인 못 세움 → orphan 체인이 dev에서 출발 안 함, git·gil 괴리 누적. git/gil 그래프 첨부. (#98~#101 계열)
+- 2차 인터뷰 답: Rust 승인 / 원칙 보류(실측 보강 요구: 축약 직관 통계·케이브맨류 전략 조사)
+- 사이클 ② abbrev-stats close(goal met): 1,400 실측 — 모음 제거 100% 악화(중앙값 +3), 3자 절단 최선이 본전(68% 동일), 키워드 관용 축약도 이득 0(온전 단어가 이미 1토큰 = 하한). "축약 = 비대칭 내기(이득 상한 0)". 차트 2장(assets/). 전략 6종 조사(케이브맨 포함) — 5종이 권고 층이라 샘 → HEAAL 경제성 논거
+- 원칙 1 refines: "신조 축약 금지 + 표준 어휘는 온전 단어" (사이클① s4 정밀화, --refines는 --inherit 필수)
+- 3차 승인 인터뷰 상정(자유 의견 + 채택 여부), 백그라운드 대기 중. 채택되면 사이클 ③ grammar-draft(키워드 전수 1토큰 실측 + 의도 계약 표기 초안)
+- gil 팁: --refines는 배열 아닌 단일 경로 문자열 + --inherit 동반. open은 --fits 필수
