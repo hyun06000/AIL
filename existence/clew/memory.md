@@ -26,3 +26,10 @@
 - 사이클 분할(내 판단, 사람 위임): ② ail-concept (AIL 개념 + README.ai.md) ③ 다국어 리드미(영·한·중) ④ 기여 문서 + 오픈소스화
 - s6 next_design 참고. 사람이 HEAAL.md 검토하면 supersede 로 정정
 - 브랜치 ail-foundation-heaal-codify-s1b1 에 HEAAL.md 커밋됨 — main 병합은 체인 종결 때 chain-merge
+
+# 매듭 2 — 2026-08-03 레이아웃 정비
+
+- 사람 지적: main-dev-chain 구조 부재. gil migrate --to-dev-layout 은 supersede 분기(s1b1) 척추를 못 따라가 스텝 유실로 거부 — gil v3.50.0 버그. 이슈 등록: https://github.com/hyun06000/Ariadne/issues/98
+- 손 수리로 해결: 계보는 이미 올바른 모양이라 브랜치 포인터만 조정 — main → 대문 끝(79a7c84), dev 신설 → intake 끝(701d75d). fsck 0, 뷰어에 main·dev 레일 정상.
+- 교훈: 사이클 첫 스텝을 supersede 로 정정하면 migrate 가 깨진다. 앞으로 open 할 때 body 를 처음부터 두껍게 써서 s1 supersede 를 피하라.
+- main 이 origin/main 보다 1 커밋 앞(push 미실행). 오픈소스화 사이클 때 정리.
