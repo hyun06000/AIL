@@ -1,0 +1,69 @@
+# gil — GIt for Language model
+
+> gil은 LLM 에이전트가 어려운 문제를 작고 재현 가능한 **사이클**의 **체인**으로 정복하게 하는
+> 도구다. git이 소스 역사를 다루듯, gil은 *사고의 역사*(문제정의→가설→검증→분석→종결)를
+> 진짜 git 브랜치·커밋 그래프 위에 남긴다 — 재현·검증 가능하고 그래프로 되돌아볼 수 있다.
+> git 하나만 있으면 되는 Go 단일 바이너리다.
+
+이 파일은 LLM이 gil 지식에 **능동적으로** 접근하는 wiki의 진입점(index)이다. 통째로 읽지
+말고, 지금 필요한 페이지의 링크만 골라 **페치해서** 읽어라. 각 페이지는 서로 이어진다.
+(링크는 raw.githubusercontent.com 절대 URL — 어느 환경에서든 그대로 가져올 수 있다.)
+
+## 시작하기
+
+- [에이전트 자가 온보딩](https://raw.githubusercontent.com/hyun06000/Ariadne/main/README.ai.md): 사람이 이 도구를 건넸을 때 처음 읽는다 — 설치→`gil init`→첫 체인, 재방문 "이어서".
+- [직접 설치 (사람용 · Windows/PowerShell)](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/INSTALL.md): Windows 이거나 네가 제3자 실행파일 실행을 거부할 때 — 너는 검증만 하고 사람이 붙여넣는다.
+- [무에서 세팅 (gil init)](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/gil/index.md): 빈 폴더에서 gil 세계를 세우는 한 줄.
+
+## 핵심 개념
+
+- [체인·사이클·스텝 — 세 위계](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/gil/concepts.md): git 브랜치·커밋으로의 매핑, 무엇이 노드인가.
+- [사고의 생애 — 스텝 흐름과 분기](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/gil/lifecycle.md): define→hypothesis→verify→analyze→success/fail, 막힘·형제 가지·종결.
+- [존재와 기억 (refs/gil/global)](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/gil/existence.md): 정체성·기억은 브랜치가 아니라 전용 ref에 산다. 세션을 넘어 부활.
+
+## 관용 예제 (개념만으론 조합이 안 될 때 — 실제로 도는 명령 시퀀스)
+
+개념 페이지는 *무엇*인지 알려주지만, *어떻게 이어 치는지*는 예제가 알려준다. 필수 플래그·순서
+(open 의 `--body`, hypothesis 의 `--falsify`/`--falsify-to`, verify 의 `--verdict`,
+verify→analyze 경유)가 검증된 복붙 시퀀스로 있어야 처음 쓰는 모델도 하드코딩 없이 조합한다.
+
+- [관용 예제 — 한 사이클 끝까지 + backtrack](https://raw.githubusercontent.com/hyun06000/Ariadne/main/README.ai.md): README.ai 의 Step C — open→hypothesis→verify→analyze→success→close 한 벌과, 막혔을 때 fail→`hypothesis --to --inherit` 형제 가지 분기. 값만 바꿔 그대로 돈다.
+
+## 워크플로우
+
+- [목적성 가드](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/gil/purpose-guard.md): 시작마다 목적을 띄우고 정합을 판단한다.
+- [사람과의 소통 (pending·approve·reject)](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/gil/human-in-the-loop.md): human-in-the-loop을 데이터로.
+- [배포 순환과 체인 전환 (chain-close)](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/gil/deployment.md): 개발→스테이징→배포 체인 흐름, 한 국면을 닫고 다음으로.
+- [스텝 본문은 보고서다](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/gil/reports.md): 각 스텝의 본문이 곧 누적 보고서. 뷰어로 관전.
+
+## 거부당하면 — 대개 이 중 하나를 요구한다 (v3.21 문법)
+
+gil 은 거부할 때 "다음 올바른 한 수"를 같이 낸다. 읽고 그대로 따르면 된다.
+
+- **"미해결 사이클이 있다"** → 앞 사이클의 define 이 답을 못 얻었다. 재분기
+  (`step --kind hypothesis --to <조상 define|analyze> --inherit <교훈>`) 하거나
+  `close --abandon` 으로 봉인하라. 정말 나란히 여는 것이면 `open --parallel <사이클>` 로 **선언**.
+- **"열린 체인이 있다"** → 앞 국면을 `chain-close --retro <회고>` 로 닫거나,
+  동시 트랙이면 `chain --parallel-with <그 체인>` 으로 선언.
+- **"목표에 답해라"** → 열 때 `open --goal <달성 기준>` 을 선언했다. 닿았으면 `close --goal-met`,
+  아직이면 닫지 말고 갈래를 더 내라.
+- **"종결 스텝 뒤에 이어 붙일 수 없다"** → success/fail 은 잎이다. `--to` 로 갈래를 새로 내라.
+- **"매달린 미종결 잎"(fsck)** → HEAD 가 떠난 가지다. `step --kind fail --at <그 잎> --to <define>`
+  으로 그 자리에 종결을 박아라. 안 하면 영구 미종결(append-only).
+- **정정할 때**: 앞 판정이 틀렸으면 `--refutes`, 판정은 맞고 **해석만** 불완전했으면 `--refines`.
+- **배포**: 아직 안 올라갔으면 `deploy --state staged`, 실제로 올라가면 `deploy --promote`.
+- **인터뷰 답 기다릴 때**: `interview <chain> --status` (pending|done),
+  `--wait [--timeout <초>]`. MCP 라면 `gil_interview_status`.
+
+## 명령
+
+- [명령 전체 표면](https://raw.githubusercontent.com/hyun06000/Ariadne/main/docs/gil/commands.md): init·chain·chain-close·chain-merge·open·step·close·approve·reject·log·fsck·global·memory·handoff·migrate·viewer·mcp·version.
+- [MCP 자가 온보딩](https://raw.githubusercontent.com/hyun06000/Ariadne/main/MCP.ai.md): gil 을 네 호스트에 툴로 물리고, 사람의 실제 일을 인터뷰→목표→사이클→회고→시드로 이끄는 절차.
+- **MCP 호스트(Claude Desktop 등)라면**: `gil mcp serve` 로 gil 을 툴로 직접 부를 수 있다.
+  인터뷰는 네이티브 폼(Elicitation)으로 사람에게 그 자리에서 묻고, 그래프는 MCP Apps 로
+  호스트 안에 뜬다 — localhost 주소·포트·브라우저가 필요 없다.
+
+## Optional
+
+- [전체 명세 (SPEC)](https://raw.githubusercontent.com/hyun06000/Ariadne/main/project/gil-v3-redesign/SPEC.md): 트레일러 키셋·무결성·머지 규칙까지 규범 문서.
+- [지침서 (QUICKSTART, 단일 문서판)](https://raw.githubusercontent.com/hyun06000/Ariadne/main/project/gil-v3-redesign/QUICKSTART.md): 위 페이지들의 원본 — 한 문서로 통독하고 싶을 때.
