@@ -54,3 +54,11 @@
 - multilingual-readme close(goal met): README.md(영)·README.ko.md(한)·README.zh.md(중, 간체) — 5절 마스터 구조 동일, 4방향 언어 링크, 새 주장 0. 기준 산출물 5/6
 - 사람 검토 지점: (1) 중국어 간체 선택 (2) 인간용은 '왜'를 앞세우고 LLM용은 '무엇'을 앞세운 서사 차이 (3) docs/가 한국어뿐이라 영·중 리드미가 '(Korean)' 표기로 링크
 - 다음: ④ contrib-opensource — CONTRIBUTING.md + 오픈소스화. **라이선스 선택·origin push·저장소 공개는 반드시 사람에게 묻는다**
+
+# 매듭 6 — 2026-08-03 사이클 ④ 완주, 체인 6/6
+
+- contrib-opensource close(goal met): CONTRIBUTING.md(사람·LLM 온보딩, 규칙 3개, PR 체크리스트, 영어 요약) + LICENSE(MIT, 사람 선택) + 전 브랜치·refs/gil/global push (전부 ff/신규, force 0). hyun06000/AIL은 이미 PUBLIC이었음
+- 체인 ail-foundation 기준 6/6 전부 실재: README(en/ko/zh/ai)·CONTRIBUTING·HEAAL. 모든 사이클 닫힘
+- chain-close는 사람 검토 후 — gil chain-close ail-foundation --verdict success
+- 다음 체인 후보(사람이 정한다): 문법 설계 / HEAAL 기본 하네스 구체화. docs/ 다국어화는 별도 인테이크로
+- 리드미 상태 체크리스트는 4종 동기화 규칙 대상 — CONTRIBUTING §5에 명문화했음
