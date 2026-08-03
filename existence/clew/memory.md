@@ -297,3 +297,33 @@ dev 머지 → `gil deploy --tag v0.3.0` (마커 새겨짐, 승격은 여전히 
 1. **interp-skeleton s2 hypothesis** — 인터프리터 골격 가설 세우기(--falsify·--plan 고정)
 2. D9 파서 반영(콜론 거부) 먼저 할지 가설에 포함할지 판단
 3. 업스트림 릴리스 나오면 gil 갱신 후 #109 수정 확인
+
+# 매듭 25 — 2026-08-03 gil v3.52.0 갱신 + 계승선 복구, adopt-dev 결함(#113)
+
+## 업스트림이 이슈 4건 수정 (v3.52.0 릴리스)
+- **#105**: `--to pending` 신설 — fail 시점에 "다음 갈 곳은 사람 판정에 달렸다"를 선언으로 적고, 나중 재분기가 확정. 그때 --despite 안 물음
+- **#106**: **경합(competing) 1급 상태** — `--competing` 선언으로 형제 가설 동시 in-flight 허용, fsck 통과하되 `⚖ 경합 중`으로 호명. "매달린 잎은 잊혀서 남은 것, 경합 갈래는 겨루려고 열어 둔 것"
+- **#107**: analyze 안내에 병렬 1급 노출 + 선택지 N개면 수를 세어 되돌림. `gil adopt <승자> --over <패자…>` 신설(패자 fail·승자 이동·Gil-Lost-To 기록 일괄). `gil close`가 사이클 그래프 전체에서 산 잎 탐색
+- **#108**: deploy에 산 잎 검사 추가(fixture로 재현 후 수정). "집행이 두 자리에서 갈리면 느슨한 쪽이 실질 규칙이 된다"
+- **#109**(앞서): 트레일러 접기 — `--inherit` 여러 줄이 트레일러 블록 전체 무효화. **우회로: 한 줄로**
+
+## 설치 실전 메모
+- `gil version --update`가 GitHub API 403(비인증 한도)로 막힘 → gil이 안내한 2번 경로: `gh release download -R hyun06000/Ariadne -p 'gil-*' -p 'SHA256SUMS'` + shasum 대조
+- **`cp`로 덮어쓰면 SIGKILL(137)** — macOS 코드서명 캐시 충돌. 해결: `rm` 후 `cp` + `codesign --force --sign -`
+
+## 계승선 복구 (뷰어로 확인)
+- `gil migrate --adopt-dev`(SHA 불변) 실행 → dev 층 표식 심김 → **뷰어 체인 맵에 계승선 등장**: dev → ail-foundation → ail-grammar-skeleton → ail-pure-compute
+- 앞선 224커밋 리맵(각 체인 루트의 첫 부모 = 앞 체인 chain-close)과 합쳐져 효과
+- 유실 직전 57개는 전부 리맵 대체된 옛 sha — 새 버전 브랜치 존재 확인 후 gc 정리
+
+## 남은 결함 2건
+1. **#113 (신규 보고)**: `--adopt-dev`가 dev-root 표식을 **층 뿌리가 아닌 브랜치 팁에** 심음. dev 148커밋 중 147개가 층 밖 → **첫 체인 ail-foundation만 뿌리 없이 뜬다**(2~4번째는 앞 체인 chain-close로 이어져 무사). 진짜 층 시작 a80b0b1("dev 층 개설")은 Gil-Kind 트레일러가 빈 값. 제안: 표식을 층 뿌리에 / ref(`refs/gil/layer/dev`)로 두어 이력 재작성 없이 정정 / `--remark` 경로 / 인정 범위 N개 보고
+2. **fsck 위반 1건 — main이 작업 커밋 12개 보유**(인터뷰·intake가 dev 우회해 대문에 직접 심김, ail-start 시절부터 누적). `migrate --to-dev-layout`이 정공법이나 **거부됨**: 체인 브랜치 9개의 끝이 gil 커밋이 아님(chore/docs/experiment 커밋) → 강행 시 스텝 유실 경고. 오늘 이미 224커밋 리맵 후라 보류. 다음 세션에서 여유 있을 때: 브랜치 팁 9개를 보관 브랜치로 옮기고 --to-dev-layout 후 복원
+
+## 판단 원칙 (사람 승인)
+표시상 결함은 업스트림 수정을 기다린다 — 계보 데이터 자체가 옳으면 큰 재작성으로 앞당기지 않는다.
+
+## 다음
+1. **interp-skeleton s2 hypothesis** — 새 gil의 `--competing` 어휘 활용 가능
+2. D9(콜론 거부) 파서 반영
+3. #113 답 오면 재확인
