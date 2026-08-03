@@ -4,7 +4,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tok {
     // 계약 슬롯
-    Task, Goal, Done, Never, Limit, Uses, Again, Wait, Set,
+    Task, Fn, Goal, Done, Never, Limit, Uses, Again, Wait, Set,
     // 문장
     Let, Each, In, If, Else, Match, Case, Return, Fail,
     // 금지어 (렉싱은 되고 파싱에서 거부 — 진단 메시지를 위해)
@@ -58,7 +58,7 @@ fn lex_line(line: &str, out: &mut Vec<Tok>) {
             let slot = first_word; first_word = false;
             out.push(match w.as_str() {
                 // 전역 키워드
-                "task" => Tok::Task, "let" => Tok::Let, "set" => Tok::Set,
+                "task" => Tok::Task, "fn" => Tok::Fn, "let" => Tok::Let, "set" => Tok::Set,
                 "each" => Tok::Each, "in" => Tok::In,
                 "if" => Tok::If, "else" => Tok::Else, "match" => Tok::Match,
                 "case" => Tok::Case, "return" => Tok::Return, "fail" => Tok::Fail,

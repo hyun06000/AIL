@@ -1,0 +1,17 @@
+fn analyze(lists) {
+  let totalSum = 0
+  let count = 0
+  let largest = null
+
+  each list in lists {
+    each num in list {
+      set totalSum = totalSum + num
+      set count = count + 1
+      if largest == null || num > largest {
+        set largest = num
+      }
+    }
+  }
+
+  return { totalSum totalSum, count count, largest largest }
+}

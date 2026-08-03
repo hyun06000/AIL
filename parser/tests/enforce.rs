@@ -145,3 +145,48 @@ task f(x) {
     let e = parse_program(src).unwrap_err();
     assert!(e.contains("판정"), "{}", e);
 }
+
+// ── 순수 함수 fn (사이클 pure-fn 초안) ──
+
+#[test]
+fn pure_fn_accepted() {
+    let src = r#"
+fn mergeSorted(a, b) {
+  let out = []
+  each x in a { set out = push(out, x) }
+  each y in b { set out = insertSorted(out, y) }
+  return { list out, length len(out) }
+}
+"#;
+    parse_program(src).expect("순수 fn 은 슬롯 없이 성립해야 한다");
+}
+
+#[test]
+fn pure_fn_rejects_uses() {
+    let src = "fn f(x) {\n  uses [http]\n  return x\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("순수"), "{}", e);
+}
+
+#[test]
+fn pure_fn_rejects_effect_call() {
+    let src = "fn f(url) {\n  let r = http.get(url)\n  return r\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("순수"), "{}", e);
+}
+
+#[test]
+fn task_rules_unchanged_with_fn_present() {
+    let src = r#"
+fn add(a, b) { return a + b }
+task main(xs) {
+  goal add them all
+  done total >= 0
+  never []
+  let total = 0
+  each x in xs { set total = add(total, x) }
+  return total
+}
+"#;
+    parse_program(src).expect("fn 과 task 공존");
+}

@@ -1,0 +1,50 @@
+fn mergeSorted(list1, list2) {
+  let merged = []
+  let i = 0
+  let j = 0
+  let len1 = 0
+  let len2 = 0
+
+  each x in list1 {
+    set len1 = len1 + 1
+  }
+
+  each x in list2 {
+    set len2 = len2 + 1
+  }
+
+  each _ in list1 {
+    each _ in list2 {
+      if i < len1 && j < len2 {
+        if list1[i] <= list2[j] {
+          set merged = merged + [list1[i]]
+          set i = i + 1
+        } {
+          set merged = merged + [list2[j]]
+          set j = j + 1
+        }
+      }
+    }
+  }
+
+  each _ in list1 {
+    if i < len1 {
+      set merged = merged + [list1[i]]
+      set i = i + 1
+    }
+  }
+
+  each _ in list2 {
+    if j < len2 {
+      set merged = merged + [list2[j]]
+      set j = j + 1
+    }
+  }
+
+  let length = 0
+  each _ in merged {
+    set length = length + 1
+  }
+
+  return { merged merged, length length }
+}
