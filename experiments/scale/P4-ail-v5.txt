@@ -1,0 +1,23 @@
+fn merge(list1, list2) {
+  let merged = []
+  let i = 0
+  let j = 0
+
+  each k in range(len(list1) + len(list2)) {
+    if i >= len(list1) {
+      set merged = append(merged, list2[j])
+      set j = j + 1
+    } else if j >= len(list2) {
+      set merged = append(merged, list1[i])
+      set i = i + 1
+    } else if list1[i] <= list2[j] {
+      set merged = append(merged, list1[i])
+      set i = i + 1
+    } else {
+      set merged = append(merged, list2[j])
+      set j = j + 1
+    }
+  }
+
+  return { merged merged, length len(merged) }
+}

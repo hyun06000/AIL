@@ -1,0 +1,18 @@
+fn parseQuery(qs) {
+  let result = {}
+  let empty = 0
+  let pairs = split(qs, "&")
+
+  each pair in pairs {
+    let parts = split(pair, "=")
+    let key = get(parts, 0)
+    let val = if size(parts) > 1 { get(parts, 1) } else { "" }
+
+    set result = put(result, key, val)
+    if val == "" {
+      set empty = empty + 1
+    }
+  }
+
+  return { result result, emptyCount empty }
+}

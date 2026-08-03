@@ -1,0 +1,25 @@
+task parseQueryString(queryStr) {
+  goal Parse URL query string into key-value pairs and count empty values
+  done emptyCount >= 0
+  never []
+  limit 2000 tokens
+  uses []
+
+  let pairs = {}
+  let emptyCount = 0
+  let parts = split(queryStr, "&")
+
+  each part in parts {
+    let kv = split(part, "=")
+    let key = first(kv)
+    let value = if length(kv) > 1 { nth(kv, 1) } else { "" }
+
+    set pairs[key] = value
+
+    if value == "" {
+      set emptyCount = emptyCount + 1
+    }
+  }
+
+  return { pairs pairs, emptyCount emptyCount }
+}

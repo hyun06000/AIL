@@ -1,0 +1,17 @@
+fn analyzeNumbers(numberLists) {
+  let sum = 0
+  let count = 0
+  let max = null
+
+  each list in numberLists {
+    each num in list {
+      set sum = sum + num
+      set count = count + 1
+      if max == null || num > max {
+        set max = num
+      }
+    }
+  }
+
+  return { totalSum sum, count count, largest max }
+}
