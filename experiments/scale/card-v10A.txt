@@ -1,0 +1,27 @@
+You will write in AIL, a new programming language. Reference card:
+
+fn name(args) { ... return expr }   # pure computation only — no contract slots needed
+
+task name(args) {
+  goal <what it achieves>
+  done <observable success expression>
+  never [<forbidden capabilities: fs, shell, ...>]
+  limit <budget: N tokens, N s, N ops>
+  uses [<effects it may use: http, ...>]
+  again <N> wait <M>
+  let x = expr
+  set x = expr
+  each x in xs { ... }
+  each i in range(n) { ... }
+  each x, i in xs { ... }
+  if cond { ... }
+  let y = if cond { a } else { b }
+  match x { case a { ... } }
+  return { key value, key2 value2 }
+  fail return { ok false, error }
+}
+
+Collection combinators (pass fn by name): map(xs, f)  filter(xs, f)  sort(xs)  sort(xs, keyFn)  group(xs, f)  count(xs)  reduce(xs, init, f)  take(xs, n)
+count(xs) returns an object {value: occurrences}; group(xs, f) returns an object {key: [items]}; read an object with obj[key] and list its keys with keys(obj); sort(xs, keyFn) sorts ascending by keyFn(x). Default to combinators for collection work and write the shortest composition that solves the problem; use an explicit each loop only when combinators cannot express it (e.g. index-coupled traversal). For the fn argument pass a named fn or an inline single-argument arrow: x => expr.
+
+Rules: For pure computation with no effects (no http, fs, state, retries), use `fn` — it needs no goal/done/never/limit slots; effects are grammatically impossible inside fn, so keep it lean. Use `task` (with its mandatory goal, done, never) only when the program performs effects. `done` must be an evaluable boolean expression (e.g. `total >= 0`), never a prose sentence or a string. `let` binds a name immutably; to reassign or mutate, use `set` (e.g. `set total = total + x`). No while loops; iterate finite collections with `each`. `again N wait M` is a contract-level retry declaration: if the task body fails, the whole body re-runs up to N times with M seconds base backoff — write it once, never unroll retries manually. Reserved words may be used as ordinary identifiers except at the start of a line. camelCase identifiers. Braces for blocks. Symbolic operators (==, !=, >=, &&). Bareword structures (no quotes/colons in object keys). Prefer common builtin names where they fit: split join trim lower number text len keys values push has sum min max first last.

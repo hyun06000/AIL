@@ -13,6 +13,8 @@ pub enum Tok {
     LBrace, RBrace, LParen, RParen, LBracket, RBracket,
     Comma, Dot, Assign, Arrow,
     Op(String), // == != >= <= < > && || + - * / % !
+    /// 문법에 없는 문자 — 조용히 삼키지 않는다 (D9, 사람 확정). 파서가 거부한다.
+    Unknown(char),
     Newline,
     FreeText(String), // goal/limit 의 행 끝까지 자유 텍스트 (렉서 모드)
 }
@@ -101,7 +103,10 @@ fn lex_line(line: &str, out: &mut Vec<Tok>) {
             ',' => out.push(Tok::Comma), '.' => out.push(Tok::Dot),
             '=' => out.push(Tok::Assign),
             '<' | '>' | '+' | '-' | '*' | '/' | '%' | '!' => out.push(Tok::Op(c.to_string())),
-            _ => {} // 미지 문자는 골격 단계에선 무시 (결정 목록 D6)
+            // D9(사람 확정): 문법에 없는 문자를 조용히 무시하지 않는다.
+            // 옛 D6은 ':' 를 삼켜 콜론 객체 표기가 파싱을 통과했고, 틀린 코드가
+            // 실행 단계에 가서야 걸렸다 — 하네스는 표현 단계에서 작동해야 한다.
+            _ => out.push(Tok::Unknown(c)),
         }
         i += 1;
     }
