@@ -190,3 +190,64 @@ task main(xs) {
 "#;
     parse_program(src).expect("fn 과 task 공존");
 }
+
+// ── 표현력 보강 (사람 승인: 인덱스 반복 2형 + 조건식) ──
+
+#[test]
+fn each_range_accepted() {
+    let src = "fn f(n) {\n  let total = 0\n  each i in range(n) { set total = total + i }\n  return total\n}\n";
+    parse_program(src).expect("each i in range(n)");
+}
+
+#[test]
+fn each_with_index_accepted() {
+    let src = "fn f(xs) {\n  let total = 0\n  each x, i in xs { set total = total + x + i }\n  return total\n}\n";
+    parse_program(src).expect("each x, i in xs");
+}
+
+#[test]
+fn if_expression_accepted() {
+    let src = "fn pick(c, a, b) {\n  let y = if c { a } else { b }\n  return y\n}\n";
+    parse_program(src).expect("식 위치 if");
+}
+
+#[test]
+fn if_expression_requires_else() {
+    let src = "fn pick(c, a) {\n  let y = if c { a }\n  return y\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("else"), "{}", e);
+}
+
+#[test]
+fn numeric_member_accepted() {
+    let src = "fn f(pair) {\n  return pair.0 + pair.1\n}\n";
+    parse_program(src).expect("숫자 멤버 (.0)");
+}
+
+// ── 사이클 stdlib-vocab s10: 조합자는 문법 확장 없이 일반 호출로 성립한다 ──
+
+#[test]
+fn combinators_parse_as_plain_calls() {
+    let src = r#"
+fn freq(words) {
+  let counts = count(words)
+  let pairs = map(keys(counts), fn2)
+  let ranked = sort(pairs, byCount)
+  return take(ranked, 3)
+}
+"#;
+    parse_program(src).expect("조합자 합성(count→map→sort→take)");
+}
+
+#[test]
+fn fn_passed_by_name_as_argument() {
+    let src = r#"
+fn double(x) { return x * 2 }
+fn run(xs) {
+  let ys = filter(map(xs, double), positive)
+  let total = reduce(ys, 0, add)
+  return total
+}
+"#;
+    parse_program(src).expect("fn 이름의 값 인자 전달·중첩 호출");
+}

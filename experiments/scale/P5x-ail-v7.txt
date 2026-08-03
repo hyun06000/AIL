@@ -1,0 +1,20 @@
+fn topWords(text) {
+  let words = split(lower(text), " ")
+  let counts = {}
+  each word in words {
+    let c = if has(counts, word) { counts[word] } else { 0 }
+    set counts[word] = c + 1
+  }
+  let entries = []
+  each word in keys(counts) {
+    push entries { word word, count counts[word] }
+  }
+  let sorted = sort entries by count desc
+  let top3 = []
+  each i in range(3) {
+    if i < len(sorted) {
+      push top3 sorted[i]
+    }
+  }
+  return top3
+}

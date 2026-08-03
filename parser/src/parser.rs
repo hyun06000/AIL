@@ -201,6 +201,10 @@ impl P {
             Some(Tok::Each) => {
                 self.i += 1;
                 match self.next() { Some(Tok::Ident(_)) => {}, o => return Err(format!("each 변수 자리에서 {:?}", o)) }
+                if matches!(self.peek(), Some(Tok::Comma)) { // each x, i in xs (원소+인덱스, 사람 승인)
+                    self.i += 1;
+                    match self.next() { Some(Tok::Ident(_)) => {}, o => return Err(format!("each 인덱스 변수 자리에서 {:?}", o)) }
+                }
                 self.expect(&Tok::In, "each")?;
                 self.parse_expr()?;
                 self.parse_block()
@@ -250,7 +254,7 @@ impl P {
         match self.next() { Some(Tok::Ident(_)) => {}, o => return Err(format!("이름 자리에서 {:?}", o)) }
         loop {
             match self.peek() {
-                Some(Tok::Dot) => { self.i += 1; match self.next() { Some(Tok::Ident(_)) | Some(Tok::Done) => {}, o => return Err(format!("멤버 이름 자리에서 {:?}", o)) } }
+                Some(Tok::Dot) => { self.i += 1; match self.next() { Some(Tok::Ident(_)) | Some(Tok::Done) | Some(Tok::Num(_)) => {}, o => return Err(format!("멤버 이름 자리에서 {:?}", o)) } }
                 Some(Tok::LBracket) => { self.i += 1; self.parse_expr()?; self.expect(&Tok::RBracket, "인덱스")?; }
                 Some(Tok::LParen) => { self.i += 1; self.parse_args()?; }
                 _ => return Ok(()),
@@ -285,7 +289,7 @@ impl P {
         self.parse_atom()?;
         loop {
             match self.peek() {
-                Some(Tok::Dot) => { self.i += 1; match self.next() { Some(Tok::Ident(_)) | Some(Tok::Done) => {}, o => return Err(format!("멤버 이름 자리에서 {:?}", o)) } }
+                Some(Tok::Dot) => { self.i += 1; match self.next() { Some(Tok::Ident(_)) | Some(Tok::Done) | Some(Tok::Num(_)) => {}, o => return Err(format!("멤버 이름 자리에서 {:?}", o)) } }
                 Some(Tok::LParen) => { self.i += 1; self.parse_args()?; }
                 Some(Tok::LBracket) => { self.i += 1; self.parse_expr()?; self.expect(&Tok::RBracket, "인덱스")?; }
                 _ => return Ok(()),
@@ -297,6 +301,21 @@ impl P {
         let t = self.peek().cloned();
         self.guard_while(&t)?;
         match self.next() {
+            Some(Tok::If) => { // 조건식 (사람 승인): if c { a } else { b } — else 필수 (H2: 값이 비면 안 된다)
+                self.parse_expr()?;
+                self.expect(&Tok::LBrace, "조건식 참 가지")?;
+                self.parse_expr()?;
+                self.skip_nl();
+                self.expect(&Tok::RBrace, "조건식 참 가지")?;
+                self.skip_nl();
+                self.expect(&Tok::Else, "조건식은 else 필수 (H2)")?;
+                self.skip_nl();
+                self.expect(&Tok::LBrace, "조건식 거짓 가지")?;
+                self.parse_expr()?;
+                self.skip_nl();
+                self.expect(&Tok::RBrace, "조건식 거짓 가지")?;
+                return Ok(());
+            }
             Some(Tok::Ident(name)) => {
                 if self.in_pure && ["http","fs","shell","state","env","llm","clock"].contains(&name.as_str())
                     && matches!(self.peek(), Some(Tok::Dot)) {

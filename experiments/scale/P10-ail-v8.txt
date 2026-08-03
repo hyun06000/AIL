@@ -1,0 +1,17 @@
+fn parseQueryString(queryStr) {
+  let pairStrings = split(queryStr, "&")
+  let result = map(pairStrings, parsePair)
+  let emptyCount = reduce(result, 0, countEmpty)
+  return { pairs result, emptyCount emptyCount }
+}
+
+fn parsePair(pairStr) {
+  let parts = split(pairStr, "=")
+  let key = first(parts)
+  let value = if len(parts) >= 2 { last(parts) } else { "" }
+  return { key key, value value }
+}
+
+fn countEmpty(acc, pair) {
+  return if pair.value == "" { acc + 1 } else { acc }
+}

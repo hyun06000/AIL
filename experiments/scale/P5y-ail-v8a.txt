@@ -1,0 +1,15 @@
+fn identity(x) { return x }
+
+fn descending(item) { return 0 - item.count }
+
+fn topWords(text) {
+  let words = split(text)
+  let lowered = map(words, lower)
+  let grouped = group(lowered, identity)
+  let freqs = []
+  each word in keys(grouped) {
+    set freqs = push(freqs, { word word, count len(grouped[word]) })
+  }
+  let sorted = sort(freqs, descending)
+  return take(sorted, 3)
+}

@@ -1,0 +1,35 @@
+fn countTopWords(text) {
+  let words = split(lower(text), " ")
+  let freq = {}
+
+  each word in words {
+    if len(word) > 0 {
+      set freq[word] = if has(freq, word) { freq[word] + 1 } else { 1 }
+    }
+  }
+
+  let top1 = { word "", count 0 }
+  let top2 = { word "", count 0 }
+  let top3 = { word "", count 0 }
+
+  each word in keys(freq) {
+    let count = freq[word]
+    if count > top1.count {
+      set top3 = top2
+      set top2 = top1
+      set top1 = { word word, count count }
+    } else if count > top2.count {
+      set top3 = top2
+      set top2 = { word word, count count }
+    } else if count > top3.count {
+      set top3 = { word word, count count }
+    }
+  }
+
+  let result = []
+  if len(top1.word) > 0 { push(result, top1) }
+  if len(top2.word) > 0 { push(result, top2) }
+  if len(top3.word) > 0 { push(result, top3) }
+
+  return result
+}

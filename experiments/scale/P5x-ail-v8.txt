@@ -1,0 +1,24 @@
+fn topWords(text) {
+  let words = text split " "
+  let lowered = map(words, toLower)
+  let nonEmpty = filter(lowered, notEmpty)
+  let grouped = group(nonEmpty, identity)
+  let wordCounts = []
+  each word in keys(grouped) {
+    set wordCounts = push(wordCounts, { word word, count len(grouped word) })
+  }
+  let sorted = sort(wordCounts, byCount)
+  return take(sorted, 3)
+}
+
+fn notEmpty(word) {
+  return len(word) > 0
+}
+
+fn byCount(item) {
+  return 0 - item count
+}
+
+fn identity(x) {
+  return x
+}
