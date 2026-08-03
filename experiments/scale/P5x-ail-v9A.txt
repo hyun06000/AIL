@@ -1,0 +1,6 @@
+fn topWords(text) {
+  let words = split(lower(text), " ")
+  let freq = group(words, x => x)
+  let counts = map(freq, x => { word: x.key, count: len(x.value) })
+  return take(sort(counts, x => 0 - x.count), 3)
+}

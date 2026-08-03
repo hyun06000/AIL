@@ -1,0 +1,13 @@
+fn analyze(lists) {
+  let flattened = []
+  each list in lists {
+    each num in list {
+      set flattened = push(flattened, num)
+    }
+  }
+  return {
+    total sum(flattened),
+    count len(flattened),
+    largest max(flattened)
+  }
+}
