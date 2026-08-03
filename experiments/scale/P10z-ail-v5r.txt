@@ -1,0 +1,19 @@
+fn parseQueryString(queryStr) {
+  let pairs = queryStr.split("&")
+  let result = {}
+  let emptyCount = 0
+  
+  each pair in pairs {
+    let parts = pair.split("=")
+    let key = parts[0]
+    let value = if parts.length > 1 { parts[1] } else { "" }
+    
+    if value == "" {
+      set emptyCount = emptyCount + 1
+    }
+    
+    set result[key] = value
+  }
+  
+  return { parsed result, empty emptyCount }
+}

@@ -1,0 +1,22 @@
+fn topWords(text) {
+  words = split(text, " ")
+  lowerWords = map(words, lower)
+  grouped = group(lowerWords, identity)
+  wordNames = keys(grouped)
+  pairs = []
+  each word in wordNames {
+    list = grouped[word]
+    pair = { word word, count len(list) }
+    set pairs = push(pairs, pair)
+  }
+  sorted = sort(pairs, byCount)
+  return take(sorted, 3)
+}
+
+fn identity(x) {
+  return x
+}
+
+fn byCount(item) {
+  return 0 - item.count
+}

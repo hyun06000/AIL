@@ -1,0 +1,43 @@
+fn topWords(text) {
+  let words = text.lower().split(" ")
+  let counts = {}
+  
+  each word in words {
+    if word != "" {
+      if word in counts {
+        set counts[word] = counts[word] + 1
+      } else {
+        set counts[word] = 1
+      }
+    }
+  }
+  
+  let top1Word = ""
+  let top1Count = 0
+  let top2Word = ""
+  let top2Count = 0
+  let top3Word = ""
+  let top3Count = 0
+  
+  each word in counts {
+    let count = counts[word]
+    if count > top1Count {
+      set top3Word = top2Word
+      set top3Count = top2Count
+      set top2Word = top1Word
+      set top2Count = top1Count
+      set top1Word = word
+      set top1Count = count
+    } else if count > top2Count {
+      set top3Word = top2Word
+      set top3Count = top2Count
+      set top2Word = word
+      set top2Count = count
+    } else if count > top3Count {
+      set top3Word = word
+      set top3Count = count
+    }
+  }
+  
+  return { top1 top1Word, count1 top1Count, top2 top2Word, count2 top2Count, top3 top3Word, count3 top3Count }
+}

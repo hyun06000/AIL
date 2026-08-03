@@ -4,14 +4,14 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tok {
     // 계약 슬롯
-    Task, Goal, Done, Never, Limit, Uses, Again, Wait, Set,
+    Task, Fn, Goal, Done, Never, Limit, Uses, Again, Wait, Set,
     // 문장
     Let, Each, In, If, Else, Match, Case, Return, Fail,
     // 금지어 (렉싱은 되고 파싱에서 거부 — 진단 메시지를 위해)
     While,
     Ident(String), Num(String), Str(String),
     LBrace, RBrace, LParen, RParen, LBracket, RBracket,
-    Comma, Dot, Assign,
+    Comma, Dot, Assign, Arrow,
     Op(String), // == != >= <= < > && || + - * / % !
     Newline,
     FreeText(String), // goal/limit 의 행 끝까지 자유 텍스트 (렉서 모드)
@@ -58,7 +58,7 @@ fn lex_line(line: &str, out: &mut Vec<Tok>) {
             let slot = first_word; first_word = false;
             out.push(match w.as_str() {
                 // 전역 키워드
-                "task" => Tok::Task, "let" => Tok::Let, "set" => Tok::Set,
+                "task" => Tok::Task, "fn" => Tok::Fn, "let" => Tok::Let, "set" => Tok::Set,
                 "each" => Tok::Each, "in" => Tok::In,
                 "if" => Tok::If, "else" => Tok::Else, "match" => Tok::Match,
                 "case" => Tok::Case, "return" => Tok::Return, "fail" => Tok::Fail,
@@ -89,6 +89,7 @@ fn lex_line(line: &str, out: &mut Vec<Tok>) {
         // 2글자 연산자 우선
         if i + 1 < b.len() {
             let two: String = [b[i], b[i + 1]].iter().collect();
+            if two == "=>" { out.push(Tok::Arrow); i += 2; continue; }
             if ["==", "!=", ">=", "<=", "&&", "||", "++"].contains(&two.as_str()) {
                 out.push(Tok::Op(two)); i += 2; continue;
             }

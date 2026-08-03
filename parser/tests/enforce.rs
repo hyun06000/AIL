@@ -145,3 +145,129 @@ task f(x) {
     let e = parse_program(src).unwrap_err();
     assert!(e.contains("판정"), "{}", e);
 }
+
+// ── 순수 함수 fn (사이클 pure-fn 초안) ──
+
+#[test]
+fn pure_fn_accepted() {
+    let src = r#"
+fn mergeSorted(a, b) {
+  let out = []
+  each x in a { set out = push(out, x) }
+  each y in b { set out = insertSorted(out, y) }
+  return { list out, length len(out) }
+}
+"#;
+    parse_program(src).expect("순수 fn 은 슬롯 없이 성립해야 한다");
+}
+
+#[test]
+fn pure_fn_rejects_uses() {
+    let src = "fn f(x) {\n  uses [http]\n  return x\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("순수"), "{}", e);
+}
+
+#[test]
+fn pure_fn_rejects_effect_call() {
+    let src = "fn f(url) {\n  let r = http.get(url)\n  return r\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("순수"), "{}", e);
+}
+
+#[test]
+fn task_rules_unchanged_with_fn_present() {
+    let src = r#"
+fn add(a, b) { return a + b }
+task main(xs) {
+  goal add them all
+  done total >= 0
+  never []
+  let total = 0
+  each x in xs { set total = add(total, x) }
+  return total
+}
+"#;
+    parse_program(src).expect("fn 과 task 공존");
+}
+
+// ── 표현력 보강 (사람 승인: 인덱스 반복 2형 + 조건식) ──
+
+#[test]
+fn each_range_accepted() {
+    let src = "fn f(n) {\n  let total = 0\n  each i in range(n) { set total = total + i }\n  return total\n}\n";
+    parse_program(src).expect("each i in range(n)");
+}
+
+#[test]
+fn each_with_index_accepted() {
+    let src = "fn f(xs) {\n  let total = 0\n  each x, i in xs { set total = total + x + i }\n  return total\n}\n";
+    parse_program(src).expect("each x, i in xs");
+}
+
+#[test]
+fn if_expression_accepted() {
+    let src = "fn pick(c, a, b) {\n  let y = if c { a } else { b }\n  return y\n}\n";
+    parse_program(src).expect("식 위치 if");
+}
+
+#[test]
+fn if_expression_requires_else() {
+    let src = "fn pick(c, a) {\n  let y = if c { a }\n  return y\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("else"), "{}", e);
+}
+
+#[test]
+fn numeric_member_accepted() {
+    let src = "fn f(pair) {\n  return pair.0 + pair.1\n}\n";
+    parse_program(src).expect("숫자 멤버 (.0)");
+}
+
+// ── 사이클 stdlib-vocab s10: 조합자는 문법 확장 없이 일반 호출로 성립한다 ──
+
+#[test]
+fn combinators_parse_as_plain_calls() {
+    let src = r#"
+fn freq(words) {
+  let counts = count(words)
+  let pairs = map(keys(counts), fn2)
+  let ranked = sort(pairs, byCount)
+  return take(ranked, 3)
+}
+"#;
+    parse_program(src).expect("조합자 합성(count→map→sort→take)");
+}
+
+#[test]
+fn fn_passed_by_name_as_argument() {
+    let src = r#"
+fn double(x) { return x * 2 }
+fn run(xs) {
+  let ys = filter(map(xs, double), positive)
+  let total = reduce(ys, 0, add)
+  return total
+}
+"#;
+    parse_program(src).expect("fn 이름의 값 인자 전달·중첩 호출");
+}
+
+// ── 사이클 stdlib-vocab s15 가설 A: 단일 인자 화살표 람다 ──
+
+#[test]
+fn arrow_lambda_single_arg() {
+    let src = r#"
+fn top3(pairs) {
+  let ranked = sort(pairs, p => 0 - p.count)
+  return take(filter(ranked, p => p.count > 0), 3)
+}
+"#;
+    parse_program(src).expect("단일 인자 람다 x => expr");
+}
+
+#[test]
+fn arrow_lambda_still_pure_inside_fn() {
+    let src = "fn f(xs) {\n  return map(xs, x => http.get(x))\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("순수"), "{}", e);
+}

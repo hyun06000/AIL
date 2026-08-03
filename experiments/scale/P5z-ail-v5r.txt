@@ -1,0 +1,33 @@
+fn topWords(text) {
+  let words = text.split(" ")
+  let freq = {}
+  
+  each word in words {
+    let lower = word.toLowerCase()
+    if lower != "" {
+      if freq[lower] {
+        set freq[lower] = freq[lower] + 1
+      } else {
+        set freq[lower] = 1
+      }
+    }
+  }
+  
+  let pairs = []
+  each word in freq {
+    pairs.push([word, freq[word]])
+  }
+  
+  pairs.sort(fn(a, b) {
+    return b[1] - a[1]
+  })
+  
+  let result = {}
+  each i in range(3) {
+    if i < pairs.length {
+      set result[pairs[i][0]] = pairs[i][1]
+    }
+  }
+  
+  return result
+}
