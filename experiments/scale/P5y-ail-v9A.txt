@@ -1,0 +1,7 @@
+fn topWords(text) {
+  let words = filter(split(lower(text), " "), w => len(w) > 0)
+  let grouped = group(words, x => x)
+  let wordCounts = map(keys(grouped), w => { word w, count len(grouped(w)) })
+  let sorted = sort(wordCounts, x => 0 - x.count)
+  return take(sorted, 3)
+}
