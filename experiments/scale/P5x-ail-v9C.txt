@@ -1,0 +1,26 @@
+fn topWords(text) {
+  let cleaned = trim(text)
+  let words = split(lower(cleaned), " ")
+  let filtered = filter(words, notEmpty)
+  let grouped = group(filtered, identity)
+  
+  let items = []
+  each word in keys(grouped) {
+    push items { word word, count len(grouped[word]) }
+  }
+  
+  let sorted = sort(items, scoreDesc)
+  return take(sorted, 3)
+}
+
+fn identity(x) {
+  return x
+}
+
+fn notEmpty(word) {
+  return len(word) > 0
+}
+
+fn scoreDesc(item) {
+  return 0 - item.count
+}
