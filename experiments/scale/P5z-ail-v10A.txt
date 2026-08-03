@@ -1,0 +1,7 @@
+fn topFrequent(text) {
+  let words = split(lower(text), " ")
+  let grouped = group(words, x => x)
+  let counts = map(keys(grouped), w => { word w, count len(grouped[w]) })
+  let sorted = sort(counts, c => 0 - c.count)
+  return take(sorted, 3)
+}
