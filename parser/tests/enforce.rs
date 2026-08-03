@@ -251,3 +251,23 @@ fn run(xs) {
 "#;
     parse_program(src).expect("fn 이름의 값 인자 전달·중첩 호출");
 }
+
+// ── 사이클 stdlib-vocab s15 가설 A: 단일 인자 화살표 람다 ──
+
+#[test]
+fn arrow_lambda_single_arg() {
+    let src = r#"
+fn top3(pairs) {
+  let ranked = sort(pairs, p => 0 - p.count)
+  return take(filter(ranked, p => p.count > 0), 3)
+}
+"#;
+    parse_program(src).expect("단일 인자 람다 x => expr");
+}
+
+#[test]
+fn arrow_lambda_still_pure_inside_fn() {
+    let src = "fn f(xs) {\n  return map(xs, x => http.get(x))\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("순수"), "{}", e);
+}
