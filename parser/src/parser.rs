@@ -321,6 +321,8 @@ impl P {
                     && matches!(self.peek(), Some(Tok::Dot)) {
                     return Err(format!("fn 은 순수하다 — 효과 네임스페이스 `{}` 는 fn 안에서 표현되지 않는다 (H1: 구조적 순수성)", name));
                 }
+                // 단일 인자 화살표 람다 `x => expr` (사이클 stdlib-vocab s15, 가설 A)
+                if matches!(self.peek(), Some(Tok::Arrow)) { self.i += 1; return self.parse_expr(); }
                 Ok(())
             }
             Some(Tok::Num(_)) | Some(Tok::Str(_)) => Ok(()),

@@ -11,7 +11,7 @@ pub enum Tok {
     While,
     Ident(String), Num(String), Str(String),
     LBrace, RBrace, LParen, RParen, LBracket, RBracket,
-    Comma, Dot, Assign,
+    Comma, Dot, Assign, Arrow,
     Op(String), // == != >= <= < > && || + - * / % !
     Newline,
     FreeText(String), // goal/limit 의 행 끝까지 자유 텍스트 (렉서 모드)
@@ -89,6 +89,7 @@ fn lex_line(line: &str, out: &mut Vec<Tok>) {
         // 2글자 연산자 우선
         if i + 1 < b.len() {
             let two: String = [b[i], b[i + 1]].iter().collect();
+            if two == "=>" { out.push(Tok::Arrow); i += 2; continue; }
             if ["==", "!=", ">=", "<=", "&&", "||", "++"].contains(&two.as_str()) {
                 out.push(Tok::Op(two)); i += 2; continue;
             }

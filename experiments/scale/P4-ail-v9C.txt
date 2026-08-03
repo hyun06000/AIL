@@ -1,0 +1,60 @@
+fn merge(left, right) {
+  let result = []
+  let leftIdx = 0
+  let rightIdx = 0
+  let leftDone = false
+  let rightDone = false
+  
+  each _ in range(len(left) + len(right)) {
+    if leftDone && rightDone {
+    } else if leftDone {
+      each item, idx in right {
+        if idx == rightIdx {
+          result = push(result, item)
+          set rightIdx = rightIdx + 1
+        }
+      }
+      if rightIdx >= len(right) {
+        set rightDone = true
+      }
+    } else if rightDone {
+      each item, idx in left {
+        if idx == leftIdx {
+          result = push(result, item)
+          set leftIdx = leftIdx + 1
+        }
+      }
+      if leftIdx >= len(left) {
+        set leftDone = true
+      }
+    } else {
+      let leftVal = 0
+      let rightVal = 0
+      each item, idx in left {
+        if idx == leftIdx {
+          set leftVal = item
+        }
+      }
+      each item, idx in right {
+        if idx == rightIdx {
+          set rightVal = item
+        }
+      }
+      if leftVal <= rightVal {
+        result = push(result, leftVal)
+        set leftIdx = leftIdx + 1
+        if leftIdx >= len(left) {
+          set leftDone = true
+        }
+      } else {
+        result = push(result, rightVal)
+        set rightIdx = rightIdx + 1
+        if rightIdx >= len(right) {
+          set rightDone = true
+        }
+      }
+    }
+  }
+  
+  return { merged result, length len(result) }
+}
