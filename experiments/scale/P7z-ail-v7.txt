@@ -1,0 +1,11 @@
+fn analyzeNumbers(lists) {
+  let allNums = []
+
+  each list in lists {
+    each num in list {
+      push allNums num
+    }
+  }
+
+  return { total sum(allNums), count len(allNums), largest max(allNums) }
+}

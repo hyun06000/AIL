@@ -1,0 +1,14 @@
+fn topWords(text) {
+  let words = split(lower(text), " ")
+  let grouped = group(words, identity)
+  let counts = []
+  each word in keys(grouped) {
+    set counts = push(counts, { word word, count len(grouped[word]) })
+  }
+  let sorted = sort(counts, byCount)
+  return take(sorted, 3)
+}
+
+fn identity(x) { return x }
+
+fn byCount(item) { return 0 - item.count }

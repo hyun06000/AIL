@@ -1,0 +1,18 @@
+fn topWords(text) {
+  let words = split(lower(text), " ")
+  let freq = {}
+  each word in words {
+    set freq[word] = if has(freq, word) { freq[word] + 1 } else { 1 }
+  }
+  let allWords = keys(freq)
+  let entries = []
+  each word in allWords {
+    set entries = push(entries, { word word, count freq[word] })
+  }
+  let sorted = sort(entries, byCountDesc)
+  return take(sorted, 3)
+}
+
+fn byCountDesc(item) {
+  return 0 - item.count
+}

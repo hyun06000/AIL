@@ -1,0 +1,16 @@
+fn flattenAndAnalyze(data) {
+  let flat = reduce(data, [], mergeSublist)
+  return {
+    totalSum sum(flat),
+    count len(flat),
+    largestNumber max(flat)
+  }
+}
+
+fn mergeSublist(flat, sublist) {
+  return reduce(sublist, flat, addNumber)
+}
+
+fn addNumber(flat, num) {
+  return push(flat, num)
+}

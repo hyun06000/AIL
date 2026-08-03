@@ -1,0 +1,29 @@
+fn topWords(text) {
+  let words = split(lower(trim(text)), " ")
+  let pairs = []
+
+  each word in words {
+    if len(word) > 0 {
+      let found = false
+      each pair in pairs {
+        if pair.word == word {
+          set pair.count = pair.count + 1
+          set found = true
+        }
+      }
+      if found == false {
+        push(pairs, { word word, count 1 })
+      }
+    }
+  }
+
+  let sorted = sort(pairs)
+  let top3 = []
+  each i in range(3) {
+    if i < len(sorted) {
+      push(top3, sorted[len(sorted) - 1 - i])
+    }
+  }
+
+  return top3
+}

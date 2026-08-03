@@ -1,0 +1,20 @@
+fn analyzeNumbers(lists) {
+  let total = 0
+  let count = 0
+  let largest = null
+
+  each list in lists {
+    each num in list {
+      set total = total + num
+      set count = count + 1
+      if largest == null {
+        set largest = num
+      }
+      if largest != null && num > largest {
+        set largest = num
+      }
+    }
+  }
+
+  return { total total, count count, largest largest }
+}

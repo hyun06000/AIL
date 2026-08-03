@@ -1,0 +1,23 @@
+fn merge(a, b) {
+  let result = []
+  let i = 0
+  let j = 0
+  
+  each _ in range(len(a) + len(b)) {
+    if i >= len(a) {
+      set result = push(result, b[j])
+      set j = j + 1
+    } else if j >= len(b) {
+      set result = push(result, a[i])
+      set i = i + 1
+    } else if a[i] <= b[j] {
+      set result = push(result, a[i])
+      set i = i + 1
+    } else {
+      set result = push(result, b[j])
+      set j = j + 1
+    }
+  }
+  
+  return { merged result, length len(result) }
+}

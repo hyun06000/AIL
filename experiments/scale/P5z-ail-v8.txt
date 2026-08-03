@@ -1,0 +1,21 @@
+fn topWords(text) {
+  let words = split(lower(text), " ")
+  let counts = {}
+  each word in words {
+    if has(counts, word) {
+      set counts[word] = counts[word] + 1
+    } else {
+      set counts[word] = 1
+    }
+  }
+  let entries = []
+  each word in keys(counts) {
+    push(entries, { word word, count counts[word] })
+  }
+  let sorted = sort(entries, descCount)
+  return take(sorted, 3)
+}
+
+fn descCount(entry) {
+  return 0 - entry.count
+}
