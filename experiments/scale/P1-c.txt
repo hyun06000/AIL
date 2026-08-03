@@ -1,0 +1,139 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <curl/curl.h>
+#include <unistd.h>
+
+typedef struct {
+    char *data;
+    size_t size;
+} Response;
+
+typedef struct {
+    int ok;
+    char *name;
+    char *email;
+    char *error;
+} Result;
+
+static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    Response *mem = (Response *)userp;
+
+    char *ptr = realloc(mem->data, mem->size + realsize + 1);
+    if(!ptr) {
+        fprintf(stderr, "Not enough memory for realloc\n");
+        return 0;
+    }
+
+    mem->data = ptr;
+    memcpy(&(mem->data[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->data[mem->size] = 0;
+
+    return realsize;
+}
+
+char* extract_json_string(const char *json, const char *key) {
+    char search[256];
+    snprintf(search, sizeof(search), "\"%s\":\"", key);
+
+    char *pos = strstr(json, search);
+    if (!pos) return NULL;
+
+    pos += strlen(search);
+    char *end = strchr(pos, '"');
+    if (!end) return NULL;
+
+    size_t len = end - pos;
+    char *result = malloc(len + 1);
+    strncpy(result, pos, len);
+    result[len] = '\0';
+
+    return result;
+}
+
+Result fetch_json(const char *url) {
+    Result result = {0};
+
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        result.ok = 0;
+        result.error = strdup("Failed to initialize CURL");
+        return result;
+    }
+
+    int max_retries = 3;
+
+    for (int attempt = 0; attempt < max_retries; attempt++) {
+        Response response = {0};
+        response.data = malloc(1);
+        response.size = 0;
+
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&response);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+
+        CURLcode res = curl_easy_perform(curl);
+
+        if (res == CURLE_OK) {
+            char *name = extract_json_string(response.data, "name");
+            char *email = extract_json_string(response.data, "email");
+
+            if (name && email) {
+                result.ok = 1;
+                result.name = name;
+                result.email = email;
+                free(response.data);
+                curl_easy_cleanup(curl);
+                return result;
+            }
+
+            if (name) free(name);
+            if (email) free(email);
+        }
+
+        free(response.data);
+
+        if (attempt < max_retries - 1) {
+            int backoff = 1 << attempt;
+            sleep(backoff);
+        }
+    }
+
+    result.ok = 0;
+    result.error = strdup("Failed to fetch JSON after 3 retries");
+    curl_easy_cleanup(curl);
+    return result;
+}
+
+void print_json_result(Result result) {
+    printf("{");
+    printf("\"ok\":%s", result.ok ? "true" : "false");
+
+    if (result.ok) {
+        printf(",\"name\":\"%s\"", result.name ? result.name : "");
+        printf(",\"email\":\"%s\"", result.email ? result.email : "");
+    } else if (result.error) {
+        printf(",\"error\":\"%s\"", result.error);
+    }
+
+    printf("}\n");
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <url>\n", argv[0]);
+        return 1;
+    }
+
+    Result result = fetch_json(argv[1]);
+    print_json_result(result);
+
+    if (result.name) free(result.name);
+    if (result.email) free(result.email);
+    if (result.error) free(result.error);
+
+    return 0;
+}

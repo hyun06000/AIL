@@ -1,0 +1,37 @@
+async function fetchWithRetry(url, maxRetries = 3) {
+  const timeout = 5000;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const delay = attempt > 0 ? Math.pow(2, attempt - 1) * 1000 : 0;
+      if (delay > 0) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      return {
+        ok: true,
+        name: data.name,
+        email: data.email
+      };
+    } catch (error) {
+      if (attempt === maxRetries - 1) {
+        return {
+          ok: false,
+          error: error.message
+        };
+      }
+    }
+  }
+}

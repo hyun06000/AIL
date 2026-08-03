@@ -1,0 +1,38 @@
+package main
+
+import (
+	"fmt"
+	"net/url"
+)
+
+func parseQueryString(queryString string) (map[string]string, int) {
+	values, _ := url.ParseQuery(queryString)
+
+	params := make(map[string]string)
+	emptyCount := 0
+
+	for key, valueList := range values {
+		value := ""
+		if len(valueList) > 0 {
+			value = valueList[0]
+		}
+		params[key] = value
+
+		if value == "" {
+			emptyCount++
+		}
+	}
+
+	return params, emptyCount
+}
+
+func main() {
+	queryString := "a=1&b=hello&c="
+	params, emptyCount := parseQueryString(queryString)
+
+	fmt.Println("Parsed parameters:")
+	for k, v := range params {
+		fmt.Printf("  %s: %q\n", k, v)
+	}
+	fmt.Printf("Empty values count: %d\n", emptyCount)
+}

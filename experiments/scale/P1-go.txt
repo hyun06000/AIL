@@ -1,0 +1,81 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+type Result struct {
+	Ok    bool   `json:"ok"`
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+func fetchJSON(url string) Result {
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Exponential backoff: 1s, 2s, 4s
+		if attempt > 0 {
+			backoffDuration := time.Duration(1<<uint(attempt-1)) * time.Second
+			time.Sleep(backoffDuration)
+		}
+
+		client := &http.Client{
+			Timeout: 5 * time.Second,
+		}
+
+		resp, err := client.Get(url)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		var data struct {
+			Name  string `json:"name"`
+			Email string `json:"email"`
+		}
+
+		err = json.Unmarshal(body, &data)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		return Result{
+			Ok:    true,
+			Name:  data.Name,
+			Email: data.Email,
+		}
+	}
+
+	errorMsg := "unknown error"
+	if lastErr != nil {
+		errorMsg = lastErr.Error()
+	}
+
+	return Result{
+		Ok:    false,
+		Error: errorMsg,
+	}
+}
+
+func main() {
+	url := "https://jsonplaceholder.typicode.com/users/1"
+	result := fetchJSON(url)
+
+	resultJSON, _ := json.Marshal(result)
+	fmt.Println(string(resultJSON))
+}

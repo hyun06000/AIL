@@ -1,0 +1,48 @@
+def process_jobs(jobs):
+    """
+    Process jobs with a budget of 10 operations.
+    Each job costs 1 operation whether it succeeds or fails.
+    Returns counts of done, failed, and remaining jobs.
+    """
+    budget = 10
+    done = 0
+    failed = 0
+    failed_jobs = []
+
+    for job in jobs:
+        if budget <= 0:
+            break
+
+        try:
+            # Job fails if its name starts with "fail"
+            if isinstance(job, str) and job.startswith("fail"):
+                raise Exception(f"Job failed: {job}")
+            done += 1
+        except Exception:
+            failed += 1
+            failed_jobs.append(job)
+
+        budget -= 1
+
+    remaining = len(jobs) - done - failed
+
+    return {
+        'done': done,
+        'failed': failed,
+        'remaining': remaining,
+        'failed_jobs': failed_jobs
+    }
+
+
+if __name__ == "__main__":
+    jobs = [
+        "job1", "fail_job2", "job3", "job4",
+        "fail_job5", "job6", "job7", "job8",
+        "fail_job9", "job10", "job11", "job12"
+    ]
+
+    result = process_jobs(jobs)
+    print(f"Done: {result['done']}")
+    print(f"Failed: {result['failed']}")
+    print(f"Remaining: {result['remaining']}")
+    print(f"Failed jobs: {result['failed_jobs']}")

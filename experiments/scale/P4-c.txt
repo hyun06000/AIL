@@ -1,0 +1,46 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+int* mergeSortedLists(int* list1, int len1, int* list2, int len2, int* resultLen) {
+    int* merged = (int*)malloc((len1 + len2) * sizeof(int));
+    int i = 0, j = 0, k = 0;
+
+    while (i < len1 && j < len2) {
+        if (list1[i] <= list2[j]) {
+            merged[k++] = list1[i++];
+        } else {
+            merged[k++] = list2[j++];
+        }
+    }
+
+    while (i < len1) {
+        merged[k++] = list1[i++];
+    }
+
+    while (j < len2) {
+        merged[k++] = list2[j++];
+    }
+
+    *resultLen = len1 + len2;
+    return merged;
+}
+
+int main() {
+    int list1[] = {1, 3, 5, 7};
+    int len1 = 4;
+
+    int list2[] = {2, 4, 6, 8};
+    int len2 = 4;
+
+    int resultLen = 0;
+    int* result = mergeSortedLists(list1, len1, list2, len2, &resultLen);
+
+    printf("Merged list: ");
+    for (int i = 0; i < resultLen; i++) {
+        printf("%d ", result[i]);
+    }
+    printf("\nLength: %d\n", resultLen);
+
+    free(result);
+    return 0;
+}

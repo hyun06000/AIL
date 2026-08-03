@@ -1,0 +1,18 @@
+function getTopWords(text) {
+  const words = text.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+
+  const wordCount = {};
+  words.forEach(word => {
+    wordCount[word] = (wordCount[word] || 0) + 1;
+  });
+
+  const sorted = Object.entries(wordCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  return sorted;
+}
+
+const text = "Hello world hello JavaScript world JavaScript world";
+const result = getTopWords(text);
+console.log(result);

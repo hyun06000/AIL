@@ -1,0 +1,27 @@
+task parseQueryString(queryStr) {
+  goal <parse URL query string into object and count empty values>
+  done <result.emptyCount >= 0>
+  never [fs, shell]
+
+  let pairs = {}
+  let emptyCount = 0
+  let entries = split(queryStr, "&")
+
+  each entry in entries {
+    let parts = split(entry, "=")
+    let key = parts[0]
+    let value = ""
+
+    if len(parts) > 1 {
+      set value = parts[1]
+    }
+
+    set pairs[key] = value
+
+    if value == "" {
+      set emptyCount = emptyCount + 1
+    }
+  }
+
+  return { pairs pairs, emptyCount emptyCount }
+}

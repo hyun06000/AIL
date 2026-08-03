@@ -1,0 +1,53 @@
+package main
+
+import "fmt"
+
+type Job struct {
+	ID   int
+	Cost int
+}
+
+type Result struct {
+	Done       int
+	Failed     int
+	Remaining  int
+	FailedJobs []int
+}
+
+func ProcessJobs(jobs []Job, budget int) Result {
+	result := Result{
+		FailedJobs: []int{},
+	}
+
+	for i, job := range jobs {
+		if budget <= 0 {
+			result.Remaining = len(jobs) - i
+			break
+		}
+
+		if job.Cost <= budget {
+			result.Done++
+			budget -= job.Cost
+		} else {
+			result.Failed++
+			result.FailedJobs = append(result.FailedJobs, job.ID)
+		}
+	}
+
+	return result
+}
+
+func main() {
+	jobs := []Job{
+		{ID: 1, Cost: 2},
+		{ID: 2, Cost: 3},
+		{ID: 3, Cost: 4},
+		{ID: 4, Cost: 2},
+		{ID: 5, Cost: 5},
+		{ID: 6, Cost: 1},
+	}
+
+	result := ProcessJobs(jobs, 10)
+	fmt.Printf("Done: %d, Failed: %d, Remaining: %d\n", result.Done, result.Failed, result.Remaining)
+	fmt.Printf("Failed Jobs: %v\n", result.FailedJobs)
+}

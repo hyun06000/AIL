@@ -1,0 +1,19 @@
+function parseQueryString(queryString) {
+  const params = new URLSearchParams(queryString);
+  const result = {};
+  let emptyCount = 0;
+
+  for (const [key, value] of params) {
+    result[key] = value;
+    if (value === '') {
+      emptyCount++;
+    }
+  }
+
+  return { result, emptyCount };
+}
+
+// Example:
+const { result, emptyCount } = parseQueryString("a=1&b=hello&c=");
+console.log(result); // { a: '1', b: 'hello', c: '' }
+console.log(emptyCount); // 1

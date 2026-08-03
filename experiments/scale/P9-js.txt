@@ -1,0 +1,26 @@
+async function sendPostRequests(items, endpoint, budget = 5) {
+  const successIds = [];
+  const errorMessages = [];
+
+  for (let i = 0; i < Math.min(items.length, budget); i++) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(items[i])
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        successIds.push(data.id);
+      } else {
+        errorMessages.push(data.error || `HTTP ${response.status}`);
+      }
+    } catch (error) {
+      errorMessages.push(error.message);
+    }
+  }
+
+  return { successIds, errorMessages };
+}

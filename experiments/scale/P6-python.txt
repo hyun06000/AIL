@@ -1,0 +1,71 @@
+def validate_config(config):
+    """
+    Validate a config object.
+
+    Args:
+        config: A dictionary with 'name', 'port', and 'mode' keys
+
+    Returns:
+        A list of validation error messages (empty if valid)
+    """
+    errors = []
+
+    # Validate name
+    if 'name' not in config:
+        errors.append("Missing required field: name")
+    elif not isinstance(config['name'], str) or not config['name']:
+        errors.append("name must be a non-empty string")
+
+    # Validate port
+    if 'port' not in config:
+        errors.append("Missing required field: port")
+    elif not isinstance(config['port'], (int, float)) or isinstance(config['port'], bool):
+        errors.append("port must be a number")
+    elif not (1 <= config['port'] <= 65535):
+        errors.append("port must be between 1 and 65535")
+
+    # Validate mode
+    if 'mode' not in config:
+        errors.append("Missing required field: mode")
+    elif config['mode'] not in ['dev', 'prod']:
+        errors.append("mode must be either 'dev' or 'prod'")
+
+    return errors
+
+
+# Test cases
+if __name__ == "__main__":
+    # Valid config
+    valid_config = {
+        "name": "MyApp",
+        "port": 8080,
+        "mode": "dev"
+    }
+    print("Valid config:", validate_config(valid_config))
+
+    # Invalid configs
+    invalid_config_1 = {
+        "name": "",
+        "port": 8080,
+        "mode": "dev"
+    }
+    print("Empty name:", validate_config(invalid_config_1))
+
+    invalid_config_2 = {
+        "name": "MyApp",
+        "port": 70000,
+        "mode": "dev"
+    }
+    print("Port out of range:", validate_config(invalid_config_2))
+
+    invalid_config_3 = {
+        "name": "MyApp",
+        "port": 8080,
+        "mode": "staging"
+    }
+    print("Invalid mode:", validate_config(invalid_config_3))
+
+    invalid_config_4 = {
+        "name": "MyApp"
+    }
+    print("Missing fields:", validate_config(invalid_config_4))

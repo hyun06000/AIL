@@ -1,0 +1,61 @@
+task processJobs(jobs) {
+  goal Process jobs within 10 operation budget, track completed, failed, and remaining
+  done jobsProcessedOrBudgetExhausted
+  never [shell]
+  limit 10 ops
+  uses []
+
+  let stats = processList(jobs, 0, 0, 0, [])
+
+  return {
+    done stats.done,
+    failed stats.failed,
+    remaining stats.remaining
+  }
+}
+
+task processList(jobList, doneCount, failedCount, opsUsed, failedJobs) {
+  goal Recursively process jobs with operation budget tracking
+  done opsUsed >= 10
+  never [shell]
+  limit 10 ops
+  uses []
+
+  if opsUsed >= 10 {
+    return {
+      done doneCount,
+      failed failedCount,
+      remaining 0
+    }
+  }
+
+  if isEmpty(jobList) {
+    return {
+      done doneCount,
+      failed failedCount,
+      remaining 0
+    }
+  }
+
+  let job = head(jobList)
+  let rest = tail(jobList)
+
+  match processJob(job) {
+    case ok {
+      return processList(rest, doneCount + 1, failedCount, opsUsed + 1, failedJobs)
+    }
+    case error {
+      return processList(rest, doneCount, failedCount + 1, opsUsed + 1, failedJobs ++ [job])
+    }
+  }
+}
+
+task processJob(job) {
+  goal Process single job and return success or error
+  done jobAttempted
+  never [shell]
+  limit 1 op
+  uses []
+
+  return ok
+}

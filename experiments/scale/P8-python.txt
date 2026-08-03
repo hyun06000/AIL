@@ -1,0 +1,31 @@
+def filter_active_adults(users):
+    """
+    Filter active users aged 18 or over and return with isAdult flag.
+
+    Args:
+        users: List of user records with fields name, age, active
+
+    Returns:
+        List of objects with name and isAdult flag
+    """
+    result = []
+    for user in users:
+        if user['active'] and user['age'] >= 18:
+            result.append({
+                'name': user['name'],
+                'isAdult': True
+            })
+    return result
+
+
+# Example usage
+if __name__ == "__main__":
+    users = [
+        {'name': 'Alice', 'age': 25, 'active': True},
+        {'name': 'Bob', 'age': 17, 'active': True},
+        {'name': 'Charlie', 'age': 30, 'active': False},
+        {'name': 'Diana', 'age': 22, 'active': True},
+    ]
+
+    active_adults = filter_active_adults(users)
+    print(active_adults)

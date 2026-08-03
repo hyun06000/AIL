@@ -1,0 +1,46 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+)
+
+func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	wordFreq := make(map[string]int)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		words := strings.Fields(line)
+		for _, word := range words {
+			word = strings.ToLower(word)
+			wordFreq[word]++
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "error reading input: %v\n", err)
+		os.Exit(1)
+	}
+
+	type wordCount struct {
+		word  string
+		count int
+	}
+
+	var words []wordCount
+	for word, count := range wordFreq {
+		words = append(words, wordCount{word, count})
+	}
+
+	sort.Slice(words, func(i, j int) bool {
+		return words[i].count > words[j].count
+	})
+
+	for i := 0; i < 3 && i < len(words); i++ {
+		fmt.Printf("%s: %d\n", words[i].word, words[i].count)
+	}
+}

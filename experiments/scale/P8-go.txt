@@ -1,0 +1,42 @@
+package main
+
+import "fmt"
+
+type UserRecord struct {
+	Name   string
+	Age    int
+	Active bool
+}
+
+type Result struct {
+	Name    string
+	IsAdult bool
+}
+
+func FilterActiveAdults(users []UserRecord) []Result {
+	var results []Result
+	for _, user := range users {
+		if user.Active && user.Age >= 18 {
+			results = append(results, Result{
+				Name:    user.Name,
+				IsAdult: true,
+			})
+		}
+	}
+	return results
+}
+
+func main() {
+	users := []UserRecord{
+		{"Alice", 25, true},
+		{"Bob", 17, true},
+		{"Charlie", 30, true},
+		{"Diana", 22, false},
+		{"Eve", 19, true},
+	}
+
+	result := FilterActiveAdults(users)
+	for _, r := range result {
+		fmt.Printf("{Name: %s, IsAdult: %v}\n", r.Name, r.IsAdult)
+	}
+}

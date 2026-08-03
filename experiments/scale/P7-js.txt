@@ -1,0 +1,21 @@
+function analyzeNumbers(listOfLists) {
+  let totalSum = 0;
+  let count = 0;
+  let largest = -Infinity;
+
+  for (const list of listOfLists) {
+    for (const num of list) {
+      totalSum += num;
+      count += 1;
+      if (num > largest) {
+        largest = num;
+      }
+    }
+  }
+
+  return {
+    totalSum: totalSum,
+    count: count,
+    largest: largest
+  };
+}

@@ -1,0 +1,22 @@
+task fetchJSON(url) {
+  goal <fetches JSON from URL with 5 second timeout and exponential backoff retry>
+  done result.ok == true
+  never [fs, shell]
+  uses [http]
+  again 3 wait 1
+
+  let response = http.get(url, timeout 5, json true)
+
+  if response.ok {
+    return {
+      ok true,
+      name response.name,
+      email response.email
+    }
+  } else {
+    fail return {
+      ok false,
+      error response.error
+    }
+  }
+}

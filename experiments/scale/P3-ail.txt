@@ -1,0 +1,32 @@
+task processJobs(jobs) {
+  goal Process jobs respecting 10 operation budget, track results
+  done doneCount + failedCount + remainingCount == jobs.length
+  never [shell, fs]
+  limit 10 ops
+
+  let doneCount = 0
+  let failedCount = 0
+  let failedJobs = []
+  let processed = 0
+
+  each job in jobs {
+    if processed < 10 {
+      set processed = processed + 1
+      if job.status == "success" {
+        set doneCount = doneCount + 1
+      } else {
+        set failedCount = failedCount + 1
+        set failedJobs = failedJobs + [job]
+      }
+    }
+  }
+
+  let remainingCount = jobs.length - doneCount - failedCount
+
+  return {
+    done doneCount,
+    failed failedCount,
+    remaining remainingCount,
+    failedJobs failedJobs
+  }
+}
