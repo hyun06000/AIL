@@ -1,0 +1,31 @@
+task postItems(items, endpoint) {
+  goal <send HTTP POST for each item to endpoint, collect successful ids and error messages from responses, limited to 5 requests>
+  done completed == true
+  never [fs, shell]
+  limit 5 ops
+  uses [http]
+
+  let ids = []
+  let errors = []
+  let count = 0
+  let completed = false
+
+  each item in items {
+    if count < 5 {
+      let response = http.post(endpoint, item)
+
+      if response.ok {
+        set ids = ids ++ [response.id]
+      }
+
+      if response.ok == false {
+        set errors = errors ++ [response.error]
+      }
+
+      set count = count + 1
+    }
+  }
+
+  set completed = true
+  return { ids ids, errors errors }
+}

@@ -1,0 +1,56 @@
+import requests
+from typing import List, Tuple
+
+def send_posts_with_budget(items: List[dict], url: str, budget: int = 5) -> Tuple[List[str], List[str]]:
+    """
+    Send HTTP POST requests for each item up to the budget limit.
+
+    Args:
+        items: List of items to send in POST requests
+        url: The URL endpoint to POST to
+        budget: Maximum number of requests allowed (default: 5)
+
+    Returns:
+        Tuple of (successful_ids, error_messages)
+    """
+    successful_ids = []
+    error_messages = []
+
+    for i, item in enumerate(items):
+        if i >= budget:
+            break
+
+        try:
+            response = requests.post(url, json=item)
+            response.raise_for_status()
+
+            data = response.json()
+            if 'id' in data:
+                successful_ids.append(str(data['id']))
+            else:
+                error_messages.append(f"No 'id' in response for item {i}")
+
+        except requests.exceptions.RequestException as e:
+            error_messages.append(f"Request failed for item {i}: {str(e)}")
+        except Exception as e:
+            error_messages.append(f"Error processing item {i}: {str(e)}")
+
+    return successful_ids, error_messages
+
+
+if __name__ == "__main__":
+    items = [
+        {"name": "item1", "value": 10},
+        {"name": "item2", "value": 20},
+        {"name": "item3", "value": 30},
+        {"name": "item4", "value": 40},
+        {"name": "item5", "value": 50},
+        {"name": "item6", "value": 60},
+    ]
+
+    url = "https://api.example.com/endpoint"
+
+    successful_ids, error_messages = send_posts_with_budget(items, url, budget=5)
+
+    print("Successful IDs:", successful_ids)
+    print("Error Messages:", error_messages)

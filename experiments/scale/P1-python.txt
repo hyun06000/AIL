@@ -1,0 +1,67 @@
+import requests
+import json
+import time
+
+def fetch_json_with_retry(url, max_retries=3, initial_timeout=5):
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, timeout=initial_timeout)
+            response.raise_for_status()
+            data = response.json()
+
+            return {
+                'ok': True,
+                'name': data.get('name'),
+                'email': data.get('email')
+            }
+
+        except requests.exceptions.Timeout as e:
+            error_msg = str(e)
+            if attempt == max_retries - 1:
+                return {
+                    'ok': False,
+                    'error': error_msg
+                }
+            wait_time = 2 ** attempt
+            time.sleep(wait_time)
+
+        except requests.exceptions.RequestException as e:
+            error_msg = str(e)
+            if attempt == max_retries - 1:
+                return {
+                    'ok': False,
+                    'error': error_msg
+                }
+            wait_time = 2 ** attempt
+            time.sleep(wait_time)
+
+        except json.JSONDecodeError as e:
+            error_msg = str(e)
+            if attempt == max_retries - 1:
+                return {
+                    'ok': False,
+                    'error': error_msg
+                }
+            wait_time = 2 ** attempt
+            time.sleep(wait_time)
+
+        except Exception as e:
+            error_msg = str(e)
+            if attempt == max_retries - 1:
+                return {
+                    'ok': False,
+                    'error': error_msg
+                }
+            wait_time = 2 ** attempt
+            time.sleep(wait_time)
+
+    return {
+        'ok': False,
+        'error': 'Failed after maximum retries'
+    }
+
+
+if __name__ == '__main__':
+    url = 'https://api.example.com/user'
+    result = fetch_json_with_retry(url)
+    print(json.dumps(result, indent=2))

@@ -1,0 +1,17 @@
+task countTopWords(text) {
+  goal count word frequencies case-insensitive and return top 3 most frequent words
+  done topWords.length <= 3
+  never []
+
+  let freq = {}
+
+  each word in text {
+    set freq[word] = freq[word] + 1
+  }
+
+  let entries = freq
+  let sorted = entries
+  let topWords = sorted
+
+  return topWords topWords
+}

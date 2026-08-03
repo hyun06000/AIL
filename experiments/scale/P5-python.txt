@@ -1,0 +1,14 @@
+def get_top_3_words(text):
+    words = text.lower().split()
+    word_freq = {}
+    for word in words:
+        word_freq[word] = word_freq.get(word, 0) + 1
+    sorted_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
+    return sorted_words[:3]
+
+if __name__ == "__main__":
+    sample_text = "hello world hello python python python test hello"
+    result = get_top_3_words(sample_text)
+    print("Top 3 most frequent words:")
+    for word, count in result:
+        print(f"{word}: {count}")

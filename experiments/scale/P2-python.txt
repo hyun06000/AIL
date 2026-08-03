@@ -1,0 +1,63 @@
+import csv
+from io import StringIO
+from collections import defaultdict
+
+def compute_average_salary_per_dept(csv_text):
+    """
+    Compute average salary per department from CSV text.
+
+    Args:
+        csv_text: CSV text with columns name, dept, salary
+
+    Returns:
+        A tuple of (averages_dict, skipped_count)
+        where averages_dict maps dept to average salary
+    """
+    dept_salaries = defaultdict(list)
+    skipped_count = 0
+
+    lines = csv_text.strip().split('\n')
+    if not lines:
+        return {}, 0
+
+    reader = csv.DictReader(lines)
+
+    for row in reader:
+        try:
+            if not row:
+                skipped_count += 1
+                continue
+
+            name = row.get('name', '').strip()
+            dept = row.get('dept', '').strip()
+            salary_str = row.get('salary', '').strip()
+
+            if not name or not dept or not salary_str:
+                skipped_count += 1
+                continue
+
+            salary = float(salary_str)
+            dept_salaries[dept].append(salary)
+        except (ValueError, KeyError, AttributeError, TypeError):
+            skipped_count += 1
+            continue
+
+    averages = {dept: sum(salaries) / len(salaries) for dept, salaries in dept_salaries.items()}
+
+    return averages, skipped_count
+
+
+if __name__ == "__main__":
+    csv_text = """name,dept,salary
+John,Sales,50000
+Jane,Engineering,70000
+Bob,Sales,60000
+Alice,Engineering,80000
+Charlie,Sales,malformed
+David,HR,55000"""
+
+    averages, skipped = compute_average_salary_per_dept(csv_text)
+    print("Average Salary per Department:")
+    for dept, avg in sorted(averages.items()):
+        print(f"  {dept}: ${avg:.2f}")
+    print(f"\nSkipped Rows: {skipped}")

@@ -1,0 +1,19 @@
+You will write in AIL, a new programming language. Reference card:
+
+task name(args) {
+  goal <what it achieves>
+  done <observable success expression>
+  never [<forbidden capabilities: fs, shell, ...>]
+  limit <budget: N tokens, N s, N ops>
+  uses [<effects it may use: http, ...>]
+  again <N> wait <M>
+  let x = expr
+  set x = expr
+  each x in xs { ... }
+  if cond { ... }
+  match x { case a { ... } }
+  return { key value, key2 value2 }
+  fail return { ok false, error }
+}
+
+Rules: goal, done, never are mandatory in every task. `done` must be an evaluable boolean expression (e.g. `total >= 0`), never a prose sentence or a string. `let` binds a name immutably; to reassign or mutate, use `set` (e.g. `set total = total + x`). No while loops; iterate finite collections with `each x in xs { ... }`. `again N wait M` is a contract-level retry declaration: if the task body fails, the whole body re-runs up to N times with M seconds base backoff — write it once, never unroll retries manually. Reserved words may be used as ordinary identifiers except at the start of a line (e.g. `let done = 0` is fine). camelCase identifiers. Braces for blocks. Symbolic operators (==, !=, >=, &&). Bareword structures (no quotes/colons in object keys).

@@ -1,0 +1,52 @@
+package main
+
+import (
+	"fmt"
+)
+
+type Config struct {
+	Name string
+	Port int
+	Mode string
+}
+
+func ValidateConfig(config Config) []string {
+	var errors []string
+
+	if config.Name == "" {
+		errors = append(errors, "name is required and must be non-empty")
+	}
+
+	if config.Port < 1 || config.Port > 65535 {
+		errors = append(errors, "port must be a number between 1 and 65535")
+	}
+
+	if config.Mode != "dev" && config.Mode != "prod" {
+		errors = append(errors, "mode must be either 'dev' or 'prod'")
+	}
+
+	return errors
+}
+
+func main() {
+	testConfigs := []Config{
+		{Name: "app1", Port: 8080, Mode: "dev"},
+		{Name: "", Port: 8080, Mode: "dev"},
+		{Name: "app2", Port: 70000, Mode: "prod"},
+		{Name: "app3", Port: 3000, Mode: "invalid"},
+		{Name: "app4", Port: 0, Mode: "dev"},
+	}
+
+	for i, config := range testConfigs {
+		errors := ValidateConfig(config)
+		fmt.Printf("Config %d: %v\n", i+1, config)
+		if len(errors) == 0 {
+			fmt.Println("  Valid")
+		} else {
+			for _, err := range errors {
+				fmt.Printf("  Error: %s\n", err)
+			}
+		}
+		fmt.Println()
+	}
+}

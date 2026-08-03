@@ -1,0 +1,32 @@
+task mergeSortedLists(list1, list2) {
+  goal <merge two sorted lists into one sorted list>
+  done <merged.length == list1.length + list2.length>
+  never [sort]
+
+  let merged = []
+  let i = 0
+  let j = 0
+  let len1 = list1.length
+  let len2 = list2.length
+
+  each _ in list1 ++ list2 {
+    if i == len1 {
+      set merged = merged ++ [list2[j]]
+      set j = j + 1
+    }
+    if j == len2 {
+      set merged = merged ++ [list1[i]]
+      set i = i + 1
+    }
+    if i < len1 && j < len2 && list1[i] <= list2[j] {
+      set merged = merged ++ [list1[i]]
+      set i = i + 1
+    }
+    if i < len1 && j < len2 && list1[i] > list2[j] {
+      set merged = merged ++ [list2[j]]
+      set j = j + 1
+    }
+  }
+
+  return { merged merged, length merged.length }
+}

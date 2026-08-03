@@ -1,0 +1,46 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+
+typedef struct {
+    int sum;
+    int count;
+    int max;
+} Result;
+
+Result analyze_lists(int** lists, int* list_lengths, int num_lists) {
+    Result result;
+    result.sum = 0;
+    result.count = 0;
+    result.max = INT_MIN;
+
+    for (int i = 0; i < num_lists; i++) {
+        for (int j = 0; j < list_lengths[i]; j++) {
+            result.sum += lists[i][j];
+            result.count++;
+            if (lists[i][j] > result.max) {
+                result.max = lists[i][j];
+            }
+        }
+    }
+
+    return result;
+}
+
+int main() {
+    int list1[] = {1, 2, 3, 4, 5};
+    int list2[] = {10, 20, 30};
+    int list3[] = {100, 50};
+
+    int* lists[] = {list1, list2, list3};
+    int list_lengths[] = {5, 3, 2};
+    int num_lists = 3;
+
+    Result result = analyze_lists(lists, list_lengths, num_lists);
+
+    printf("Sum: %d\n", result.sum);
+    printf("Count: %d\n", result.count);
+    printf("Max: %d\n", result.max);
+
+    return 0;
+}

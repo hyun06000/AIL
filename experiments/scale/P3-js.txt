@@ -1,0 +1,52 @@
+function processJobs(jobs) {
+  let budget = 10;
+  let done = 0;
+  let failed = 0;
+  let failedJobs = [];
+  let index = 0;
+
+  while (budget > 0 && index < jobs.length) {
+    const job = jobs[index];
+    index++;
+    budget--;
+
+    try {
+      if (job.willFail) {
+        throw new Error('Job execution failed');
+      }
+      done++;
+    } catch (error) {
+      failed++;
+      failedJobs.push(job);
+    }
+  }
+
+  const remaining = jobs.length - index;
+
+  return {
+    done,
+    failed,
+    remaining,
+    failedJobs
+  };
+}
+
+// Example usage
+const jobs = [
+  { id: 1, name: 'Job 1', willFail: false },
+  { id: 2, name: 'Job 2', willFail: false },
+  { id: 3, name: 'Job 3', willFail: true },
+  { id: 4, name: 'Job 4', willFail: false },
+  { id: 5, name: 'Job 5', willFail: false },
+  { id: 6, name: 'Job 6', willFail: false },
+  { id: 7, name: 'Job 7', willFail: false },
+  { id: 8, name: 'Job 8', willFail: false },
+  { id: 9, name: 'Job 9', willFail: false },
+  { id: 10, name: 'Job 10', willFail: false },
+  { id: 11, name: 'Job 11', willFail: false },
+  { id: 12, name: 'Job 12', willFail: false }
+];
+
+const result = processJobs(jobs);
+console.log(`Done: ${result.done}, Failed: ${result.failed}, Remaining: ${result.remaining}`);
+console.log('Failed jobs:', result.failedJobs);

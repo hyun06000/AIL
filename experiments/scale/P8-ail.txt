@@ -1,0 +1,16 @@
+task filterAdultActiveUsers(users) {
+  goal Return active users aged 18 or over with name and isAdult flag
+  done result != null
+  never []
+  limit 1000 tokens
+  uses []
+
+  let result = []
+  each user in users {
+    if user.active && user.age >= 18 {
+      let adult = {name user.name, isAdult true}
+      set result = result + [adult]
+    }
+  }
+  return {filtered result}
+}

@@ -1,0 +1,88 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+typedef struct {
+    char dept[256];
+    double total_salary;
+    int count;
+} DeptStats;
+
+int parse_csv_line(const char *line, char *name, char *dept, double *salary) {
+    char buffer[1024];
+    strncpy(buffer, line, sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+
+    char *comma1 = strchr(buffer, ',');
+    if (!comma1) return 0;
+
+    strncpy(name, buffer, comma1 - buffer);
+    name[comma1 - buffer] = '\0';
+
+    char *comma2 = strchr(comma1 + 1, ',');
+    if (!comma2) return 0;
+
+    strncpy(dept, comma1 + 1, comma2 - (comma1 + 1));
+    dept[comma2 - (comma1 + 1)] = '\0';
+
+    char *endptr;
+    *salary = strtod(comma2 + 1, &endptr);
+
+    while (*endptr && isspace(*endptr)) endptr++;
+    if (*endptr != '\0') return 0;
+
+    return 1;
+}
+
+int main() {
+    DeptStats *depts = NULL;
+    int dept_count = 0;
+    int skipped = 0;
+
+    char line[1024];
+    while (fgets(line, sizeof(line), stdin)) {
+        size_t len = strlen(line);
+        if (len > 0 && line[len-1] == '\n') {
+            line[len-1] = '\0';
+        }
+
+        if (strlen(line) == 0) continue;
+
+        char name[256], dept[256];
+        double salary;
+
+        if (!parse_csv_line(line, name, dept, &salary)) {
+            skipped++;
+            continue;
+        }
+
+        int found = 0;
+        for (int i = 0; i < dept_count; i++) {
+            if (strcmp(depts[i].dept, dept) == 0) {
+                depts[i].total_salary += salary;
+                depts[i].count++;
+                found = 1;
+                break;
+            }
+        }
+
+        if (!found) {
+            depts = realloc(depts, (dept_count + 1) * sizeof(DeptStats));
+            strcpy(depts[dept_count].dept, dept);
+            depts[dept_count].total_salary = salary;
+            depts[dept_count].count = 1;
+            dept_count++;
+        }
+    }
+
+    for (int i = 0; i < dept_count; i++) {
+        double avg = depts[i].total_salary / depts[i].count;
+        printf("%s: %.2f\n", depts[i].dept, avg);
+    }
+
+    printf("Skipped: %d\n", skipped);
+
+    free(depts);
+    return 0;
+}

@@ -1,0 +1,40 @@
+package main
+
+import (
+	"fmt"
+)
+
+func analyzeNumbers(lists [][]int) (int, int, int) {
+	totalSum := 0
+	count := 0
+	largest := 0
+	firstNumber := true
+
+	for _, list := range lists {
+		for _, num := range list {
+			totalSum += num
+			count++
+			if firstNumber {
+				largest = num
+				firstNumber = false
+			} else if num > largest {
+				largest = num
+			}
+		}
+	}
+
+	return totalSum, count, largest
+}
+
+func main() {
+	numbers := [][]int{
+		{1, 2, 3},
+		{4, 5},
+		{10, 2, 8},
+	}
+
+	sum, count, largest := analyzeNumbers(numbers)
+	fmt.Printf("Total Sum: %d\n", sum)
+	fmt.Printf("Count: %d\n", count)
+	fmt.Printf("Largest: %d\n", largest)
+}

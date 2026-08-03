@@ -1,0 +1,33 @@
+def parse_query_string(query_string):
+    """
+    Parse a URL query string into a dictionary and count empty values.
+
+    Args:
+        query_string: A query string like "a=1&b=hello&c="
+
+    Returns:
+        A tuple of (dict, empty_count)
+    """
+    result = {}
+    empty_count = 0
+
+    if query_string:
+        pairs = query_string.split('&')
+        for pair in pairs:
+            if '=' in pair:
+                key, value = pair.split('=', 1)
+                result[key] = value
+                if value == '':
+                    empty_count += 1
+            else:
+                result[pair] = ''
+                empty_count += 1
+
+    return result, empty_count
+
+
+if __name__ == "__main__":
+    query = "a=1&b=hello&c="
+    obj, count = parse_query_string(query)
+    print(f"Object: {obj}")
+    print(f"Empty count: {count}")

@@ -1,0 +1,21 @@
+task validateConfig(config) {
+  goal validate a config object and return a list of validation error messages
+  done errors != null
+  never [fs, shell]
+
+  let errors = []
+
+  if config.name == null || config.name == "" {
+    set errors = errors + ["name is required and must be non-empty"]
+  }
+
+  if config.port == null || config.port < 1 || config.port > 65535 {
+    set errors = errors + ["port must be a number between 1 and 65535"]
+  }
+
+  if config.mode != "dev" && config.mode != "prod" {
+    set errors = errors + ["mode must be either 'dev' or 'prod'"]
+  }
+
+  return { errors errors }
+}

@@ -1,0 +1,92 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct {
+    char *key;
+    char *value;
+} KeyValue;
+
+typedef struct {
+    KeyValue *pairs;
+    int count;
+    int empty_count;
+} QueryObject;
+
+QueryObject parseQueryString(const char *query) {
+    QueryObject result = {0};
+    if (!query || strlen(query) == 0) {
+        result.pairs = NULL;
+        result.count = 0;
+        result.empty_count = 0;
+        return result;
+    }
+
+    char *query_copy = malloc(strlen(query) + 1);
+    strcpy(query_copy, query);
+
+    int capacity = 10;
+    result.pairs = malloc(capacity * sizeof(KeyValue));
+    result.count = 0;
+    result.empty_count = 0;
+
+    char *pair_token = strtok(query_copy, "&");
+    while (pair_token) {
+        if (result.count >= capacity) {
+            capacity *= 2;
+            result.pairs = realloc(result.pairs, capacity * sizeof(KeyValue));
+        }
+
+        char *eq_pos = strchr(pair_token, '=');
+        if (eq_pos) {
+            int key_len = eq_pos - pair_token;
+            result.pairs[result.count].key = malloc(key_len + 1);
+            strncpy(result.pairs[result.count].key, pair_token, key_len);
+            result.pairs[result.count].key[key_len] = '\0';
+
+            const char *value_start = eq_pos + 1;
+            result.pairs[result.count].value = malloc(strlen(value_start) + 1);
+            strcpy(result.pairs[result.count].value, value_start);
+
+            if (strlen(value_start) == 0) {
+                result.empty_count++;
+            }
+        } else {
+            result.pairs[result.count].key = malloc(strlen(pair_token) + 1);
+            strcpy(result.pairs[result.count].key, pair_token);
+            result.pairs[result.count].value = malloc(1);
+            strcpy(result.pairs[result.count].value, "");
+            result.empty_count++;
+        }
+
+        result.count++;
+        pair_token = strtok(NULL, "&");
+    }
+
+    free(query_copy);
+    return result;
+}
+
+void freeQueryObject(QueryObject *obj) {
+    for (int i = 0; i < obj->count; i++) {
+        free(obj->pairs[i].key);
+        free(obj->pairs[i].value);
+    }
+    free(obj->pairs);
+}
+
+void printQueryObject(QueryObject *obj) {
+    printf("Query Object:\n");
+    for (int i = 0; i < obj->count; i++) {
+        printf("  %s = %s\n", obj->pairs[i].key, obj->pairs[i].value);
+    }
+    printf("Empty count: %d\n", obj->empty_count);
+}
+
+int main() {
+    const char *query = "a=1&b=hello&c=";
+    QueryObject obj = parseQueryString(query);
+    printQueryObject(&obj);
+    freeQueryObject(&obj);
+    return 0;
+}
