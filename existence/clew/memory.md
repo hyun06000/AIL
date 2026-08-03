@@ -268,3 +268,32 @@ dev 머지 → `gil deploy --tag v0.3.0` (마커 새겨짐, 승격은 여전히 
 
 ## 업스트림 이슈 현황 (모니터 가동 중)
 #104 전체맵 고아 · #105 fail 단일 --to · #106 병렬 형제 가설 부재 · #107 직렬 기본값(생애주기 3지점) · #108 배포 안전장치·마커 소실
+
+# 매듭 24 — 2026-08-03 체인 ail-runtime 개설 + 전 계보 수리 (이슈 #109~#111)
+
+## 새 체인 ail-runtime (열림) — 첫 다중 계승
+- 사람 답(intake ail-runtime): 목적=런타임 실행 검증 / 기준="런타임까지 돌려서 지표측정, 시각화" / 계승=세 체인 전부 / D9=콜론 객체 표기 **거부**(bareword 원칙 6) / 방법론=하던대로(3표본·병렬 우선)
+- 첫 사이클 **interp-skeleton** 열림(s1 define): interp 모듈+cargo test / HEAAL 3강제 실행 시점 실증(done·never·limit) / P4·P5·P7·P10 v9A 생성물 실제 실행해 정답 일치표 / D9 파서 반영. **틀린 답 나와도 그대로 기록**
+- 데이터셋 선언: scale-problems@sha256(problems.md) — --require-dataset 체인
+
+## gil 결함 3건 (업스트림 대응 확인)
+- **#109 트레일러 접기**(업스트림이 원인 규명·수정 완료): `--inherit`에 여러 줄 넘기면 git 트레일러 블록 전체 무효화 → Gil-Chain 소실 → 체인이 "존재하지 않는 것"이 됨. handoff·interview·open 세 증상 한 뿌리. **우회로: --inherit을 한 줄로**. 회귀시험 6개 추가됐다고
+- **#110 뷰어 포트 정체 부재**: 포트가 저장소 사이를 떠도는데 화면에 저장소 경로가 없음. 사람이 남의 저장소(ch1·ch2·ch3) 보며 "망가졌다" 오진. 제안: 상단에 저장소 경로 표시(가장 값쌈)
+- **#111 chain 계승 자리 강제 실패**: main 끝에서 열어도 통과 → orphan. fsck는 닫힌 체인을 "닫힌 적 없다"고 오진(first-parent 편향, #104·#108과 같은 뿌리)
+
+## 전 계보 수리 (사람 지시로 전수 점검)
+- 증상: `gil handoff`가 4체인 전부 `← (대문)`. 시간순으론 전부 정당한 계승
+- 진단: grammar-skeleton=진짜 적층(조상 관계 없음) / pure-compute·runtime=조상 관계 성립하나 first-parent 아님(오탐)
+- **수리**: 전 그래프 토포 순 리맵(224커밋, ref 24개). 각 체인 루트의 **첫 부모를 앞 체인 chain-close로**. 트리·메시지·저자 보존. 백업 태그 `backup-before-lineage-repair-1537`
+- 결과: fsck 위반 2→1, 파서 25/25 유지, 자산 전량 보존, force push 완료
+- **남은 1건은 오탐**: grammar-skeleton이 foundation chain-close 위에 정확히 얹혔는데도 위반. pure-compute와 구조 동일한데 판정만 다름 → #111에 보고
+- **수리 후에도 계승선은 여전히 안 그려짐** → 계보 표시가 fsck와도 다른 제3 경로. #111에 함께 보고
+
+## 방법 메모
+- 리맵 스크립트 패턴: `git rev-list --all --topo-order --reverse` + `commit-tree`로 재작성, 부모만 교체. 재귀 remap + newsha 캐시. ref는 `update-ref <name> <new> <old>`로 원자 갱신
+- 리맵 후 옛 커밋은 고아가 되어 fsck가 "유실 직전"으로 짚음 → `reflog expire --expire=now --all && gc --prune=now`로 정리(백업 태그는 유지)
+
+## 다음
+1. **interp-skeleton s2 hypothesis** — 인터프리터 골격 가설 세우기(--falsify·--plan 고정)
+2. D9 파서 반영(콜론 거부) 먼저 할지 가설에 포함할지 판단
+3. 업스트림 릴리스 나오면 gil 갱신 후 #109 수정 확인
