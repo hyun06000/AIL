@@ -129,3 +129,10 @@
 - scale-experiment close(goal met): 카드 v3, N=10 × 5언어 × Haiku 50생성. **AIL 167토큰 — 4언어 전승(−47% vs Python, js 235), ail-check 10/10** → 체인 기준 사전 고정 판정 첫 충족
 - 지형: 문제별 6승 4패 — 패배는 전부 의례 없는 순수 계산(P4·P7·P9·P10, vs JS −5~16%). "언제 AIL이 아닌가"의 답
 - chain-close는 사람 판정 대기. 다음 체인 후보: 런타임 / 다중 모델 검증 / 계약 의례 경감
+
+# 매듭 15 — 2026-08-03 체인 ail-grammar-skeleton 종결 (success)
+
+- 닫힘 조건(기준 문서) 충족으로 chain-close: 토큰 4언어 전승(AIL 167 vs js 235~c 593) + 통과율 10/10, 사전 고정 판정. 회고에 4특성 표·궤적(v1 패배→v2 승리→N=10 통과)·한계 4개 명시
+- merge → dev, deploy v0.2.0 마커(승격은 여전히 레이아웃 오인으로 거부 — #99 계열, main은 손 ff), main=dev push
+- 저장소 상태: 파서(Rust, 12/12) + 실험 3종(tokenizer/haiku/scale) + 연구 문서 5편 + 스펙 2편 전부 main에 공개
+- 다음 체인 후보(닫힌 체인 끝에서 intake로): 런타임(실행 검증·레이턴시 절대치) / 다중 모델 검증 / 계약 의례 경감. parser/target은 .gitignore 처리
