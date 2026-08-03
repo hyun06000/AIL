@@ -136,3 +136,11 @@
 - merge → dev, deploy v0.2.0 마커(승격은 여전히 레이아웃 오인으로 거부 — #99 계열, main은 손 ff), main=dev push
 - 저장소 상태: 파서(Rust, 12/12) + 실험 3종(tokenizer/haiku/scale) + 연구 문서 5편 + 스펙 2편 전부 main에 공개
 - 다음 체인 후보(닫힌 체인 끝에서 intake로): 런타임(실행 검증·레이턴시 절대치) / 다중 모델 검증 / 계약 의례 경감. parser/target은 .gitignore 처리
+
+# 매듭 16 — 2026-08-03 orphan 사이클 4개 전면 수리 + 체인 종결 마무리
+
+- 사람 발견: 체인 내 사이클 7개 중 4개(abbrev·grammar-draft·haiku·scale)가 앞 사이클 close 위 적층(orphan) — gil open HEAD 의존의 사이클판. #102에 3번째 재현 코멘트(fsck 검사 제안 포함)
+- 전면 수리: 파이썬 스크립트로 전 그래프 토포 순 재작성 — orphan s1 4개를 당시 체인 기준 커밋(88d22a6/778d0c8/a8ac723/1010650)에 재부모화, 후손 44커밋 리맵(트리·메시지·저자 보존), 전 브랜치+main/dev 갱신, force push. 검증: 7사이클 전부 체인 계보 위 ✓, fsck 0
+- 이전: 체인 ail-grammar-skeleton chain-close(success, 기준 충족) + dev 머지 + v0.2.0 마커 + 옛 main 계보 보존 머지(de2b320→재작성 후 5308953)
+- 교훈: gil merge 후 재부모화 수리는 개별 브랜치가 아니라 전 그래프 리맵으로 — 머지 커밋이 옛 팁을 동결하므로
+- 다음: 새 체인 intake (런타임 / 다중 모델 검증 / 계약 의례 경감 후보)
