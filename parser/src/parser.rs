@@ -56,6 +56,20 @@ impl P {
         if matches!(t, Some(Tok::While)) {
             return Err("`while` 은 AIL 에서 성립하지 않는다 — 유한 반복은 `each x in xs { }` (H4)".into());
         }
+        self.guard_unknown(t)
+    }
+
+    /// D9(사람 확정) — 문법에 없는 문자는 거부한다. 옛 D6은 조용히 삼켰다.
+    fn guard_unknown(&self, t: &Option<Tok>) -> Result<(), String> {
+        if let Some(Tok::Unknown(c)) = t {
+            let hint = match c {
+                ':' => " — 객체는 bareword 다: `{ key value }` (원칙 6)",
+                ';' => " — 문장은 줄로 나눈다",
+                '|' | '&' => " — 논리 연산은 `&&` `||` 두 글자다",
+                _ => "",
+            };
+            return Err(format!("문법에 없는 문자 `{}`{}", c, hint));
+        }
         Ok(())
     }
 
