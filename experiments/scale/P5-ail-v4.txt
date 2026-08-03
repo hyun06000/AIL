@@ -1,0 +1,13 @@
+fn topWords(text) {
+  let words = split(text)
+  let freq = {}
+  each word in words {
+    let w = lower(word)
+    let cur = getOrZero(freq, w)
+    set freq = updateMap(freq, w, cur + 1)
+  }
+  let entries = toEntries(freq)
+  let sorted = sortByCount(entries)
+  let top3 = take(sorted, 3)
+  return top3
+}

@@ -13,11 +13,14 @@ pub struct ParseOutcome {
 
 pub fn parse_program(src: &str) -> Result<ParseOutcome, String> {
     let toks: Vec<Tok> = lex(src).into_iter().filter(|t| *t != Tok::Newline || true).collect();
-    let mut p = P { t: toks, i: 0, warnings: Vec::new(), strict_done: true }; // D2: 기본 strict, 정책 플래그
+    let mut p = P { t: toks, i: 0, warnings: Vec::new(), strict_done: true, in_pure: false }; // D2 strict / in_pure: fn 순수성 강제
     let mut tasks = 0;
     p.skip_nl();
     while !p.eof() {
-        p.parse_task()?;
+        match p.peek() {
+            Some(Tok::Fn) => p.parse_fn()?,
+            _ => p.parse_task()?,
+        }
         tasks += 1;
         p.skip_nl();
     }
@@ -25,7 +28,7 @@ pub fn parse_program(src: &str) -> Result<ParseOutcome, String> {
     Ok(ParseOutcome { tasks, warnings: p.warnings })
 }
 
-struct P { t: Vec<Tok>, i: usize, warnings: Vec<String>, strict_done: bool }
+struct P { t: Vec<Tok>, i: usize, warnings: Vec<String>, strict_done: bool, in_pure: bool }
 
 impl P {
     fn eof(&self) -> bool { self.i >= self.t.len() }
@@ -44,6 +47,27 @@ impl P {
             return Err("`while` 은 AIL 에서 성립하지 않는다 — 유한 반복은 `each x in xs { }` (H4)".into());
         }
         Ok(())
+    }
+
+    /// 순수 함수 — 효과가 문법적으로 불가능한 블록 (계약 슬롯 불요, 순수성이 하네스)
+    fn parse_fn(&mut self) -> Result<(), String> {
+        self.expect(&Tok::Fn, "fn 선언")?;
+        match self.next() {
+            Some(Tok::Ident(_)) => {}
+            other => return Err(format!("fn 이름을 기대했으나 {:?}", other)),
+        }
+        self.expect(&Tok::LParen, "매개변수")?;
+        loop {
+            match self.next() {
+                Some(Tok::RParen) => break,
+                Some(Tok::Ident(_)) | Some(Tok::Comma) => continue,
+                other => return Err(format!("매개변수 목록에서 {:?}", other)),
+            }
+        }
+        self.in_pure = true;
+        let r = self.parse_block();
+        self.in_pure = false;
+        r
     }
 
     fn parse_task(&mut self) -> Result<(), String> {
@@ -161,6 +185,16 @@ impl P {
         self.skip_nl();
         let t = self.peek().cloned();
         self.guard_while(&t)?;
+        if self.in_pure {
+            if matches!(t, Some(Tok::Uses) | Some(Tok::Again) | Some(Tok::Never) | Some(Tok::Done) | Some(Tok::Goal) | Some(Tok::Limit) | Some(Tok::Fail)) {
+                return Err(format!("fn 은 순수하다 — {:?} 는 fn 안에서 성립하지 않는다 (효과·계약은 task 의 것)", t));
+            }
+            if let Some(Tok::Ident(name)) = &t {
+                if ["http","fs","shell","state","env","llm","clock"].contains(&name.as_str()) {
+                    return Err(format!("fn 은 순수하다 — 효과 네임스페이스 `{}` 는 fn 안에서 표현되지 않는다 (H1: 구조적 순수성)", name));
+                }
+            }
+        }
         match t {
             Some(Tok::Let) => { self.i += 1; self.parse_target()?; self.expect(&Tok::Assign, "let")?; self.parse_expr()?; Ok(()) }
             Some(Tok::Set) => { self.i += 1; self.parse_target()?; self.expect(&Tok::Assign, "set")?; self.parse_expr()?; Ok(()) }
@@ -263,7 +297,14 @@ impl P {
         let t = self.peek().cloned();
         self.guard_while(&t)?;
         match self.next() {
-            Some(Tok::Ident(_)) | Some(Tok::Num(_)) | Some(Tok::Str(_)) => Ok(()),
+            Some(Tok::Ident(name)) => {
+                if self.in_pure && ["http","fs","shell","state","env","llm","clock"].contains(&name.as_str())
+                    && matches!(self.peek(), Some(Tok::Dot)) {
+                    return Err(format!("fn 은 순수하다 — 효과 네임스페이스 `{}` 는 fn 안에서 표현되지 않는다 (H1: 구조적 순수성)", name));
+                }
+                Ok(())
+            }
+            Some(Tok::Num(_)) | Some(Tok::Str(_)) => Ok(()),
             // 예약어의 bareword/값 사용 허용 (v2 승인): `return { done 5 }`, `return ok`
             Some(Tok::Done) | Some(Tok::Fail) | Some(Tok::Case) => Ok(()),
             Some(Tok::LParen) => { self.parse_expr()?; self.expect(&Tok::RParen, "괄호식") }
