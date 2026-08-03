@@ -15,8 +15,9 @@ slot      := "goal" FREETEXT NL            # 필수
            | "limit" FREETEXT NL
            | "uses" "[" idents? "]"
            | "again" NUM ("wait" NUM)?     # 유한 리터럴만 (H4)
-stmt      := "let" target "=" expr
-           | target ("=" expr)?            # let 없는 대입은 경고 — D4
+stmt      := "let" target "=" expr       # 불변 바인딩 (D4)
+           | "set" target "=" expr        # 대입 (D4)
+           | target                        # 표현식 문장 (무선언 대입은 거부)
            | "each" IDENT "in" expr block  # 유일한 반복
            | "if" expr block ("else" (block | if-stmt))?
            | "match" expr "{" ("case" expr block)* "}"
@@ -37,18 +38,18 @@ object    := "{" (KEY expr? ("," KEY expr?)*)? "}"   # KEY = bareword (예약어
 | 생성물 | 판정 | 비고 |
 |---|---|---|
 | P1-ail-v2 | **OK** | 경고 0 |
-| P2-ail-v2 | **OK** | 경고: done 문자열(D2), let 없는 대입 ×6(D4) |
-| P3-ail-v2 | **REJECT** | `let done = 0` — 예약어를 변수명으로 (D8, 신규 발견) |
+| P2-ail-v2 | OK → **REJECT** (결정 반영 후) | done 문자열(D2 확정 거부) |
+| P3-ail-v2 | REJECT → **OK** (결정 반영 후) | D8 위치 기반으로 해소 |
 
 ## 문법 결정 목록 — 사람 승인 대기
 
 | # | 미정 지점 | 골격의 보수 선택 | 권고 |
 |---|---|---|---|
 | D1 | goal·limit 의 형식 | 행 끝까지 자유 텍스트 | goal 은 자유 텍스트 유지, limit 은 구조화(`limit 2000 tokens, 5 s` 파싱) 예정 |
-| D2 | done 이 문자열일 때 | 수용+경고 | **거부 권고** — done 은 판정 가능식이어야 계약이다 (Haiku 도 P2 에서 문자열로 흘렀음 — 강제 없으면 샌다) |
+| D2 | ~~done 문자열~~ | **확정: 거부** (기본 strict, 정책 플래그로 완화 가능 — "꽉 닫지는 말자") | 성공 판정에 LLM 이 필요해지면 H3 위반 |
 | D3 | never 대괄호 생략 | 수용+경고 | 거부 권고 (형태 하나 원칙) |
-| D4 | let 없는 대입 | 수용+경고 | 결정 필요 — 불변 기본(let=바인딩, 재대입 금지)이 H2 정신이나, Haiku 관용은 대입. `set` 도입? |
+| D4 | ~~무선언 대입~~ | **확정: let=불변 바인딩, `set`=대입, 무선언 대입 거부** | H2 정신 |
 | D5 | 주석 `#` | 수용 | AIL.md §2 "주석 문화 폐기"와 긴장 — 금지 권고 |
 | D6 | 미지 문자 | 무시 | 거부로 전환 예정 (골격 한정 임시) |
 | D7 | 명명 인자 `timeout 5` | 수용 | 유지 권고 (bareword 원칙과 정합) |
-| D8 | **예약어를 변수명으로** (`let done = 0`) | 거부됨 | 결정 필요 — Haiku 가 자연스럽게 쓴다. 슬롯 키워드는 행 선두에서만 키워드로 취급(위치 기반)하면 해소 가능 |
+| D8 | ~~예약어 변수명~~ | **확정: 위치 기반** — 슬롯 키워드(goal·done·never·limit·uses·again)는 행 선두에서만 키워드 | 다중 모델(GPT·오픈소스)로 하이쿠 편향 점검 실험 예정(사람 지시) |
