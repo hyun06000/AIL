@@ -271,3 +271,26 @@ fn arrow_lambda_still_pure_inside_fn() {
     let e = parse_program(src).unwrap_err();
     assert!(e.contains("순수"), "{}", e);
 }
+
+// ── D9 (사람 확정): 문법에 없는 문자는 조용히 삼키지 않는다 ──
+
+#[test]
+fn d9_colon_object_notation_rejected() {
+    // P5x 가 실제로 쓴 표기 — 옛 D6 은 ':' 를 삼켜 통과시켰고 실행에서야 걸렸다
+    let src = "fn f(x) {\n  return { word: x.key, count: 1 }\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("bareword") || e.contains(":"), "콜론 표기를 거부해야 한다: {}", e);
+}
+
+#[test]
+fn d9_bareword_object_still_accepted() {
+    let src = "fn f(x) {\n  return { word x, count 1 }\n}\n";
+    parse_program(src).expect("bareword 객체는 그대로 성립한다");
+}
+
+#[test]
+fn d9_other_swallowed_chars_rejected() {
+    for bad in ["fn f() { return a ; b }", "fn f() { return a | b }", "fn f() { return a @ b }"] {
+        assert!(parse_program(bad).is_err(), "문법에 없는 문자를 거부해야 한다: {}", bad);
+    }
+}
