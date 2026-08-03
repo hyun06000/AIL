@@ -13,7 +13,7 @@ pub struct ParseOutcome {
 
 pub fn parse_program(src: &str) -> Result<ParseOutcome, String> {
     let toks: Vec<Tok> = lex(src).into_iter().filter(|t| *t != Tok::Newline || true).collect();
-    let mut p = P { t: toks, i: 0, warnings: Vec::new() };
+    let mut p = P { t: toks, i: 0, warnings: Vec::new(), strict_done: true }; // D2: 기본 strict, 정책 플래그
     let mut tasks = 0;
     p.skip_nl();
     while !p.eof() {
@@ -25,7 +25,7 @@ pub fn parse_program(src: &str) -> Result<ParseOutcome, String> {
     Ok(ParseOutcome { tasks, warnings: p.warnings })
 }
 
-struct P { t: Vec<Tok>, i: usize, warnings: Vec<String> }
+struct P { t: Vec<Tok>, i: usize, warnings: Vec<String>, strict_done: bool }
 
 impl P {
     fn eof(&self) -> bool { self.i >= self.t.len() }
@@ -73,7 +73,10 @@ impl P {
                 Some(Tok::Done) => {
                     self.i += 1;
                     if matches!(self.peek(), Some(Tok::Str(_))) {
-                        self.warnings.push("done 이 판정식이 아니라 문자열이다 (결정 목록 D2)".into());
+                        if self.strict_done {
+                            return Err("done 은 판정 가능식이어야 한다 — 문자열(산문)은 계약이 아니다 (D2, 사람 확정: 성공 판정에 LLM 이 필요해지면 H3 위반)".into());
+                        }
+                        self.warnings.push("done 이 문자열 — 완화 정책 모드 (D2)".into());
                     }
                     self.eat_to_newline();
                     has_done = true;
@@ -160,6 +163,7 @@ impl P {
         self.guard_while(&t)?;
         match t {
             Some(Tok::Let) => { self.i += 1; self.parse_target()?; self.expect(&Tok::Assign, "let")?; self.parse_expr()?; Ok(()) }
+            Some(Tok::Set) => { self.i += 1; self.parse_target()?; self.expect(&Tok::Assign, "set")?; self.parse_expr()?; Ok(()) }
             Some(Tok::Each) => {
                 self.i += 1;
                 match self.next() { Some(Tok::Ident(_)) => {}, o => return Err(format!("each 변수 자리에서 {:?}", o)) }
@@ -196,11 +200,10 @@ impl P {
                 self.parse_expr()?; Ok(())
             }
             Some(Tok::Ident(_)) => {
-                // 대입 또는 표현식 문장 (Haiku 관용: let 없는 재대입 — 결정 목록 D4)
+                // 표현식 문장. 무선언 대입은 거부 (D4, 사람 확정: let=불변 바인딩, 대입은 set)
                 self.parse_target()?;
                 if matches!(self.peek(), Some(Tok::Assign)) {
-                    self.warnings.push("let 없는 대입 (결정 목록 D4)".into());
-                    self.i += 1; self.parse_expr()?;
+                    return Err("무선언 대입은 성립하지 않는다 — 바인딩은 `let`(불변), 대입은 `set` (D4, H2)".into());
                 }
                 Ok(())
             }

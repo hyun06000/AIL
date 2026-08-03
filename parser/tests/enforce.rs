@@ -83,3 +83,65 @@ fn rejects_unbounded_again() {
     let e = parse_program(&src).unwrap_err();
     assert!(e.contains("again"), "{}", e);
 }
+
+// ── 6차 인터뷰 결정 반영 테스트 (D2·D4·D8) ──
+
+#[test]
+fn d8_reserved_word_as_variable() {
+    let src = r#"
+task counts(jobs) {
+  goal count them
+  done total >= 0
+  never []
+  let done = 0
+  let total = done + 1
+  return { done done }
+}
+"#;
+    parse_program(src).expect("행 선두가 아닌 done 은 식별자다 (D8, 사람 확정)");
+}
+
+#[test]
+fn d4_set_assignment_accepted() {
+    let src = r#"
+task acc(xs) {
+  goal accumulate
+  done total >= 0
+  never []
+  let total = 0
+  each x in xs { set total = total + x }
+  return total
+}
+"#;
+    parse_program(src).expect("set 대입은 성립해야 한다 (D4)");
+}
+
+#[test]
+fn d4_bare_assignment_rejected() {
+    let src = r#"
+task acc(xs) {
+  goal accumulate
+  done total >= 0
+  never []
+  let total = 0
+  each x in xs { total = total + x }
+  return total
+}
+"#;
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("set"), "{}", e);
+}
+
+#[test]
+fn d2_string_done_rejected() {
+    let src = r#"
+task f(x) {
+  goal do it
+  done "everything worked out"
+  never []
+  return x
+}
+"#;
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("판정"), "{}", e);
+}
