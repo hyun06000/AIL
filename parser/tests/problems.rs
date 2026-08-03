@@ -47,10 +47,11 @@ fn p4_merge_sorted_lists() {
 }
 
 // ── P5: 단어 빈도 상위 3 ──
+// v9A 표본은 객체 접근 표기 공백으로 2/3 이 실행 불가였다(s3). v10A(카드 한 줄 추가)로 3/3 정답.
 #[test]
 fn p5_top3_word_frequency() {
     // "a b a c a b" → a:3, b:2, c:1
-    let out = run_first(&src("P5x-ail-v9A.txt"), vec![s("a b a c a b")]).expect("P5 실행");
+    let out = run_first(&src("P5x-ail-v10A.txt"), vec![s("a b a c a b")]).expect("P5 실행");
     let list = match &out { Value::List(v) => v.clone(), other => panic!("리스트 기대: {}", other.show()) };
     assert_eq!(list.len(), 3, "상위 3개여야 한다");
     // 첫 항목이 최빈어 a(3회)여야 한다
