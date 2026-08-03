@@ -190,3 +190,30 @@ task main(xs) {
 "#;
     parse_program(src).expect("fn 과 task 공존");
 }
+
+// ── 표현력 보강 (사람 승인: 인덱스 반복 2형 + 조건식) ──
+
+#[test]
+fn each_range_accepted() {
+    let src = "fn f(n) {\n  let total = 0\n  each i in range(n) { set total = total + i }\n  return total\n}\n";
+    parse_program(src).expect("each i in range(n)");
+}
+
+#[test]
+fn each_with_index_accepted() {
+    let src = "fn f(xs) {\n  let total = 0\n  each x, i in xs { set total = total + x + i }\n  return total\n}\n";
+    parse_program(src).expect("each x, i in xs");
+}
+
+#[test]
+fn if_expression_accepted() {
+    let src = "fn pick(c, a, b) {\n  let y = if c { a } else { b }\n  return y\n}\n";
+    parse_program(src).expect("식 위치 if");
+}
+
+#[test]
+fn if_expression_requires_else() {
+    let src = "fn pick(c, a) {\n  let y = if c { a }\n  return y\n}\n";
+    let e = parse_program(src).unwrap_err();
+    assert!(e.contains("else"), "{}", e);
+}

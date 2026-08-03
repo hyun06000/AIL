@@ -1,0 +1,19 @@
+fn countTopWords(text) {
+  let words = split(text)
+  let freq = {}
+
+  each word in words {
+    let w = lower(word)
+    if freq[w] {
+      set freq[w] = freq[w] + 1
+    } else {
+      set freq[w] = 1
+    }
+  }
+
+  let entries = toEntries(freq)
+  let sorted = sortByCount(entries)
+  let top3 = take(sorted, 3)
+
+  return top3
+}
