@@ -1,0 +1,1 @@
+dev: bash -lc "source $HOME/.cargo/env && cd parser && cargo test -q"
