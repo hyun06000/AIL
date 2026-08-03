@@ -1,0 +1,49 @@
+fn topWords(text) {
+  let words = split(lower(trim(text)), " ")
+  let freqs = {}
+  each word in words {
+    if word != "" {
+      if has(freqs, word) {
+        set freqs[word] = freqs[word] + 1
+      } else {
+        set freqs[word] = 1
+      }
+    }
+  }
+  let top1 = ""
+  let count1 = 0
+  let top2 = ""
+  let count2 = 0
+  let top3 = ""
+  let count3 = 0
+  each word in keys(freqs) {
+    let freq = freqs[word]
+    if freq > count1 {
+      set top3 = top2
+      set count3 = count2
+      set top2 = top1
+      set count2 = count1
+      set top1 = word
+      set count1 = freq
+    } else if freq > count2 {
+      set top3 = top2
+      set count3 = count2
+      set top2 = word
+      set count2 = freq
+    } else if freq > count3 {
+      set top3 = word
+      set count3 = freq
+    }
+  }
+  let result = {}
+  if top1 != "" {
+    set result[top1] = count1
+  }
+  if top2 != "" {
+    set result[top2] = count2
+  }
+  if top3 != "" {
+    set result[top3] = count3
+  }
+  return result
+}

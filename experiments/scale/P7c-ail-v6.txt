@@ -1,0 +1,23 @@
+fn process(lists) {
+  let total = 0
+  let count = 0
+  let maxVal = 0
+  let started = false
+
+  each list in lists {
+    each num in list {
+      set total = total + num
+      set count = count + 1
+      if started {
+        if num > maxVal {
+          set maxVal = num
+        }
+      } else {
+        set maxVal = num
+        set started = true
+      }
+    }
+  }
+
+  return { total total, count count, max maxVal }
+}

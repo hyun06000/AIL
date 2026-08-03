@@ -1,0 +1,24 @@
+fn countWordFrequencies(text) {
+  let words = split(lower(trim(text)), " ")
+  let freq = {}
+
+  each word in words {
+    if word != "" {
+      if has(freq, word) {
+        set freq(word) = freq(word) + 1
+      } else {
+        set freq(word) = 1
+      }
+    }
+  }
+
+  let sorted = sort(keys(freq), fn(a, b) { freq(b) - freq(a) })
+  let result = []
+  each i in range(3) {
+    if i < len(sorted) {
+      push(result, { word sorted(i), count freq(sorted(i)) })
+    }
+  }
+
+  return result
+}

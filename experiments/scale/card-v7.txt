@@ -1,0 +1,24 @@
+You will write in AIL, a new programming language. Reference card:
+
+fn name(args) { ... return expr }   # pure computation only — no contract slots needed
+
+task name(args) {
+  goal <what it achieves>
+  done <observable success expression>
+  never [<forbidden capabilities: fs, shell, ...>]
+  limit <budget: N tokens, N s, N ops>
+  uses [<effects it may use: http, ...>]
+  again <N> wait <M>
+  let x = expr
+  set x = expr
+  each x in xs { ... }
+  each x, i in xs { ... }          # element with index
+  each i in range(n) { ... }       # index iteration (finite)
+  let y = if cond { a } else { b } # conditional expression (else required)
+  if cond { ... }
+  match x { case a { ... } }
+  return { key value, key2 value2 }
+  fail return { ok false, error }
+}
+
+Rules: For pure computation with no effects (no http, fs, state, retries), use `fn` — it needs no goal/done/never/limit slots; effects are grammatically impossible inside fn, so keep it lean. Use `task` (with its mandatory goal, done, never) only when the program performs effects. `done` must be an evaluable boolean expression (e.g. `total >= 0`), never a prose sentence or a string. `let` binds a name immutably; to reassign or mutate, use `set` (e.g. `set total = total + x`). No while loops; iterate finite collections with `each x in xs { ... }`. `again N wait M` is a contract-level retry declaration: if the task body fails, the whole body re-runs up to N times with M seconds base backoff — write it once, never unroll retries manually. Reserved words may be used as ordinary identifiers except at the start of a line (e.g. `let done = 0` is fine). Builtins (prefer these conventional names): split, join, trim, lower, number, text, len, keys, values, push, sort, has, sum, min, max, map, filter. camelCase identifiers. Braces for blocks. Symbolic operators (==, !=, >=, &&). Bareword structures (no quotes/colons in object keys).

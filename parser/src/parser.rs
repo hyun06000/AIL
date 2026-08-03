@@ -254,7 +254,7 @@ impl P {
         match self.next() { Some(Tok::Ident(_)) => {}, o => return Err(format!("이름 자리에서 {:?}", o)) }
         loop {
             match self.peek() {
-                Some(Tok::Dot) => { self.i += 1; match self.next() { Some(Tok::Ident(_)) | Some(Tok::Done) => {}, o => return Err(format!("멤버 이름 자리에서 {:?}", o)) } }
+                Some(Tok::Dot) => { self.i += 1; match self.next() { Some(Tok::Ident(_)) | Some(Tok::Done) | Some(Tok::Num(_)) => {}, o => return Err(format!("멤버 이름 자리에서 {:?}", o)) } }
                 Some(Tok::LBracket) => { self.i += 1; self.parse_expr()?; self.expect(&Tok::RBracket, "인덱스")?; }
                 Some(Tok::LParen) => { self.i += 1; self.parse_args()?; }
                 _ => return Ok(()),
@@ -289,7 +289,7 @@ impl P {
         self.parse_atom()?;
         loop {
             match self.peek() {
-                Some(Tok::Dot) => { self.i += 1; match self.next() { Some(Tok::Ident(_)) | Some(Tok::Done) => {}, o => return Err(format!("멤버 이름 자리에서 {:?}", o)) } }
+                Some(Tok::Dot) => { self.i += 1; match self.next() { Some(Tok::Ident(_)) | Some(Tok::Done) | Some(Tok::Num(_)) => {}, o => return Err(format!("멤버 이름 자리에서 {:?}", o)) } }
                 Some(Tok::LParen) => { self.i += 1; self.parse_args()?; }
                 Some(Tok::LBracket) => { self.i += 1; self.parse_expr()?; self.expect(&Tok::RBracket, "인덱스")?; }
                 _ => return Ok(()),

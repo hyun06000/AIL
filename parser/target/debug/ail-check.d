@@ -1,1 +1,0 @@
-/Users/davi/Desktop/code/my_project/AIL/parser/target/debug/ail-check: /Users/davi/Desktop/code/my_project/AIL/parser/src/lexer.rs /Users/davi/Desktop/code/my_project/AIL/parser/src/lib.rs /Users/davi/Desktop/code/my_project/AIL/parser/src/main.rs /Users/davi/Desktop/code/my_project/AIL/parser/src/parser.rs

@@ -1,0 +1,33 @@
+fn topWords(text) {
+  let words = split(text, " ")
+  let freqs = {}
+
+  each w in words {
+    let word = lower(trim(w))
+    if word != "" {
+      if has(freqs, word) {
+        set freqs[word] = freqs[word] + 1
+      } else {
+        set freqs[word] = 1
+      }
+    }
+  }
+
+  let entries = []
+  let wordKeys = keys(freqs)
+
+  each k in wordKeys {
+    push(entries, { word k, count freqs[k] })
+  }
+
+  let sorted = sort(entries)
+  let result = []
+
+  each i in range(3) {
+    if i < len(sorted) {
+      push(result, sorted[i])
+    }
+  }
+
+  return result
+}

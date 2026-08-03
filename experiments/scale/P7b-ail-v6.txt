@@ -1,0 +1,23 @@
+fn analyzeNumbers(lists) {
+  let total = 0
+  let count = 0
+  let largest = 0
+  let first = true
+
+  each list in lists {
+    each num in list {
+      set total = total + num
+      set count = count + 1
+      if first {
+        set largest = num
+        set first = false
+      } else {
+        if num > largest {
+          set largest = num
+        }
+      }
+    }
+  }
+
+  return { sum total, count count, largest largest }
+}

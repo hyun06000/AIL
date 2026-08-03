@@ -217,3 +217,9 @@ fn if_expression_requires_else() {
     let e = parse_program(src).unwrap_err();
     assert!(e.contains("else"), "{}", e);
 }
+
+#[test]
+fn numeric_member_accepted() {
+    let src = "fn f(pair) {\n  return pair.0 + pair.1\n}\n";
+    parse_program(src).expect("숫자 멤버 (.0)");
+}

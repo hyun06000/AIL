@@ -1,0 +1,25 @@
+fn mergeSorted(list1, list2) {
+  let result = []
+  let i = 0
+  let j = 0
+  let len1 = len(list1)
+  let len2 = len(list2)
+
+  each _ in range(len1 + len2) {
+    if i >= len1 {
+      push(result, list2[j])
+      set j = j + 1
+    } else if j >= len2 {
+      push(result, list1[i])
+      set i = i + 1
+    } else if list1[i] <= list2[j] {
+      push(result, list1[i])
+      set i = i + 1
+    } else {
+      push(result, list2[j])
+      set j = j + 1
+    }
+  }
+
+  return { merged result, length len(result) }
+}

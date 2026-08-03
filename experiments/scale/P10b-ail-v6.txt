@@ -1,0 +1,19 @@
+fn parseQuery(queryString) {
+  pairs = split(queryString, "&")
+  parsed = {}
+  emptyCount = 0
+
+  each pair in pairs {
+    parts = split(pair, "=")
+    key = parts[0]
+    value = if len(parts) > 1 { parts[1] } else { "" }
+
+    if value == "" {
+      set emptyCount = emptyCount + 1
+    }
+
+    set parsed[key] = value
+  }
+
+  return { parsed parsed, emptyCount emptyCount }
+}

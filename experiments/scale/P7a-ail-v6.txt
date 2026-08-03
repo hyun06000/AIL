@@ -1,0 +1,21 @@
+fn analyze(listOfLists) {
+  let sum = 0
+  let count = 0
+  let max = 0
+
+  each list in listOfLists {
+    each num in list {
+      set sum = sum + num
+      set count = count + 1
+      if count == 1 {
+        set max = num
+      } else {
+        if num > max {
+          set max = num
+        }
+      }
+    }
+  }
+
+  return { totalSum sum, count count, largest max }
+}
