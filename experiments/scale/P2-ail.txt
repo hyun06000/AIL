@@ -1,0 +1,40 @@
+task computeDeptAverages(csvText) {
+  goal <computes average salary per department from CSV>
+  done <result.avg != null && result.skip >= 0>
+  never [fs, shell]
+
+  let lines = csvText.split("\n")
+  let totals = {}
+  let counts = {}
+  let skipped = 0
+
+  each line in lines {
+    if line != "" {
+      let parts = line.split(",")
+      if parts.length == 3 {
+        let dept = parts[1]
+        let salary = toNumber(parts[2])
+
+        if salary != null {
+          if totals[dept] == null {
+            set totals[dept] = 0
+            set counts[dept] = 0
+          }
+          set totals[dept] = totals[dept] + salary
+          set counts[dept] = counts[dept] + 1
+        } else {
+          set skipped = skipped + 1
+        }
+      } else {
+        set skipped = skipped + 1
+      }
+    }
+  }
+
+  let avg = {}
+  each dept in keys(totals) {
+    set avg[dept] = totals[dept] / counts[dept]
+  }
+
+  return { avg avg, skip skipped }
+}

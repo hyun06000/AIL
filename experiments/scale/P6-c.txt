@@ -1,0 +1,58 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct {
+    char* name;
+    int port;
+    char* mode;
+} Config;
+
+typedef struct {
+    char** errors;
+    int count;
+} ValidationResult;
+
+ValidationResult validate_config(Config* config) {
+    ValidationResult result;
+    result.errors = (char**)malloc(10 * sizeof(char*));
+    result.count = 0;
+
+    if (config->name == NULL || strlen(config->name) == 0) {
+        result.errors[result.count++] = "name is required and must be non-empty";
+    }
+
+    if (config->port < 1 || config->port > 65535) {
+        result.errors[result.count++] = "port must be between 1 and 65535";
+    }
+
+    if (config->mode == NULL || (strcmp(config->mode, "dev") != 0 && strcmp(config->mode, "prod") != 0)) {
+        result.errors[result.count++] = "mode must be either 'dev' or 'prod'";
+    }
+
+    return result;
+}
+
+void free_validation_result(ValidationResult* result) {
+    free(result->errors);
+}
+
+int main() {
+    Config valid = {"myapp", 8080, "dev"};
+    ValidationResult result1 = validate_config(&valid);
+    printf("Test 1 (valid): %d errors\n", result1.count);
+    for (int i = 0; i < result1.count; i++) {
+        printf("  - %s\n", result1.errors[i]);
+    }
+    free_validation_result(&result1);
+
+    Config invalid = {"", 99999, "staging"};
+    ValidationResult result2 = validate_config(&invalid);
+    printf("Test 2 (invalid): %d errors\n", result2.count);
+    for (int i = 0; i < result2.count; i++) {
+        printf("  - %s\n", result2.errors[i]);
+    }
+    free_validation_result(&result2);
+
+    return 0;
+}

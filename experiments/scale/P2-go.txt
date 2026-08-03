@@ -1,0 +1,69 @@
+package main
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+func main() {
+	csvText := `name,dept,salary
+Alice,Engineering,80000
+Bob,Sales,60000
+Charlie,Engineering,90000
+David,malformed
+Eve,Sales,70000`
+
+	averages, skipped := computeAverageSalaryPerDept(csvText)
+
+	fmt.Println("Average Salary per Department:")
+	for dept, avg := range averages {
+		fmt.Printf("%s: %.2f\n", dept, avg)
+	}
+	fmt.Printf("Skipped rows: %d\n", skipped)
+}
+
+func computeAverageSalaryPerDept(csvText string) (map[string]float64, int) {
+	lines := strings.Split(csvText, "\n")
+
+	deptSalaries := make(map[string][]float64)
+	skipped := 0
+
+	// Skip header
+	for i := 1; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Split(line, ",")
+		if len(fields) != 3 {
+			skipped++
+			continue
+		}
+
+		name := strings.TrimSpace(fields[0])
+		dept := strings.TrimSpace(fields[1])
+		salaryStr := strings.TrimSpace(fields[2])
+
+		salary, err := strconv.ParseFloat(salaryStr, 64)
+		if err != nil || name == "" || dept == "" {
+			skipped++
+			continue
+		}
+
+		deptSalaries[dept] = append(deptSalaries[dept], salary)
+	}
+
+	// Compute averages
+	averages := make(map[string]float64)
+	for dept, salaries := range deptSalaries {
+		sum := 0.0
+		for _, sal := range salaries {
+			sum += sal
+		}
+		averages[dept] = sum / float64(len(salaries))
+	}
+
+	return averages, skipped
+}

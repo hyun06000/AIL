@@ -1,0 +1,39 @@
+package main
+
+import "fmt"
+
+func mergeSortedLists(list1 []int, list2 []int) ([]int, int) {
+	merged := make([]int, 0, len(list1)+len(list2))
+	i, j := 0, 0
+
+	for i < len(list1) && j < len(list2) {
+		if list1[i] <= list2[j] {
+			merged = append(merged, list1[i])
+			i++
+		} else {
+			merged = append(merged, list2[j])
+			j++
+		}
+	}
+
+	for i < len(list1) {
+		merged = append(merged, list1[i])
+		i++
+	}
+
+	for j < len(list2) {
+		merged = append(merged, list2[j])
+		j++
+	}
+
+	return merged, len(merged)
+}
+
+func main() {
+	list1 := []int{1, 3, 5, 7}
+	list2 := []int{2, 4, 6, 8}
+
+	merged, length := mergeSortedLists(list1, list2)
+	fmt.Println("Merged list:", merged)
+	fmt.Println("Length:", length)
+}

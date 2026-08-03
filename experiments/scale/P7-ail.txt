@@ -1,0 +1,21 @@
+task processNumbers(lists) {
+  goal calculate total sum, count, and maximum from nested lists
+  done count >= 0
+  never []
+
+  let sum = 0
+  let count = 0
+  let maxVal = null
+
+  each list in lists {
+    each num in list {
+      set sum = sum + num
+      set count = count + 1
+      if maxVal == null || num > maxVal {
+        set maxVal = num
+      }
+    }
+  }
+
+  return { sum sum, count count, max maxVal }
+}

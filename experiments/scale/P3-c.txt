@@ -1,0 +1,70 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {
+    int id;
+    int status;
+} Job;
+
+typedef struct {
+    int done;
+    int failed;
+    int remaining;
+    int* failed_ids;
+    int failed_count;
+} Result;
+
+Result process_jobs(Job* jobs, int job_count) {
+    Result result = {0, 0, 0, NULL, 0};
+    int budget = 10;
+
+    result.failed_ids = (int*)malloc(sizeof(int) * job_count);
+
+    for (int i = 0; i < job_count && budget > 0; i++) {
+        budget--;
+
+        if (jobs[i].id % 2 == 0) {
+            jobs[i].status = -1;
+            result.failed_ids[result.failed_count++] = jobs[i].id;
+            result.failed++;
+        } else {
+            jobs[i].status = 1;
+            result.done++;
+        }
+    }
+
+    for (int i = 0; i < job_count; i++) {
+        if (jobs[i].status == 0) {
+            result.remaining++;
+        }
+    }
+
+    return result;
+}
+
+int main() {
+    int job_count = 20;
+    Job* jobs = (Job*)malloc(sizeof(Job) * job_count);
+
+    for (int i = 0; i < job_count; i++) {
+        jobs[i].id = i + 1;
+        jobs[i].status = 0;
+    }
+
+    Result result = process_jobs(jobs, job_count);
+
+    printf("Done: %d\n", result.done);
+    printf("Failed: %d\n", result.failed);
+    printf("Remaining: %d\n", result.remaining);
+
+    printf("\nFailed Jobs: ");
+    for (int i = 0; i < result.failed_count; i++) {
+        printf("%d ", result.failed_ids[i]);
+    }
+    printf("\n");
+
+    free(jobs);
+    free(result.failed_ids);
+
+    return 0;
+}

@@ -1,0 +1,25 @@
+def analyze_lists(lists_of_numbers):
+    """
+    Given a list of lists of numbers, return the total sum,
+    the count of numbers, and the largest single number seen.
+    """
+    total_sum = 0
+    count = 0
+    largest = None
+
+    for sublist in lists_of_numbers:
+        for number in sublist:
+            total_sum += number
+            count += 1
+            if largest is None or number > largest:
+                largest = number
+
+    return total_sum, count, largest
+
+
+if __name__ == "__main__":
+    data = [[1, 2, 3], [4, 5], [6, 7, 8, 9]]
+    total, count, largest = analyze_lists(data)
+    print(f"Total sum: {total}")
+    print(f"Count of numbers: {count}")
+    print(f"Largest number: {largest}")

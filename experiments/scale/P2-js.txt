@@ -1,0 +1,64 @@
+function computeAverageSalaryPerDept(csvText) {
+  const lines = csvText.trim().split('\n');
+
+  if (lines.length === 0) {
+    return { averages: {}, skipped: 0 };
+  }
+
+  // Parse header
+  const header = lines[0].split(',').map(col => col.trim());
+  const nameIndex = header.indexOf('name');
+  const deptIndex = header.indexOf('dept');
+  const salaryIndex = header.indexOf('salary');
+
+  if (nameIndex === -1 || deptIndex === -1 || salaryIndex === -1) {
+    return { averages: {}, skipped: lines.length - 1 };
+  }
+
+  const deptSalaries = {};
+  let skipped = 0;
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const fields = line.split(',').map(field => field.trim());
+
+    // Validate row
+    if (fields.length < Math.max(nameIndex, deptIndex, salaryIndex) + 1) {
+      skipped++;
+      continue;
+    }
+
+    const name = fields[nameIndex];
+    const dept = fields[deptIndex];
+    const salaryStr = fields[salaryIndex];
+
+    // Check if fields are non-empty and salary is a valid number
+    if (!name || !dept || !salaryStr) {
+      skipped++;
+      continue;
+    }
+
+    const salary = parseFloat(salaryStr);
+    if (isNaN(salary)) {
+      skipped++;
+      continue;
+    }
+
+    if (!deptSalaries[dept]) {
+      deptSalaries[dept] = { total: 0, count: 0 };
+    }
+    deptSalaries[dept].total += salary;
+    deptSalaries[dept].count++;
+  }
+
+  const averages = {};
+  for (const dept in deptSalaries) {
+    averages[dept] = deptSalaries[dept].total / deptSalaries[dept].count;
+  }
+
+  return { averages, skipped };
+}
+
+module.exports = computeAverageSalaryPerDept;

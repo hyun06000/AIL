@@ -1,0 +1,166 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <curl/curl.h>
+
+typedef struct {
+    char **ids;
+    int count;
+    int capacity;
+} IdList;
+
+typedef struct {
+    char **errors;
+    int count;
+    int capacity;
+} ErrorList;
+
+typedef struct {
+    char *data;
+    size_t size;
+} ResponseData;
+
+size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    ResponseData *mem = (ResponseData *)userp;
+
+    char *ptr = realloc(mem->data, mem->size + realsize + 1);
+    if (!ptr) {
+        printf("Not enough memory for response\n");
+        return 0;
+    }
+
+    mem->data = ptr;
+    memcpy(&(mem->data[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->data[mem->size] = 0;
+
+    return realsize;
+}
+
+void add_id(IdList *list, const char *id) {
+    if (list->count >= list->capacity) {
+        list->capacity = (list->capacity == 0) ? 10 : list->capacity * 2;
+        list->ids = realloc(list->ids, list->capacity * sizeof(char *));
+    }
+    list->ids[list->count] = malloc(strlen(id) + 1);
+    strcpy(list->ids[list->count], id);
+    list->count++;
+}
+
+void add_error(ErrorList *list, const char *error) {
+    if (list->count >= list->capacity) {
+        list->capacity = (list->capacity == 0) ? 10 : list->capacity * 2;
+        list->errors = realloc(list->errors, list->capacity * sizeof(char *));
+    }
+    list->errors[list->count] = malloc(strlen(error) + 1);
+    strcpy(list->errors[list->count], error);
+    list->count++;
+}
+
+void send_http_posts(const char **items, int item_count, IdList *ids, ErrorList *errors) {
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        add_error(errors, "Failed to initialize curl");
+        return;
+    }
+
+    int budget = 5;
+    int processed = 0;
+
+    for (int i = 0; i < item_count && processed < budget; i++) {
+        ResponseData response = {0};
+        response.data = malloc(1);
+
+        curl_easy_setopt(curl, CURLOPT_URL, "http://example.com/api");
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, items[i]);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&response);
+
+        CURLcode res = curl_easy_perform(curl);
+
+        if (res != CURLE_OK) {
+            char error_msg[256];
+            snprintf(error_msg, sizeof(error_msg), "Request failed: %s", curl_easy_strerror(res));
+            add_error(errors, error_msg);
+        } else {
+            long http_code = 0;
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
+            if (http_code >= 200 && http_code < 300) {
+                char *id_start = strstr(response.data, "\"id\":");
+                if (id_start) {
+                    char id[100];
+                    sscanf(id_start, "\"id\":\"%99[^\"]\"", id);
+                    add_id(ids, id);
+                } else {
+                    add_id(ids, response.data);
+                }
+            } else {
+                char error_msg[512];
+                snprintf(error_msg, sizeof(error_msg), "HTTP %ld: %s", http_code, response.data);
+                add_error(errors, error_msg);
+            }
+        }
+
+        free(response.data);
+        processed++;
+    }
+
+    curl_easy_cleanup(curl);
+}
+
+void print_ids(IdList *list) {
+    printf("Successful IDs:\n");
+    for (int i = 0; i < list->count; i++) {
+        printf("  %s\n", list->ids[i]);
+    }
+}
+
+void print_errors(ErrorList *list) {
+    printf("Errors:\n");
+    for (int i = 0; i < list->count; i++) {
+        printf("  %s\n", list->errors[i]);
+    }
+}
+
+void cleanup_ids(IdList *list) {
+    for (int i = 0; i < list->count; i++) {
+        free(list->ids[i]);
+    }
+    free(list->ids);
+}
+
+void cleanup_errors(ErrorList *list) {
+    for (int i = 0; i < list->count; i++) {
+        free(list->errors[i]);
+    }
+    free(list->errors);
+}
+
+int main() {
+    const char *items[] = {
+        "item1",
+        "item2",
+        "item3",
+        "item4",
+        "item5",
+        "item6",
+        "item7",
+        "item8"
+    };
+    int item_count = sizeof(items) / sizeof(items[0]);
+
+    IdList ids = {0};
+    ErrorList errors = {0};
+
+    send_http_posts(items, item_count, &ids, &errors);
+
+    print_ids(&ids);
+    print_errors(&errors);
+
+    cleanup_ids(&ids);
+    cleanup_errors(&errors);
+
+    return 0;
+}

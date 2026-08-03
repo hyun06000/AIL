@@ -1,0 +1,97 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+)
+
+type Item struct {
+	ID   string `json:"id"`
+	Data string `json:"data"`
+}
+
+type ResponseData struct {
+	ID    string `json:"id"`
+	Error string `json:"error"`
+}
+
+func processItems(items []Item, endpoint string, budget int) ([]string, []string) {
+	var successIDs []string
+	var errors []string
+
+	client := &http.Client{}
+
+	limit := budget
+	if len(items) < budget {
+		limit = len(items)
+	}
+
+	for i := 0; i < limit; i++ {
+		item := items[i]
+
+		bodyData, err := json.Marshal(item)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("marshal error for %s: %v", item.ID, err))
+			continue
+		}
+
+		req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(bodyData))
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("request creation error for %s: %v", item.ID, err))
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("request error for %s: %v", item.ID, err))
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("read error for %s: %v", item.ID, err))
+			continue
+		}
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			var respData ResponseData
+			if err := json.Unmarshal(body, &respData); err != nil {
+				errors = append(errors, fmt.Sprintf("unmarshal error for %s: %v", item.ID, err))
+				continue
+			}
+			if respData.Error != "" {
+				errors = append(errors, respData.Error)
+			} else {
+				successIDs = append(successIDs, respData.ID)
+			}
+		} else {
+			errors = append(errors, fmt.Sprintf("HTTP %d for %s: %s", resp.StatusCode, item.ID, string(body)))
+		}
+	}
+
+	return successIDs, errors
+}
+
+func main() {
+	items := []Item{
+		{ID: "1", Data: "data1"},
+		{ID: "2", Data: "data2"},
+		{ID: "3", Data: "data3"},
+		{ID: "4", Data: "data4"},
+		{ID: "5", Data: "data5"},
+		{ID: "6", Data: "data6"},
+	}
+
+	endpoint := "http://example.com/api/endpoint"
+	budget := 5
+
+	successIDs, errorMessages := processItems(items, endpoint, budget)
+
+	fmt.Println("Success:", successIDs)
+	fmt.Println("Errors:", errorMessages)
+}

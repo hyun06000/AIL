@@ -1,0 +1,65 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX_WORDS 10000
+#define MAX_WORD_LEN 100
+
+typedef struct {
+    char word[MAX_WORD_LEN];
+    int count;
+} WordCount;
+
+int compare(const void *a, const void *b) {
+    WordCount *wc1 = (WordCount *)a;
+    WordCount *wc2 = (WordCount *)b;
+    return wc2->count - wc1->count;
+}
+
+char *to_lowercase(char *str) {
+    for (int i = 0; str[i]; i++) {
+        str[i] = tolower(str[i]);
+    }
+    return str;
+}
+
+int main() {
+    WordCount words[MAX_WORDS];
+    int word_count = 0;
+    char line[1024];
+    char word[MAX_WORD_LEN];
+
+    while (fgets(line, sizeof(line), stdin)) {
+        char *token = strtok(line, " \t\n\r");
+        while (token) {
+            strcpy(word, token);
+            to_lowercase(word);
+
+            int found = 0;
+            for (int i = 0; i < word_count; i++) {
+                if (strcmp(words[i].word, word) == 0) {
+                    words[i].count++;
+                    found = 1;
+                    break;
+                }
+            }
+
+            if (!found && word_count < MAX_WORDS) {
+                strcpy(words[word_count].word, word);
+                words[word_count].count = 1;
+                word_count++;
+            }
+
+            token = strtok(NULL, " \t\n\r");
+        }
+    }
+
+    qsort(words, word_count, sizeof(WordCount), compare);
+
+    for (int i = 0; i < 3 && i < word_count; i++) {
+        printf("%s: %d\n", words[i].word, words[i].count);
+    }
+
+    return 0;
+}

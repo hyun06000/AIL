@@ -1,0 +1,42 @@
+def process_jobs(jobs):
+    budget = 10
+    done = 0
+    failed = []
+
+    for job in jobs:
+        if budget <= 0:
+            break
+
+        try:
+            execute_job(job)
+            done += 1
+        except Exception as e:
+            failed.append(job)
+
+        budget -= 1
+
+    remaining = len(jobs) - done - len(failed)
+
+    return {
+        'done': done,
+        'failed': len(failed),
+        'remaining': remaining,
+        'failed_jobs': failed
+    }
+
+def execute_job(job):
+    if 'error' in job:
+        raise Exception(f"Job failed: {job}")
+    return f"Job {job} completed"
+
+if __name__ == "__main__":
+    jobs = [
+        'job1', 'job2', 'job3', 'job4', 'job5',
+        'job6_error', 'job7', 'job8', 'job9', 'job10',
+        'job11', 'job12', 'job13', 'job14', 'job15'
+    ]
+
+    result = process_jobs(jobs)
+    print(f"Done: {result['done']}")
+    print(f"Failed: {result['failed']}")
+    print(f"Remaining: {result['remaining']}")

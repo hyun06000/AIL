@@ -1,0 +1,26 @@
+function validateConfig(config) {
+  const errors = [];
+
+  // Validate name
+  if (typeof config.name !== 'string' || config.name.trim() === '') {
+    errors.push('name must be a non-empty string');
+  }
+
+  // Validate port
+  if (typeof config.port !== 'number' || config.port < 1 || config.port > 65535) {
+    errors.push('port must be a number between 1 and 65535');
+  }
+
+  // Validate mode
+  if (config.mode !== 'dev' && config.mode !== 'prod') {
+    errors.push('mode must be either "dev" or "prod"');
+  }
+
+  return errors;
+}
+
+// Example usage:
+console.log(validateConfig({ name: 'myapp', port: 3000, mode: 'dev' })); // []
+console.log(validateConfig({ name: '', port: 3000, mode: 'dev' })); // ['name must be a non-empty string']
+console.log(validateConfig({ name: 'myapp', port: 0, mode: 'dev' })); // ['port must be a number between 1 and 65535']
+console.log(validateConfig({ name: 'myapp', port: 3000, mode: 'staging' })); // ['mode must be either "dev" or "prod"']

@@ -1,0 +1,58 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct {
+    char name[100];
+    int age;
+    int active;
+} UserRecord;
+
+typedef struct {
+    char name[100];
+    int isAdult;
+} ResultUser;
+
+typedef struct {
+    ResultUser *users;
+    int count;
+} ResultList;
+
+ResultList filterUsers(UserRecord *records, int count) {
+    ResultList result;
+    result.users = (ResultUser *)malloc(count * sizeof(ResultUser));
+    result.count = 0;
+
+    for (int i = 0; i < count; i++) {
+        if (records[i].active && records[i].age >= 18) {
+            strcpy(result.users[result.count].name, records[i].name);
+            result.users[result.count].isAdult = 1;
+            result.count++;
+        }
+    }
+
+    return result;
+}
+
+int main() {
+    UserRecord records[] = {
+        {"Alice", 25, 1},
+        {"Bob", 17, 1},
+        {"Charlie", 30, 0},
+        {"Diana", 22, 1},
+        {"Eve", 16, 1}
+    };
+
+    int recordCount = sizeof(records) / sizeof(records[0]);
+
+    ResultList result = filterUsers(records, recordCount);
+
+    printf("Filtered Active Users (18+):\n");
+    for (int i = 0; i < result.count; i++) {
+        printf("Name: %s, isAdult: %d\n", result.users[i].name, result.users[i].isAdult);
+    }
+
+    free(result.users);
+
+    return 0;
+}
